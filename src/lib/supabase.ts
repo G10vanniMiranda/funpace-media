@@ -85,9 +85,57 @@ function setStoredSession(session: SupabaseSession | null) {
   localStorage.setItem(getSessionStorageKey(), JSON.stringify(session));
 }
 
-function getAuthToken(useAuth: boolean) {
+async function refreshStoredSession(force = false): Promise<SupabaseSession | null> {
   const session = getStoredSession();
-  return useAuth && session?.access_token ? session.access_token : supabaseConfig.anonKey;
+  if (!session) return null;
+
+  const expiresAtMs = session.expires_at ? session.expires_at * 1000 : 0;
+  const hasUsableAccessToken = session.access_token && (!expiresAtMs || expiresAtMs > Date.now() + 60_000);
+
+  if (!force && hasUsableAccessToken) {
+    return session;
+  }
+
+  if (!session.refresh_token) {
+    setStoredSession(null);
+    window.dispatchEvent(new Event('supabase-auth-changed'));
+    throw new Error('Sessao expirada. Entre novamente para continuar.');
+  }
+
+  assertSupabaseConfig();
+  const response = await fetch(`${supabaseConfig.url}/auth/v1/token?grant_type=refresh_token`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseConfig.anonKey,
+      Authorization: `Bearer ${supabaseConfig.anonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ refresh_token: session.refresh_token }),
+  });
+
+  if (!response.ok) {
+    setStoredSession(null);
+    window.dispatchEvent(new Event('supabase-auth-changed'));
+    throw new Error('Sessao expirada. Entre novamente para continuar.');
+  }
+
+  const refreshed = await response.json() as SupabaseSession;
+  const nextSession = {
+    ...refreshed,
+    user: refreshed.user ?? session.user,
+  };
+  setStoredSession(nextSession);
+  window.dispatchEvent(new Event('supabase-auth-changed'));
+  return nextSession;
+}
+
+async function getAuthToken(useAuth: boolean) {
+  const session = getStoredSession();
+  if (!useAuth) return supabaseConfig.anonKey;
+  if (!session?.access_token) {
+    throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
+  }
+  return (await refreshStoredSession())?.access_token ?? supabaseConfig.anonKey;
 }
 
 function toAppUser(user: SupabaseAuthUser | null): AppUser | null {
@@ -109,10 +157,10 @@ function toAppUser(user: SupabaseAuthUser | null): AppUser | null {
   };
 }
 
-async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = false): Promise<T> {
+async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = false, retriedAuth = false): Promise<T> {
   assertSupabaseConfig();
 
-  const token = getAuthToken(useAuth);
+  const token = await getAuthToken(useAuth);
   const response = await fetch(`${supabaseConfig.url}${path}`, {
     ...init,
     headers: {
@@ -125,6 +173,20 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
 
   if (!response.ok) {
     const raw = await response.text();
+    const rawUpper = raw.toUpperCase();
+
+    if (
+      useAuth &&
+      !retriedAuth &&
+      (
+        rawUpper.includes('EXP') && rawUpper.includes('TIMESTAMP') ||
+        rawUpper.includes('JWT EXPIRED') ||
+        rawUpper.includes('INVALID JWT')
+      )
+    ) {
+      await refreshStoredSession(true);
+      return supabaseFetch<T>(path, init, useAuth, true);
+    }
 
     // Supabase errors are often JSON strings; surface a human message when possible.
     try {
@@ -153,6 +215,15 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
       );
 
       const msgUpper = msg.toUpperCase();
+
+      if (
+        errorCode === 'INVALID_API_KEY' ||
+        msgUpper.includes('INVALID API KEY') ||
+        msgUpper.includes('SUPABASE_ANON') ||
+        msgUpper.includes('SERVICE_ROLE API KEY')
+      ) {
+        throw new Error('Chave do Supabase invalida. Confira VITE_SUPABASE_PUBLISHABLE_KEY ou VITE_SUPABASE_ANON_KEY no .env e reinicie o servidor.');
+      }
 
       if (
         errorCode === 'INVALID_CREDENTIALS' ||
@@ -228,11 +299,12 @@ export const supabaseStorage = {
   async upload(bucket: string, path: string, file: File) {
     assertSupabaseConfig();
 
+    const token = await getAuthToken(true);
     const response = await fetch(`${supabaseConfig.url}/storage/v1/object/${bucket}/${path}`, {
       method: 'POST',
       headers: {
         apikey: supabaseConfig.anonKey,
-        Authorization: `Bearer ${getAuthToken(true)}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': file.type || 'application/octet-stream',
         'x-upsert': 'false',
       },
@@ -240,8 +312,39 @@ export const supabaseStorage = {
     });
 
     if (!response.ok) {
-      const message = await response.text();
-      throw new Error(message || `Supabase storage upload failed with status ${response.status}`);
+      const raw = await response.text();
+      let message = raw || `Supabase storage upload failed with status ${response.status}`;
+
+      if (
+        raw.toUpperCase().includes('EXP') && raw.toUpperCase().includes('TIMESTAMP') ||
+        raw.toUpperCase().includes('JWT EXPIRED') ||
+        raw.toUpperCase().includes('INVALID JWT')
+      ) {
+        await refreshStoredSession(true);
+        return this.upload(bucket, path, file);
+      }
+
+      try {
+        const parsed = JSON.parse(raw);
+        message = parsed?.message || parsed?.msg || parsed?.error || raw || message;
+      } catch {
+        // Keep raw text when Supabase does not return JSON.
+      }
+
+      const normalized = message.toLowerCase();
+      if (normalized.includes('row-level security') || normalized.includes('violates policy')) {
+        throw new Error('Upload bloqueado pela policy do Supabase Storage. Confirme se o fotografo esta aprovado e se o arquivo esta sendo enviado para a pasta do proprio usuario.');
+      }
+
+      if (normalized.includes('mime') || normalized.includes('not allowed')) {
+        throw new Error(`Tipo de arquivo nao permitido no bucket funpace-media: ${file.type || file.name}`);
+      }
+
+      if (normalized.includes('payload') || normalized.includes('too large') || response.status === 413) {
+        throw new Error(`Arquivo muito grande para upload: ${file.name}`);
+      }
+
+      throw new Error(message);
     }
 
     return {

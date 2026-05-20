@@ -7,6 +7,7 @@ import { orderService } from '../lib/services';
 interface CustomerOrdersDrawerProps {
   isOpen: boolean;
   onClose: () => void;
+  highlightedOrderId?: string | null;
 }
 
 const statusLabels: Record<Order['status'], string> = {
@@ -67,6 +68,20 @@ async function downloadFile(url: string, filename: string) {
   }
 }
 
+async function authorizeDownload(orderId: string, orderItemId: string) {
+  const response = await fetch('/api/downloads/authorize', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ orderId, orderItemId }),
+  });
+
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.url) {
+    throw new Error(payload?.error || 'Nao foi possivel autorizar o download.');
+  }
+  return String(payload.url);
+}
+
 const hiddenPurchasesStorageKey = 'funpace:hidden-purchases:v1';
 
 function loadHiddenPurchaseIds(): Set<string> {
@@ -85,7 +100,7 @@ function saveHiddenPurchaseIds(ids: Set<string>) {
   localStorage.setItem(hiddenPurchasesStorageKey, JSON.stringify(Array.from(ids)));
 }
 
-export function CustomerOrdersDrawer({ isOpen, onClose }: CustomerOrdersDrawerProps) {
+export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: CustomerOrdersDrawerProps) {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
@@ -121,6 +136,19 @@ export function CustomerOrdersDrawer({ isOpen, onClose }: CustomerOrdersDrawerPr
       saveHiddenPurchaseIds(next);
       return next;
     });
+  };
+
+  const downloadPaidOrder = async (order: Order) => {
+    const items = (order.items ?? []).filter((item) => item.url && !hiddenItemIds.has(item.id));
+    for (const item of items) {
+      const signedUrl = await authorizeDownload(order.id, item.id);
+      await downloadFile(signedUrl, filenameFromItem(item as any));
+    }
+  };
+
+  const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    const signedUrl = await authorizeDownload(order.id, item.id);
+    await downloadFile(signedUrl, filenameFromItem(item as any));
   };
 
   return (
@@ -181,7 +209,12 @@ export function CustomerOrdersDrawer({ isOpen, onClose }: CustomerOrdersDrawerPr
               {!isLoading && !error && orders.length > 0 && (
                 <div className="space-y-4">
                   {orders.map((order) => (
-                    <article key={order.id} className="bg-white brutal-border p-4 space-y-4">
+                    <article
+                      key={order.id}
+                      className={`bg-white brutal-border p-4 space-y-4 ${
+                        highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
+                      }`}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="font-display text-lg uppercase truncate">Pedido #{order.id.slice(0, 8)}</p>
@@ -199,15 +232,27 @@ export function CustomerOrdersDrawer({ isOpen, onClose }: CustomerOrdersDrawerPr
                           <p className="font-mono text-[10px] text-gray-400 uppercase">Total</p>
                           <p className="font-display text-3xl">R$ {Number(order.total).toFixed(2)}</p>
                         </div>
-                        {order.status === 'pending' && order.checkoutUrl && (
-                          <a
-                            href={order.checkoutUrl}
-                            className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors"
-                          >
-                            Pagar
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
+                        <div className="flex flex-col items-end gap-2">
+                          {order.status === 'pending' && order.checkoutUrl && (
+                            <a
+                              href={order.checkoutUrl}
+                              className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors"
+                            >
+                              Pagar
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                          {order.status === 'paid' && (order.items?.length ?? 0) > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => downloadPaidOrder(order)}
+                              className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
+                            >
+                              Baixar tudo
+                              <Download className="w-3 h-3" />
+                            </button>
+                          )}
+                        </div>
                       </div>
 
                       <div className="border-t-2 border-gray-100 pt-4 space-y-3">
@@ -237,7 +282,7 @@ export function CustomerOrdersDrawer({ isOpen, onClose }: CustomerOrdersDrawerPr
                               {order.status === 'paid' && item.url && (
                                 <button
                                   type="button"
-                                  onClick={() => downloadFile(item.url, filenameFromItem(item as any))}
+                                  onClick={() => downloadPaidItem(order, item)}
                                   className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
                                   title="Baixar arquivo"
                                 >

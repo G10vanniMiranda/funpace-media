@@ -5,7 +5,9 @@ import {
   OrderItem,
   PlatformSettings,
   PhotographerDashboardMetrics,
+  PhotographerProductPerformance,
   PhotographerSale,
+  WithdrawalRequest,
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
@@ -17,6 +19,45 @@ const selectAll = 'select=*';
 const mediaBucket = 'funpace-media';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
+
+function mediaPathKey(value?: string | null) {
+  return value || '';
+}
+
+async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null }>(items: T[]): Promise<T[]> {
+  if (isMockMode || items.length === 0) return items;
+
+  const paths = Array.from(new Set(items.flatMap((item) => {
+    const thumbnail = mediaPathKey(item.thumbnailUrl);
+    return [
+      thumbnail,
+      thumbnail ? '' : mediaPathKey(item.url),
+    ];
+  }).filter(Boolean)));
+
+  if (paths.length === 0) return items;
+
+  try {
+    const response = await fetch('/api/media/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paths }),
+    });
+
+    if (!response.ok) throw new Error(await response.text());
+    const payload = await response.json() as { urls?: Record<string, string> };
+    const urls = payload.urls ?? {};
+
+    return items.map((item) => ({
+      ...item,
+      url: item.url && urls[item.url] ? urls[item.url] : item.url,
+      thumbnailUrl: item.thumbnailUrl && urls[item.thumbnailUrl] ? urls[item.thumbnailUrl] : item.thumbnailUrl,
+    }));
+  } catch (error) {
+    console.error('Erro ao assinar URLs de midia:', error);
+    return items;
+  }
+}
 
 function sanitizeStorageFileName(fileName: string) {
   const normalized = fileName
@@ -47,9 +88,18 @@ async function attachOrderItems(orders: SupabaseRow<Order>[], useAuth: boolean):
     itemsByOrderId.set(item.orderId, orderItems);
   }
 
+  const signedItems = await signMediaUrls(items);
+  const signedItemsByOrderId = new Map<string, OrderItem[]>();
+
+  for (const item of signedItems) {
+    const orderItems = signedItemsByOrderId.get(item.orderId) ?? [];
+    orderItems.push(item);
+    signedItemsByOrderId.set(item.orderId, orderItems);
+  }
+
   return orders.map((order) => ({
     ...order,
-    items: itemsByOrderId.get(order.id) ?? [],
+    items: signedItemsByOrderId.get(order.id) ?? itemsByOrderId.get(order.id) ?? [],
   }));
 }
 
@@ -65,7 +115,8 @@ export const productService = {
       order: 'createdAt.desc',
       limit: String(count),
     });
-    return supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
+    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
+    return signMediaUrls(products);
   },
 
   async getAdminProducts(count = 1000): Promise<Product[]> {
@@ -78,7 +129,8 @@ export const productService = {
       order: 'createdAt.desc',
       limit: String(count),
     });
-    return supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+    return signMediaUrls(products);
   },
 
   async searchByBib(bib: string): Promise<Product[]> {
@@ -91,7 +143,8 @@ export const productService = {
       bib: `eq.${bib}`,
       status: 'eq.published',
     });
-    return supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
+    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
+    return signMediaUrls(products);
   },
 
   async getVendedorProducts(vendedorId: string): Promise<Product[]> {
@@ -103,7 +156,8 @@ export const productService = {
       select: '*',
       vendedorId: `eq.${vendedorId}`,
     });
-    return supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+    return signMediaUrls(products);
   },
 
   async addProduct(product: Omit<Product, 'id'>): Promise<string> {
@@ -140,6 +194,27 @@ export const productService = {
     const [updated] = await supabaseRest.patch<SupabaseRow<Product>[]>(
       `/rest/v1/products?${params.toString()}&${selectAll}`,
       product,
+      true,
+    );
+
+    if (!updated) throw new Error('Produto nao encontrado.');
+    return updated;
+  },
+
+  async updateProductThumbnail(id: string, thumbnailUrl: string): Promise<Product> {
+    if (isMockMode) {
+      const existingProduct = mockProducts.find((item) => item.id === id);
+      if (!existingProduct) throw new Error('Produto nao encontrado.');
+
+      const updatedProduct = { ...existingProduct, thumbnailUrl };
+      mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
+      return updatedProduct;
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${params.toString()}&${selectAll}`,
+      { thumbnailUrl },
       true,
     );
 
@@ -245,6 +320,7 @@ export const photographerDashboardService = {
   async getDashboard(vendedorId: string, products: Product[]): Promise<{
     metrics: PhotographerDashboardMetrics;
     recentSales: PhotographerSale[];
+    productPerformance: PhotographerProductPerformance[];
   }> {
     const publishedProducts = products.filter((product) => (product.status ?? 'published') === 'published');
 
@@ -283,8 +359,23 @@ export const photographerDashboardService = {
           rating: mockPhotographers.find((photographer) => photographer.id === vendedorId)?.stats.rating ?? 5,
           downloads: mockSales.length,
           platformFeePercent: 30,
+          monthlyEarnings: mockSales.reduce((total, sale) => total + sale.netAmount, 0),
+          availableBalance: mockSales.reduce((total, sale) => total + sale.netAmount, 0),
+          monthlyGoal: 5000,
         },
         recentSales: mockSales,
+        productPerformance: mockSales.map((sale) => ({
+          productId: sale.productId,
+          name: sale.name,
+          type: sale.type,
+          event: sale.event,
+          bib: sale.bib,
+          thumbnailUrl: sale.thumbnailUrl,
+          salesCount: 1,
+          downloads: 0,
+          grossRevenue: sale.price,
+          netRevenue: sale.netAmount,
+        })),
       };
     }
 
@@ -314,43 +405,105 @@ export const photographerDashboardService = {
           rating: 5,
           downloads: 0,
           platformFeePercent: feePercent,
+          monthlyEarnings: 0,
+          availableBalance: 0,
+          monthlyGoal: 5000,
         },
         recentSales: [],
+        productPerformance: [],
       };
     }
 
-    const orderIds = [...new Set(saleItems.map((item) => item.orderId))];
+    const orderIds = Array.from(new Set(saleItems.map((item) => item.orderId).filter(Boolean)));
     const orderParams = new URLSearchParams({
       select: 'id,status,createdAt',
       id: `in.(${orderIds.join(',')})`,
-      order: 'createdAt.desc',
     });
-    const orders = await supabaseRest.get<Array<Pick<Order, 'id' | 'status' | 'createdAt'>>>(
+    const relatedOrders = await supabaseRest.get<SupabaseRow<Pick<Order, 'id' | 'status' | 'createdAt'>>[]>(
       `/rest/v1/orders?${orderParams.toString()}`,
       true,
     );
-    const ordersById = new Map(orders.map((order) => [order.id, order]));
-    const todayKey = new Date().toISOString().slice(0, 10);
-    const paidSales = saleItems
-      .map((item): PhotographerSale | null => {
-        const order = ordersById.get(item.orderId);
-        if (!order || order.status !== 'paid') return null;
+    const paidOrderById = new Map(
+      relatedOrders
+        .filter((order) => order.status === 'paid')
+        .map((order) => [order.id, order]),
+    );
 
+    const signedSaleItems = await signMediaUrls(saleItems);
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const paidSales = signedSaleItems
+      .filter((item) => paidOrderById.has(item.orderId))
+      .map((item): PhotographerSale => {
+        const order = paidOrderById.get(item.orderId);
         const netAmount = Number(item.price) * (1 - feePercent / 100);
         return {
           ...item,
-          orderCreatedAt: order.createdAt,
-          orderStatus: order.status,
+          orderCreatedAt: order?.createdAt ?? item.createdAt,
+          orderStatus: order?.status ?? 'paid',
           netAmount,
         } satisfies PhotographerSale;
       })
-      .filter((sale): sale is PhotographerSale => Boolean(sale))
       .sort((a, b) => new Date(b.orderCreatedAt).getTime() - new Date(a.orderCreatedAt).getTime());
 
     const totalEarnings = paidSales.reduce((total, sale) => total + sale.netAmount, 0);
+    const releaseWindowMs = 7 * 24 * 60 * 60 * 1000;
     const pendingEarnings = paidSales
-      .filter((sale) => Date.now() - new Date(sale.orderCreatedAt).getTime() < 7 * 24 * 60 * 60 * 1000)
+      .filter((sale) => Date.now() - new Date(sale.orderCreatedAt).getTime() < releaseWindowMs)
       .reduce((total, sale) => total + sale.netAmount, 0);
+    const currentMonthKey = new Date().toISOString().slice(0, 7);
+    const monthlyEarnings = paidSales
+      .filter((sale) => sale.orderCreatedAt.slice(0, 7) === currentMonthKey)
+      .reduce((total, sale) => total + sale.netAmount, 0);
+    const downloadParams = new URLSearchParams({
+      select: 'id,productId',
+      vendedorId: `eq.${vendedorId}`,
+      limit: '10000',
+    });
+    const downloadEvents = await supabaseRest.get<{ id: string; productId: string }[]>(
+      `/rest/v1/download_events?${downloadParams.toString()}`,
+      true,
+    );
+    const downloadsByProductId = new Map<string, number>();
+    for (const event of downloadEvents) {
+      downloadsByProductId.set(event.productId, (downloadsByProductId.get(event.productId) ?? 0) + 1);
+    }
+    const performanceByProductId = new Map<string, PhotographerProductPerformance>();
+    for (const sale of paidSales) {
+      const current = performanceByProductId.get(sale.productId) ?? {
+        productId: sale.productId,
+        name: sale.name,
+        type: sale.type,
+        event: sale.event,
+        bib: sale.bib,
+        thumbnailUrl: sale.thumbnailUrl,
+        salesCount: 0,
+        downloads: 0,
+        grossRevenue: 0,
+        netRevenue: 0,
+      };
+      current.salesCount += 1;
+      current.grossRevenue += Number(sale.price || 0);
+      current.netRevenue += Number(sale.netAmount || 0);
+      current.downloads = downloadsByProductId.get(sale.productId) ?? 0;
+      performanceByProductId.set(sale.productId, current);
+    }
+    const productPerformance = Array.from(performanceByProductId.values())
+      .sort((a, b) => b.netRevenue - a.netRevenue || b.downloads - a.downloads)
+      .slice(0, 8);
+    const withdrawalParams = new URLSearchParams({
+      select: 'amount,status',
+      photographerId: `eq.${vendedorId}`,
+      status: 'in.(pending,approved,paid)',
+      limit: '10000',
+    });
+    const reservedWithdrawals = await supabaseRest.get<Pick<WithdrawalRequest, 'amount' | 'status'>[]>(
+      `/rest/v1/withdrawal_requests?${withdrawalParams.toString()}`,
+      true,
+    );
+    const reservedWithdrawalAmount = reservedWithdrawals.reduce((total, withdrawal) => (
+      total + Number(withdrawal.amount || 0)
+    ), 0);
+    const availableBalance = Math.max(0, totalEarnings - pendingEarnings - reservedWithdrawalAmount);
 
     return {
       metrics: {
@@ -362,10 +515,14 @@ export const photographerDashboardService = {
         photoCount: publishedProducts.filter((product) => product.type === 'IMG').length,
         videoCount: publishedProducts.filter((product) => product.type === 'VIDEO').length,
         rating: 5,
-        downloads: paidSales.length,
+        downloads: downloadEvents.length,
         platformFeePercent: feePercent,
+        monthlyEarnings,
+        availableBalance,
+        monthlyGoal: 5000,
       },
       recentSales: paidSales.slice(0, 5),
+      productPerformance,
     };
   },
 };
@@ -422,6 +579,85 @@ export const platformSettingsService = {
     } catch {
       return { platformFeePercent: 30 };
     }
+  },
+};
+
+export const withdrawalService = {
+  async getPhotographerWithdrawals(photographerId: string, count = 20): Promise<WithdrawalRequest[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      photographerId: `eq.${photographerId}`,
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<WithdrawalRequest>[]>(
+      `/rest/v1/withdrawal_requests?${params.toString()}`,
+      true,
+    );
+  },
+
+  async getAdminWithdrawals(count = 200): Promise<WithdrawalRequest[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<WithdrawalRequest>[]>(
+      `/rest/v1/withdrawal_requests?${params.toString()}`,
+      true,
+    );
+  },
+
+  async createWithdrawalRequest(photographerId: string, amount: number, pixKey: string): Promise<WithdrawalRequest> {
+    if (isMockMode) {
+      return {
+        id: `mock-withdrawal-${crypto.randomUUID()}`,
+        photographerId,
+        amount,
+        pixKey,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const [created] = await supabaseRest.post<SupabaseRow<WithdrawalRequest>[]>(
+      `/rest/v1/withdrawal_requests?${selectAll}`,
+      {
+        photographerId,
+        amount,
+        pixKey,
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      },
+      true,
+    );
+
+    if (!created) throw new Error('Nao foi possivel criar a solicitacao de saque.');
+    return created;
+  },
+
+  async updateWithdrawalStatus(id: string, status: WithdrawalRequest['status'], note?: string): Promise<WithdrawalRequest> {
+    if (isMockMode) {
+      throw new Error('Atualizacao de saque esta disponivel apenas no modo producao.');
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<WithdrawalRequest>[]>(
+      `/rest/v1/withdrawal_requests?${params.toString()}&${selectAll}`,
+      {
+        status,
+        note: note ?? null,
+        processedAt: ['paid', 'rejected', 'cancelled'].includes(status) ? new Date().toISOString() : null,
+      },
+      true,
+    );
+
+    if (!updated) throw new Error('Solicitacao de saque nao encontrada.');
+    return updated;
   },
 };
 

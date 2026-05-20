@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React from 'react';
 import { Play, Pause, ShoppingCart, Check, Expand, Clock, MapPin } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Product } from '../types';
@@ -12,27 +12,7 @@ interface VideoGridProps {
 }
 
 export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewChange }: VideoGridProps) {
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({});
-
   const isVideoInCart = (id: string) => cartItems.some(item => item.id === id);
-
-  const togglePlay = (id: string) => {
-    const video = videoRefs.current[id];
-    if (!video) return;
-
-    if (activeVideoId === id) {
-      video.pause();
-      setActiveVideoId(null);
-    } else {
-      // Pause current active video if exists
-      if (activeVideoId && videoRefs.current[activeVideoId]) {
-        videoRefs.current[activeVideoId]?.pause();
-      }
-      video.play();
-      setActiveVideoId(id);
-    }
-  };
 
   return (
     <section className="max-w-[1400px] mx-auto px-6 py-12 md:py-20">
@@ -84,16 +64,10 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
             className="group relative bg-white brutal-border brutal-shadow hover:-translate-x-1 hover:-translate-y-1 hover:shadow-heavy transition-all"
           >
             <div className="relative aspect-video overflow-hidden bg-brutal-black">
-              <video 
-                ref={(el) => {
-                  videoRefs.current[video.id] = el;
-                }}
-                src={video.url}
+              <img
+                src={video.thumbnailUrl || video.url}
+                alt={video.name}
                 className="w-full h-full object-cover opacity-80"
-                loop
-                muted
-                playsInline
-                poster={video.thumbnailUrl}
               />
               
               <div className="absolute inset-0 bg-gradient-to-t from-brutal-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
@@ -105,14 +79,13 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
               </div>
 
               {/* Play Button Overlay */}
-              <button 
-                onClick={() => togglePlay(video.id)}
-                className="absolute inset-0 flex items-center justify-center group/play cursor-pointer"
+              <div
+                className="absolute inset-0 flex items-center justify-center group/play"
               >
-                <div className={`w-16 h-16 rounded-full bg-white/20 backdrop-blur-md brutal-border flex items-center justify-center transform group-hover/play:scale-110 transition-transform ${activeVideoId === video.id ? 'opacity-0 scale-90' : 'opacity-100'}`}>
+                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md brutal-border flex items-center justify-center transform group-hover/play:scale-110 transition-transform">
                   <Play className="w-8 h-8 text-white fill-white ml-1" />
                 </div>
-              </button>
+              </div>
 
               {/* Duration */}
               <div className="absolute bottom-4 right-4 font-mono text-[10px] text-white bg-brutal-black/50 px-2 py-1 backdrop-blur-sm flex items-center gap-1">

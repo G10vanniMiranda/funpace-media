@@ -35,6 +35,72 @@ function getDbConfig() {
       };
 }
 
+const mediaBucket = process.env.SUPABASE_BUCKET || "funpace-media";
+
+function getSupabaseApiConfig() {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const supabaseKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SERVICE_ROLE_KEY ||
+    process.env.ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    "";
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error("Supabase Storage nao configurado para assinar URLs.");
+  }
+
+  return { supabaseUrl, supabaseKey };
+}
+
+function extractStoragePathFromUrl(value: string) {
+  if (!value) return "";
+  if (!/^https?:\/\//i.test(value)) return value.replace(/^\/+/, "");
+
+  try {
+    const parsed = new URL(value);
+    const publicMarker = `/storage/v1/object/public/${mediaBucket}/`;
+    const signedMarker = `/storage/v1/object/sign/${mediaBucket}/`;
+    const marker = parsed.pathname.includes(publicMarker) ? publicMarker : signedMarker;
+    const index = parsed.pathname.indexOf(marker);
+    if (index === -1) return "";
+    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
+  } catch {
+    return "";
+  }
+}
+
+async function createSignedMediaUrl(rawPathOrUrl: string, expiresIn = 900) {
+  const path = extractStoragePathFromUrl(rawPathOrUrl);
+  if (!path) throw new Error("Caminho de midia invalido.");
+
+  const { supabaseUrl, supabaseKey } = getSupabaseApiConfig();
+  const response = await fetch(
+    `${supabaseUrl}/storage/v1/object/sign/${mediaBucket}/${encodeURI(path)}`,
+    {
+      method: "POST",
+      headers: {
+        apikey: supabaseKey,
+        Authorization: `Bearer ${supabaseKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ expiresIn }),
+    },
+  );
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || "Falha ao assinar midia.");
+  }
+
+  const payload: any = await response.json().catch(() => ({}));
+  const signedPath = payload?.signedURL || payload?.signedUrl || payload?.url || "";
+  if (!signedPath) throw new Error("Supabase nao retornou URL assinada.");
+  return signedPath.startsWith("http") ? signedPath : `${supabaseUrl}${signedPath}`;
+}
+
 function isUuid(value: unknown) {
   return typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -312,8 +378,14 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     const products = productsResult.rows;
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
-    const totalAmount = Math.round(total * 100);
     const buyerCpf = onlyCpfDigits(buyer.cpf);
+
+    if (total <= 1) {
+      await pool.query("rollback");
+      return res.status(400).json({
+        error: "A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.",
+      });
+    }
 
     const orderResult = await pool.query(
       `
@@ -518,6 +590,209 @@ app.post("/api/checkout/confirm", async (req, res) => {
   }
 
   return res.json({ paid: true });
+});
+
+app.post("/api/media/sign", async (req, res) => {
+  const paths: string[] = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [];
+  const uniquePaths = Array.from(new Set(paths)).filter(Boolean).slice(0, 200);
+
+  if (uniquePaths.length === 0) {
+    return res.json({ urls: {} });
+  }
+
+  const pool = new Pool(getDbConfig());
+
+  try {
+    const productsResult = await pool.query(
+      `
+        select url, "thumbnailUrl"
+        from public.products
+        where url = any($1::text[])
+          or "thumbnailUrl" = any($1::text[])
+      `,
+      [uniquePaths],
+    );
+    const allowedPaths = new Set<string>();
+
+    for (const product of productsResult.rows) {
+      if (product.thumbnailUrl) {
+        allowedPaths.add(String(product.thumbnailUrl));
+      } else if (product.url) {
+        allowedPaths.add(String(product.url));
+      }
+    }
+
+    const signablePaths = uniquePaths.filter((path) => allowedPaths.has(path));
+    if (signablePaths.length === 0) {
+      return res.json({ urls: {} });
+    }
+
+    const entries = await Promise.all(
+      signablePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
+    );
+    return res.json({ urls: Object.fromEntries(entries) });
+  } catch (error: any) {
+    console.error("Erro ao assinar midias:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel assinar midias." });
+  } finally {
+    await pool.end();
+  }
+});
+
+app.post("/api/downloads/record", async (req, res) => {
+  const orderId = String(req.body?.orderId || "");
+  const orderItemId = String(req.body?.orderItemId || "");
+
+  if (!isUuid(orderId) || !isUuid(orderItemId)) {
+    return res.status(400).json({ error: "Download invalido." });
+  }
+
+  const pool = new Pool(getDbConfig());
+
+  try {
+    const itemResult = await pool.query(
+      `
+        select
+          oi.id,
+          oi."orderId",
+          oi."productId",
+          oi."vendedorId",
+          o."buyerEmail",
+          o."userId",
+          o.status
+        from public.order_items oi
+        join public.orders o on o.id = oi."orderId"
+        where oi.id = $1
+          and oi."orderId" = $2
+        limit 1
+      `,
+      [orderItemId, orderId],
+    );
+
+    const item = itemResult.rows[0];
+    if (!item || item.status !== "paid") {
+      return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
+    }
+
+    const ipSource = req.ip || req.socket.remoteAddress || "";
+    const ipHash = ipSource
+      ? crypto.createHash("sha256").update(ipSource).digest("hex")
+      : null;
+
+    await pool.query(
+      `
+        insert into public.download_events (
+          "orderId",
+          "orderItemId",
+          "productId",
+          "vendedorId",
+          "buyerEmail",
+          "userId",
+          "ipHash",
+          "userAgent"
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        item.orderId,
+        item.id,
+        item.productId,
+        item.vendedorId,
+        item.buyerEmail,
+        item.userId,
+        ipHash,
+        String(req.header("user-agent") || "").slice(0, 500),
+      ],
+    );
+
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Erro ao registrar download:", error);
+    return res.status(500).json({ error: "Nao foi possivel registrar o download." });
+  } finally {
+    await pool.end();
+  }
+});
+
+app.post("/api/downloads/authorize", async (req, res) => {
+  const orderId = String(req.body?.orderId || "");
+  const orderItemId = String(req.body?.orderItemId || "");
+
+  if (!isUuid(orderId) || !isUuid(orderItemId)) {
+    return res.status(400).json({ error: "Download invalido." });
+  }
+
+  const pool = new Pool(getDbConfig());
+
+  try {
+    const itemResult = await pool.query(
+      `
+        select
+          oi.id,
+          oi."orderId",
+          oi."productId",
+          oi."vendedorId",
+          oi.name,
+          oi.type,
+          oi.url,
+          p."storagePath",
+          o."buyerEmail",
+          o."userId",
+          o.status
+        from public.order_items oi
+        join public.orders o on o.id = oi."orderId"
+        left join public.products p on p.id = oi."productId"
+        where oi.id = $1
+          and oi."orderId" = $2
+        limit 1
+      `,
+      [orderItemId, orderId],
+    );
+
+    const item = itemResult.rows[0];
+    if (!item || item.status !== "paid") {
+      return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
+    }
+
+    const ipSource = req.ip || req.socket.remoteAddress || "";
+    const ipHash = ipSource
+      ? crypto.createHash("sha256").update(ipSource).digest("hex")
+      : null;
+
+    await pool.query(
+      `
+        insert into public.download_events (
+          "orderId",
+          "orderItemId",
+          "productId",
+          "vendedorId",
+          "buyerEmail",
+          "userId",
+          "ipHash",
+          "userAgent"
+        )
+        values ($1, $2, $3, $4, $5, $6, $7, $8)
+      `,
+      [
+        item.orderId,
+        item.id,
+        item.productId,
+        item.vendedorId,
+        item.buyerEmail,
+        item.userId,
+        ipHash,
+        String(req.header("user-agent") || "").slice(0, 500),
+      ],
+    );
+
+    const signedUrl = await createSignedMediaUrl(item.storagePath || item.url, 300);
+    return res.json({ url: signedUrl });
+  } catch (error: any) {
+    console.error("Erro ao autorizar download:", error);
+    return res.status(500).json({ error: "Nao foi possivel autorizar o download." });
+  } finally {
+    await pool.end();
+  }
 });
 
 // Photographer signup can require email confirmation, which may prevent the client from getting an auth session

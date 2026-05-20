@@ -19,10 +19,11 @@ import {
   Tag,
   Star,
   Video as VideoIcon,
-  Trash2
+  Trash2,
+  X
 } from 'lucide-react';
-import { Product, Photographer, PhotographerDashboardMetrics, PhotographerSale } from '../types';
-import { photographerDashboardService, productService } from '../lib/services';
+import { Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
+import { photographerDashboardService, productService, withdrawalService } from '../lib/services';
 
 interface PhotographerDashboardProps {
   photographer: Photographer;
@@ -33,6 +34,8 @@ type UploadItem = {
   file: File;
   price: number;
   name: string;
+  description: string;
+  bib: string;
   previewUrl: string;
 };
 
@@ -48,6 +51,14 @@ type ProductEditForm = {
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
 
+const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
+  pending: 'Pendente',
+  approved: 'Aprovado',
+  paid: 'Pago',
+  rejected: 'Recusado',
+  cancelled: 'Cancelado',
+};
+
 function getInitialDashboardMetrics(photographer: Photographer): PhotographerDashboardMetrics {
   return {
     totalEarnings: Number(photographer.stats.totalEarnings) || 0,
@@ -60,6 +71,9 @@ function getInitialDashboardMetrics(photographer: Photographer): PhotographerDas
     rating: Number(photographer.stats.rating) || 5,
     downloads: Number(photographer.stats.salesCount) || 0,
     platformFeePercent: 30,
+    monthlyEarnings: 0,
+    availableBalance: Number(photographer.stats.pendingEarnings) || 0,
+    monthlyGoal: 5000,
   };
 }
 
@@ -135,18 +149,74 @@ async function generateVideoThumbnail(file: File): Promise<File | null> {
   });
 }
 
+async function generateImageThumbnail(file: File): Promise<File | null> {
+  if (!file.type.startsWith('image')) return null;
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const maxSide = 1000;
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        resolve(null);
+        return;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(null);
+          return;
+        }
+
+        const thumbnailName = file.name.replace(/\.[^.]+$/, '') || 'foto';
+        resolve(new File([blob], `${thumbnailName}-preview.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.78);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(null);
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function generateMediaThumbnail(file: File): Promise<File | null> {
+  return file.type.startsWith('image')
+    ? generateImageThumbnail(file)
+    : generateVideoThumbnail(file);
+}
+
 export function PhotographerDashboard({ photographer, onLogout }: PhotographerDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'earnings'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [dashboardMetrics, setDashboardMetrics] = useState<PhotographerDashboardMetrics>(() => getInitialDashboardMetrics(photographer));
   const [recentSales, setRecentSales] = useState<PhotographerSale[]>([]);
+  const [productPerformance, setProductPerformance] = useState<PhotographerProductPerformance[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
+  const [withdrawalPixKey, setWithdrawalPixKey] = useState(photographer.cpf ?? '');
+  const [withdrawalError, setWithdrawalError] = useState('');
+  const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
   const [eventInput, setEventInput] = useState('Geral');
   const [checkpointInput, setCheckpointInput] = useState('Ponto Principal');
-  const [bibInput, setBibInput] = useState('');
   const [productSearch, setProductSearch] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<ProductTypeFilter>('all');
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('all');
@@ -187,8 +257,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const pProducts = await productService.getVendedorProducts(photographer.id);
         setProducts(pProducts);
         const dashboard = await photographerDashboardService.getDashboard(photographer.id, pProducts);
+        const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
         setDashboardMetrics(dashboard.metrics);
         setRecentSales(dashboard.recentSales);
+        setProductPerformance(dashboard.productPerformance);
+        setWithdrawals(pWithdrawals);
       } catch (error) {
         console.error("Error loading photographer content:", error);
       } finally {
@@ -198,12 +271,50 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     loadPhotographerContent();
   }, [photographer.id]);
 
+  const handleWithdrawalRequest = async () => {
+    const pixKey = withdrawalPixKey.trim();
+    setWithdrawalError('');
+
+    if (dashboardMetrics.availableBalance <= 0) {
+      setWithdrawalError('Nao ha saldo disponivel para saque.');
+      return;
+    }
+
+    if (pixKey.length < 3) {
+      setWithdrawalError('Informe uma chave Pix valida.');
+      return;
+    }
+
+    setIsRequestingWithdrawal(true);
+    try {
+      const created = await withdrawalService.createWithdrawalRequest(
+        photographer.id,
+        dashboardMetrics.availableBalance,
+        pixKey,
+      );
+      setWithdrawals((current) => [created, ...current]);
+      setDashboardMetrics((current) => ({
+        ...current,
+        availableBalance: Math.max(0, current.availableBalance - Number(created.amount || 0)),
+      }));
+      setShowWithdrawalModal(false);
+      setWithdrawalPixKey(photographer.cpf ?? '');
+    } catch (error: any) {
+      console.error('Erro ao solicitar saque:', error);
+      setWithdrawalError(error?.message || 'Nao foi possivel solicitar o saque.');
+    } finally {
+      setIsRequestingWithdrawal(false);
+    }
+  };
+
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
       const newFiles = Array.from(e.target.files).map((file: File) => ({
         file,
         price: 19.90,
         name: file.name,
+        description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
+        bib: '',
         previewUrl: URL.createObjectURL(file)
       }));
       setSelectedFiles((current) => {
@@ -220,6 +331,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     selectedFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setSelectedFiles([]);
     setPreviewIndex(0);
+  };
+
+  const updateSelectedFile = (index: number, changes: Partial<Pick<UploadItem, 'price' | 'description' | 'bib'>>) => {
+    setSelectedFiles((current) => current.map((item, itemIndex) => (
+      itemIndex === index ? { ...item, ...changes } : item
+    )));
   };
 
   const openEditModal = (product: Product) => {
@@ -311,40 +428,57 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const handleUpload = async () => {
     const normalizedEvent = eventInput.trim();
     const normalizedCheckpoint = checkpointInput.trim();
-    const normalizedBib = bibInput.trim();
 
     if (selectedFiles.length === 0) {
       alert("Selecione ao menos um arquivo para publicar.");
       return;
     }
 
-    if (!normalizedEvent || !normalizedCheckpoint || !normalizedBib) {
-      alert("Preencha evento, checkpoint e numero de peito antes de publicar.");
+    if (!normalizedEvent || !normalizedCheckpoint) {
+      alert("Preencha evento e checkpoint antes de publicar.");
+      return;
+    }
+
+    const invalidFileIndex = selectedFiles.findIndex((item) => (
+      !item.description.trim() ||
+      !item.bib.trim() ||
+      !Number.isFinite(Number(item.price)) ||
+      Number(item.price) <= 0
+    ));
+
+    if (invalidFileIndex >= 0) {
+      setPreviewIndex(invalidFileIndex);
+      alert(`Preencha descricao, numero de peito e preco valido para o arquivo ${invalidFileIndex + 1}.`);
       return;
     }
 
     setIsLoading(true);
     try {
       for (const item of selectedFiles) {
-        const uploadedFile = await productService.uploadProductFile(photographer.id, item.file);
-        const thumbnailFile = await generateVideoThumbnail(item.file);
-        const uploadedThumbnail = thumbnailFile
-          ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile)
-          : null;
+        try {
+          const uploadedFile = await productService.uploadProductFile(photographer.id, item.file);
+          const thumbnailFile = await generateMediaThumbnail(item.file);
+          const uploadedThumbnail = thumbnailFile
+            ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile)
+            : null;
 
-        await productService.addProduct({
-          name: item.name,
-          price: item.price,
-          url: uploadedFile.publicUrl,
-          type: item.file.type.startsWith('image') ? 'IMG' : 'VIDEO',
-          vendedorId: photographer.id,
-          event: normalizedEvent,
-          checkpoint: normalizedCheckpoint,
-          bib: normalizedBib,
-          thumbnailUrl: uploadedThumbnail?.publicUrl,
-          storagePath: uploadedFile.path,
-          status: 'published'
-        });
+          await productService.addProduct({
+            name: item.description.trim(),
+            price: Number(item.price),
+            url: uploadedFile.path,
+            type: item.file.type.startsWith('image') ? 'IMG' : 'VIDEO',
+            vendedorId: photographer.id,
+            event: normalizedEvent,
+            checkpoint: normalizedCheckpoint,
+            bib: item.bib.trim(),
+            thumbnailUrl: uploadedThumbnail?.path,
+            storagePath: uploadedFile.path,
+            status: 'published'
+          });
+        } catch (fileError) {
+          const message = fileError instanceof Error ? fileError.message : String(fileError);
+          throw new Error(`Falha ao publicar "${item.name}": ${message}`);
+        }
       }
       
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
@@ -352,14 +486,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const dashboard = await photographerDashboardService.getDashboard(photographer.id, updatedProducts);
       setDashboardMetrics(dashboard.metrics);
       setRecentSales(dashboard.recentSales);
+      setProductPerformance(dashboard.productPerformance);
       clearSelectedFiles();
       setPreviewIndex(0);
       setShowUploadModal(false);
-      setBibInput('');
       alert("Upload realizado com sucesso!");
     } catch (error) {
       console.error("Erro no upload:", error);
-      alert("Erro ao realizar upload.");
+      alert(error instanceof Error ? error.message : "Erro ao realizar upload.");
     } finally {
       setIsLoading(false);
     }
@@ -504,7 +638,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div className="lg:col-span-2 space-y-6">
                   <div className="flex items-center justify-between mb-2">
                     <h3 className="font-display text-2xl uppercase">Vendas Recentes</h3>
-                    <button className="font-mono text-[10px] uppercase text-gray-400 hover:text-brutal-black">Ver todas</button>
+                    <button
+                      onClick={() => setActiveTab('earnings')}
+                      className="font-mono text-[10px] uppercase text-gray-400 hover:text-brutal-black cursor-pointer"
+                    >
+                      Ver todas
+                    </button>
                   </div>
                   <div className="space-y-4">
                     {recentSales.length === 0 ? (
@@ -555,7 +694,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         <span className="font-mono text-xs uppercase text-gray-400">Downloads</span>
                         <span className="font-display text-4xl">{dashboardMetrics.downloads}</span>
                       </div>
-                      <button className="w-full py-4 mt-4 bg-white text-brutal-black font-display text-sm uppercase tracking-widest hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer">
+                      <button
+                        onClick={() => setActiveTab('earnings')}
+                        className="w-full py-4 mt-4 bg-white text-brutal-black font-display text-sm uppercase tracking-widest hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer"
+                      >
                         Ver Relatório
                       </button>
                     </div>
@@ -633,7 +775,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <div key={product.id} className="group bg-white brutal-border brutal-shadow-hover overflow-hidden transition-all">
                     <div className="aspect-[3/4] relative">
                       {product.type === 'IMG' ? (
-                        <img src={product.url} alt={product.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                        <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
                       ) : product.thumbnailUrl ? (
                         <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
                       ) : (
@@ -695,49 +837,220 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             >
               <div className="bg-brutal-black text-white p-8 brutal-border brutal-shadow flex flex-col md:flex-row justify-between items-center gap-8">
                 <div>
-                  <h3 className="font-display text-2xl uppercase text-gray-400 mb-2">Seu Saldo Disponível</h3>
-                  <p className="font-display text-8xl md:text-9xl text-brutal-accent leading-none tracking-tighter">R$ 1.250,00</p>
+                  <h3 className="font-display text-2xl uppercase text-gray-400 mb-2">Seu Saldo Disponivel</h3>
+                  <p className="font-display text-7xl md:text-9xl text-brutal-accent leading-none tracking-tighter">
+                    {formatCurrency(dashboardMetrics.availableBalance)}
+                  </p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-4">
+                    Vendas pagas liberadas, descontando saques pendentes e pagos.
+                  </p>
                 </div>
                 <div className="w-full md:w-auto">
-                  <button className="w-full px-12 py-6 bg-white text-brutal-black font-display text-xl uppercase tracking-widest hover:bg-brutal-accent hover:text-white hover:-translate-x-1 hover:-translate-y-1 transition-all brutal-border cursor-pointer">
+                  <button
+                    disabled={dashboardMetrics.availableBalance <= 0}
+                    onClick={() => setShowWithdrawalModal(true)}
+                    className="w-full px-12 py-6 bg-white text-brutal-black font-display text-xl uppercase tracking-widest hover:bg-brutal-accent hover:text-white hover:-translate-x-1 hover:-translate-y-1 transition-all brutal-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brutal-black disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+                  >
                     Solicitar Saque
                   </button>
-                  <p className="font-mono text-center text-[10px] text-gray-500 mt-4 uppercase tracking-widest">Processamento em até 24h</p>
+                  <p className="font-mono text-center text-[10px] text-gray-500 mt-4 uppercase tracking-widest">Vendas recentes liberam apos 7 dias</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 <div className="bg-white p-8 brutal-border space-y-6">
-                  <h3 className="font-display text-2xl uppercase">Histórico de Saques</h3>
-                  {[1, 2].map(i => (
-                    <div key={i} className="flex justify-between items-center py-4 border-b border-gray-100">
-                      <div>
-                        <p className="font-display text-lg">Saque Finalizado</p>
-                        <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">Ref: #WD-00{i} • Pix</p>
+                  <h3 className="font-display text-2xl uppercase">Historico Financeiro</h3>
+                  {withdrawals.length > 0 && (
+                    <div className="space-y-3">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">Solicitacoes de saque</p>
+                      {withdrawals.slice(0, 4).map((withdrawal) => (
+                        <div key={withdrawal.id} className="flex justify-between items-center gap-4 py-3 border-b border-gray-100">
+                          <div className="min-w-0">
+                            <p className="font-display text-lg truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
+                            <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest truncate">
+                              Pix: {withdrawal.pixKey} - {formatSaleDate(withdrawal.createdAt)}
+                            </p>
+                          </div>
+                          <p className={`font-display text-xl shrink-0 ${
+                            withdrawal.status === 'rejected' || withdrawal.status === 'cancelled' ? 'text-red-600' : 'text-brutal-accent'
+                          }`}>
+                            - {formatCurrency(Number(withdrawal.amount))}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {recentSales.length === 0 ? (
+                    <div className="py-8 text-center">
+                      <p className="font-display text-xl uppercase">Nenhuma venda paga ainda</p>
+                      <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
+                        As movimentacoes aparecem quando pagamentos forem confirmados.
+                      </p>
+                    </div>
+                  ) : recentSales.map((sale) => (
+                    <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-gray-100">
+                      <div className="min-w-0">
+                        <p className="font-display text-lg truncate">Venda Confirmada</p>
+                        <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">
+                          Pedido #{sale.orderId.substring(0, 8)} - {sale.event}
+                        </p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-display text-xl text-gray-400">- R$ 500,00</p>
-                        <p className="font-mono text-[10px] text-green-600 uppercase">SUCESSO</p>
+                      <div className="text-right shrink-0">
+                        <p className="font-display text-xl text-green-600">+ {formatCurrency(sale.netAmount)}</p>
+                        <p className="font-mono text-[10px] text-gray-400 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
                       </div>
                     </div>
                   ))}
                 </div>
 
-                <div className="bg-white p-8 brutal-border flex flex-col items-center justify-center text-center p-12">
+                <div className="bg-white p-8 brutal-border flex flex-col items-center justify-center text-center">
                    <TrendingUp className="w-16 h-16 text-brutal-accent mb-6" />
                    <h3 className="font-display text-3xl uppercase mb-4">Meta Mensal</h3>
                    <div className="w-full h-4 bg-gray-100 brutal-border-thin mb-4 overflow-hidden">
-                     <div className="h-full bg-brutal-accent w-[65%]" />
+                     <div
+                       className="h-full bg-brutal-accent"
+                       style={{ width: `${Math.min(100, Math.round((dashboardMetrics.monthlyEarnings / dashboardMetrics.monthlyGoal) * 100))}%` }}
+                     />
                    </div>
                    <p className="font-mono text-sm text-gray-500">
-                     Você atingiu <span className="font-bold text-brutal-black">65%</span> da sua meta de <span className="font-bold text-brutal-black">R$ 5.000,00</span>
+                     Voce atingiu <span className="font-bold text-brutal-black">
+                       {Math.min(100, Math.round((dashboardMetrics.monthlyEarnings / dashboardMetrics.monthlyGoal) * 100))}%
+                     </span> da sua meta de <span className="font-bold text-brutal-black">{formatCurrency(dashboardMetrics.monthlyGoal)}</span>
+                   </p>
+                   <p className="font-mono text-[10px] uppercase text-gray-400 tracking-widest mt-3">
+                     Receita do mes: {formatCurrency(dashboardMetrics.monthlyEarnings)}
                    </p>
                 </div>
+              </div>
+
+              <div className="bg-white p-8 brutal-border space-y-6">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div>
+                    <h3 className="font-display text-2xl uppercase">Performance por Produto</h3>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mt-1">
+                      Ranking por receita liquida, vendas pagas e downloads reais.
+                    </p>
+                  </div>
+                  <span className="font-mono text-[10px] uppercase text-gray-400">{productPerformance.length} itens</span>
+                </div>
+
+                {productPerformance.length === 0 ? (
+                  <div className="py-8 text-center bg-gray-50 brutal-border-thin">
+                    <p className="font-display text-xl uppercase">Sem performance registrada</p>
+                    <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
+                      Produtos aparecem aqui depois das primeiras vendas pagas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {productPerformance.map((item, index) => (
+                      <div key={item.productId} className="grid grid-cols-[auto_56px_1fr_auto] items-center gap-4 p-3 bg-gray-50 brutal-border-thin">
+                        <span className="font-display text-2xl text-brutal-accent w-8">#{index + 1}</span>
+                        <div className="w-14 h-14 bg-gray-100 brutal-border-thin overflow-hidden">
+                          {item.thumbnailUrl ? (
+                            <img src={item.thumbnailUrl} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center font-mono text-[9px] text-gray-400">{item.type}</div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-display text-lg truncate">{item.name}</p>
+                          <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest truncate">
+                            Peito {item.bib || 'N/I'} - {item.event}
+                          </p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase mt-1">
+                            {item.salesCount} venda(s) - {item.downloads} download(s)
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-display text-xl text-green-600">{formatCurrency(item.netRevenue)}</p>
+                          <p className="font-mono text-[9px] uppercase text-gray-400">liquido</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </motion.div>
           )}
         </AnimatePresence>
       </main>
+
+      <AnimatePresence>
+        {showWithdrawalModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowWithdrawalModal(false)}
+              className="absolute inset-0 bg-brutal-black/90 backdrop-blur-sm"
+            />
+
+            <motion.div
+              initial={{ scale: 0.92, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.92, y: 20 }}
+              className="relative w-full max-w-xl bg-brutal-white brutal-border brutal-shadow-heavy p-8 space-y-6"
+            >
+              <button
+                onClick={() => setShowWithdrawalModal(false)}
+                className="absolute right-4 top-4 p-2 text-gray-400 hover:text-brutal-black transition-colors cursor-pointer"
+                aria-label="Fechar"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div>
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">Repasse financeiro</p>
+                <h3 className="font-display text-4xl uppercase tracking-tighter">Solicitar Saque</h3>
+                <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">
+                  A solicitacao fica pendente para processamento manual pela equipe Funpace.
+                </p>
+              </div>
+
+              <div className="bg-brutal-black text-white brutal-border p-5">
+                <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">Valor solicitado</p>
+                <p className="font-display text-5xl text-brutal-accent mt-1">{formatCurrency(dashboardMetrics.availableBalance)}</p>
+              </div>
+
+              <div>
+                <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Chave Pix para recebimento</label>
+                <input
+                  type="text"
+                  value={withdrawalPixKey}
+                  onChange={(event) => setWithdrawalPixKey(event.target.value)}
+                  placeholder="CPF, e-mail, telefone ou chave aleatoria"
+                  className="w-full h-14 px-4 bg-white brutal-border font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                />
+              </div>
+
+              {withdrawalError && (
+                <div className="bg-red-50 brutal-border-thin p-4 font-mono text-xs uppercase text-red-600">
+                  {withdrawalError}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={handleWithdrawalRequest}
+                  disabled={isRequestingWithdrawal}
+                  className="h-14 flex-1 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {isRequestingWithdrawal && <Loader2 className="w-5 h-5 animate-spin" />}
+                  Confirmar Solicitação
+                </button>
+                <button
+                  onClick={() => setShowWithdrawalModal(false)}
+                  className="h-14 px-6 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer"
+                >
+                  Cancelar
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Edit Product Modal */}
       <AnimatePresence>
@@ -761,7 +1074,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div className="bg-brutal-black p-6">
                   <div className="aspect-[3/4] bg-black brutal-border overflow-hidden">
                     {editingProduct.type === 'IMG' ? (
-                      <img src={editingProduct.url} alt={editingProduct.name} className="w-full h-full object-cover" />
+                      <img src={editingProduct.thumbnailUrl || editingProduct.url} alt={editingProduct.name} className="w-full h-full object-cover" />
                     ) : editingProduct.thumbnailUrl ? (
                       <img src={editingProduct.thumbnailUrl} alt={editingProduct.name} className="w-full h-full object-cover" />
                     ) : (
@@ -923,39 +1236,58 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 {selectedFiles.length > 0 && (
                   <div className="space-y-3">
                     <h4 className="font-mono text-[10px] uppercase font-bold text-gray-500">Arquivos Selecionados ({selectedFiles.length})</h4>
-                    <div className="max-h-48 overflow-y-auto space-y-2 pr-2">
+                    <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
                        {selectedFiles.map((item, idx) => (
                          <div
                            key={idx}
                            onClick={() => setPreviewIndex(idx)}
-                           className={`w-full flex items-center gap-3 bg-white p-2 brutal-border-thin text-left transition-colors cursor-pointer ${
+                           className={`w-full bg-white p-3 brutal-border-thin text-left transition-colors cursor-pointer ${
                              previewIndex === idx ? 'ring-2 ring-brutal-accent' : 'hover:bg-gray-50'
                            }`}
                          >
-                           <div className="w-10 h-10 bg-gray-100 brutal-border-thin overflow-hidden">
-                              {item.file.type.startsWith('image') ? (
-                                <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-brutal-black text-white">
-                                  <VideoIcon className="w-4 h-4" />
-                                </div>
-                              )}
-                           </div>
-                           <div className="flex-1 min-w-0">
-                             <p className="font-mono text-[9px] uppercase truncate">{item.name}</p>
-                           </div>
-                           <div className="flex items-center gap-2">
-                             <span className="font-mono text-[9px] uppercase text-gray-400">R$</span>
-                             <input 
-                              type="number"
-                              value={item.price}
-                              onChange={(e) => {
-                                const newFiles = [...selectedFiles];
-                                newFiles[idx].price = parseFloat(e.target.value);
-                                setSelectedFiles(newFiles);
-                              }}
-                              className="w-16 h-8 px-2 brutal-border-thin font-mono text-[10px] text-center"
-                             />
+                           <div className="flex items-start gap-3">
+                             <div className="w-14 h-14 bg-gray-100 brutal-border-thin overflow-hidden shrink-0">
+                                {item.file.type.startsWith('image') ? (
+                                  <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center bg-brutal-black text-white">
+                                    <VideoIcon className="w-4 h-4" />
+                                  </div>
+                                )}
+                             </div>
+                             <div className="flex-1 min-w-0 space-y-2">
+                               <p className="font-mono text-[9px] uppercase truncate text-gray-400">{item.name}</p>
+                               <input
+                                type="text"
+                                value={item.description}
+                                onClick={(event) => event.stopPropagation()}
+                                onChange={(event) => updateSelectedFile(idx, { description: event.target.value })}
+                                placeholder="Descricao desta foto"
+                                className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] uppercase"
+                               />
+                               <div className="grid grid-cols-[1fr_96px] gap-2">
+                                 <input
+                                  type="text"
+                                  value={item.bib}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onChange={(event) => updateSelectedFile(idx, { bib: event.target.value.replace(/[^\w-]/g, '').slice(0, 32) })}
+                                  placeholder="N PEITO"
+                                  className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] uppercase"
+                                 />
+                                 <div className="flex items-center gap-1">
+                                   <span className="font-mono text-[9px] uppercase text-gray-400">R$</span>
+                                   <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={item.price}
+                                    onClick={(event) => event.stopPropagation()}
+                                    onChange={(event) => updateSelectedFile(idx, { price: parseFloat(event.target.value) })}
+                                    className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] text-center"
+                                   />
+                                 </div>
+                               </div>
+                             </div>
                            </div>
                          </div>
                        ))}
@@ -1019,17 +1351,6 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       value={checkpointInput}
                       onChange={e => setCheckpointInput(e.target.value)}
                       placeholder="EX: KM 15, CHEGADA" 
-                      className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Numero de Peito</label>
-                    <input 
-                      type="text" 
-                      value={bibInput}
-                      onChange={e => setBibInput(e.target.value.replace(/[^\w-]/g, '').slice(0, 32))}
-                      placeholder="EX: 4212" 
                       className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
                     />
                   </div>

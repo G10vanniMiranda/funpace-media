@@ -62,7 +62,7 @@ export function PhotoGrid({
           <div key={photo.id} className="group relative">
             <div className="aspect-[3/4] bg-gray-200 brutal-border overflow-hidden relative brutal-shadow transition-transform duration-300">
               <img 
-                src={photo.url} 
+                src={photo.thumbnailUrl || photo.url} 
                 alt={photo.id} 
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
               />

@@ -90,6 +90,31 @@ create table if not exists public.payment_events (
   unique (provider, "eventId")
 );
 
+create table if not exists public.download_events (
+  id uuid primary key default gen_random_uuid(),
+  "orderId" uuid not null references public.orders(id) on delete cascade,
+  "orderItemId" uuid not null references public.order_items(id) on delete cascade,
+  "productId" uuid not null references public.products(id) on delete cascade,
+  "vendedorId" text not null references public.photographers(id) on delete cascade,
+  "buyerEmail" text not null check (char_length("buyerEmail") <= 256),
+  "userId" text,
+  "ipHash" text,
+  "userAgent" text,
+  "createdAt" timestamptz not null default now()
+);
+
+create table if not exists public.withdrawal_requests (
+  id uuid primary key default gen_random_uuid(),
+  "photographerId" text not null references public.photographers(id) on delete cascade,
+  amount numeric(10, 2) not null check (amount > 0),
+  "pixKey" text not null check (char_length("pixKey") between 3 and 180),
+  status text not null default 'pending' check (status in ('pending', 'approved', 'paid', 'rejected', 'cancelled')),
+  note text,
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now(),
+  "processedAt" timestamptz
+);
+
 create table if not exists public.platform_settings (
   id text primary key default 'default' check (id = 'default'),
   "platformFeePercent" numeric(5, 2) not null default 30 check ("platformFeePercent" >= 0 and "platformFeePercent" <= 100),
@@ -112,6 +137,12 @@ create index if not exists order_items_order_id_idx on public.order_items ("orde
 create index if not exists order_items_product_id_idx on public.order_items ("productId");
 create index if not exists payment_events_order_id_idx on public.payment_events ("orderId");
 create index if not exists payment_events_provider_event_id_idx on public.payment_events (provider, "eventId");
+create index if not exists download_events_vendedor_id_idx on public.download_events ("vendedorId");
+create index if not exists download_events_order_item_id_idx on public.download_events ("orderItemId");
+create index if not exists download_events_created_at_idx on public.download_events ("createdAt" desc);
+create index if not exists withdrawal_requests_photographer_id_idx on public.withdrawal_requests ("photographerId");
+create index if not exists withdrawal_requests_status_idx on public.withdrawal_requests (status);
+create index if not exists withdrawal_requests_created_at_idx on public.withdrawal_requests ("createdAt" desc);
 
 insert into public.platform_settings (id, "platformFeePercent", "withdrawalFee", "autoBlockSuspicious")
 values ('default', 30, 5, true)
@@ -121,7 +152,7 @@ insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_typ
 values (
   'funpace-media',
   'funpace-media',
-  true,
+  false,
   104857600,
   array[
     'image/jpeg',
@@ -169,11 +200,18 @@ create trigger platform_settings_set_updated_at
 before update on public.platform_settings
 for each row execute function public.set_updated_at();
 
+drop trigger if exists withdrawal_requests_set_updated_at on public.withdrawal_requests;
+create trigger withdrawal_requests_set_updated_at
+before update on public.withdrawal_requests
+for each row execute function public.set_updated_at();
+
 alter table public.photographers enable row level security;
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.payment_events enable row level security;
+alter table public.download_events enable row level security;
+alter table public.withdrawal_requests enable row level security;
 alter table public.platform_settings enable row level security;
 
 drop policy if exists "photographers_select_public_verified_or_owner_or_admin" on public.photographers;
@@ -274,15 +312,6 @@ for select
 using (
   public.is_admin()
   or "vendedorId" = auth.uid()::text
-  or exists (
-    select 1
-    from public.orders o
-    where o.id = "orderId"
-      and (
-        (o."userId" is not null and o."userId" = auth.uid()::text)
-        or o."buyerEmail" = (auth.jwt() ->> 'email')
-      )
-  )
 );
 
 drop policy if exists "payment_events_select_admin_only" on public.payment_events;
@@ -290,6 +319,47 @@ create policy "payment_events_select_admin_only"
 on public.payment_events
 for select
 using (public.is_admin());
+
+drop policy if exists "download_events_select_owner_or_admin" on public.download_events;
+create policy "download_events_select_owner_or_admin"
+on public.download_events
+for select
+using (
+  public.is_admin()
+  or "vendedorId" = auth.uid()::text
+);
+
+drop policy if exists "withdrawal_requests_select_owner_or_admin" on public.withdrawal_requests;
+create policy "withdrawal_requests_select_owner_or_admin"
+on public.withdrawal_requests
+for select
+using (
+  public.is_admin()
+  or "photographerId" = auth.uid()::text
+);
+
+drop policy if exists "withdrawal_requests_insert_owner" on public.withdrawal_requests;
+create policy "withdrawal_requests_insert_owner"
+on public.withdrawal_requests
+for insert
+with check (
+  auth.uid() is not null
+  and "photographerId" = auth.uid()::text
+  and status = 'pending'
+  and exists (
+    select 1
+    from public.photographers p
+    where p.id = auth.uid()::text
+      and p.verified = true
+  )
+);
+
+drop policy if exists "withdrawal_requests_update_admin_only" on public.withdrawal_requests;
+create policy "withdrawal_requests_update_admin_only"
+on public.withdrawal_requests
+for update
+using (public.is_admin())
+with check (public.is_admin());
 
 drop policy if exists "platform_settings_select_admin_only" on public.platform_settings;
 create policy "platform_settings_select_admin_only"
@@ -317,12 +387,17 @@ for insert
 with check (
   bucket_id = 'funpace-media'
   and auth.uid() is not null
-  and (storage.foldername(name))[1] = auth.uid()::text
-  and exists (
-    select 1
-    from public.photographers p
-    where p.id = auth.uid()::text
-      and p.verified = true
+  and (
+    public.is_admin()
+    or (
+      (storage.foldername(name))[1] = auth.uid()::text
+      and exists (
+        select 1
+        from public.photographers p
+        where p.id = auth.uid()::text
+          and p.verified = true
+      )
+    )
   )
 );
 

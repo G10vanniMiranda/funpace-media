@@ -99,6 +99,18 @@ export interface PlatformSettings {
   updatedAt?: string;
 }
 
+export interface WithdrawalRequest {
+  id: string;
+  photographerId: string;
+  amount: number;
+  pixKey: string;
+  status: 'pending' | 'approved' | 'paid' | 'rejected' | 'cancelled';
+  note?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+  processedAt?: string | null;
+}
+
 export interface PhotographerSale {
   id: string;
   orderId: string;
@@ -129,6 +141,22 @@ export interface PhotographerDashboardMetrics {
   rating: number;
   downloads: number;
   platformFeePercent: number;
+  monthlyEarnings: number;
+  availableBalance: number;
+  monthlyGoal: number;
+}
+
+export interface PhotographerProductPerformance {
+  productId: string;
+  name: string;
+  type: ProductType;
+  event: string;
+  bib: string;
+  thumbnailUrl?: string | null;
+  salesCount: number;
+  downloads: number;
+  grossRevenue: number;
+  netRevenue: number;
 }
 
 export interface Photo extends Product {

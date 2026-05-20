@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { PhotoGrid } from './components/PhotoGrid';
 import { VideoGrid } from './components/VideoGrid';
 import { CartDrawer } from './components/CartDrawer';
+import { CheckoutPage } from './components/CheckoutPage';
 import { CustomerOrdersDrawer } from './components/CustomerOrdersDrawer';
 import { Footer } from './components/Footer';
 import { AuthView } from './components/AuthView';
@@ -14,13 +15,13 @@ import { PhotographerDashboard } from './components/PhotographerDashboard';
 import { PhotographerLogin } from './components/PhotographerLogin';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLogin } from './components/AdminLogin';
-import { Product, Photographer, Buyer, AdminMetrics, Order } from './types';
+import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { productService, photographerService, orderService } from './lib/services';
+import { productService, photographerService, orderService, withdrawalService } from './lib/services';
 import { logout } from './lib/supabase';
 import { AnimatePresence, motion } from 'motion/react';
-import { Loader2, Scan, ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Loader2, ReceiptText, Scan, X, XCircle } from 'lucide-react';
 
 enum OperationType {
   CREATE = 'create',
@@ -37,6 +38,19 @@ interface DataErrorInfo {
   path: string | null;
 }
 
+const cartStorageKey = 'funpace:cart';
+
+function loadStoredCart(): Product[] {
+  try {
+    const raw = localStorage.getItem(cartStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
 function handleDataError(error: unknown, operationType: OperationType, path: string | null) {
   const errInfo: DataErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
@@ -51,7 +65,8 @@ function handleDataError(error: unknown, operationType: OperationType, path: str
 function Storefront() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [cart, setCart] = useState<Product[]>([]);
+  const location = useLocation();
+  const [cart, setCart] = useState<Product[]>(() => loadStoredCart());
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -66,6 +81,16 @@ function Storefront() {
   const [photos, setPhotos] = useState<Product[]>([]);
   const [videos, setVideos] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
+  const [paymentNotice, setPaymentNotice] = useState<{
+    status: 'paid' | 'pending' | 'cancelled';
+    orderId?: string | null;
+    message: string;
+  } | null>(null);
+
+  React.useEffect(() => {
+    localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+  }, [cart]);
 
   React.useEffect(() => {
     async function loadData() {
@@ -104,11 +129,23 @@ function Storefront() {
             throw new Error(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
           }
 
-          alert('Pagamento confirmado! Suas fotos ja estao liberadas em Minhas Compras.');
+          const orderId = params.get('order') || params.get('order_nsu');
+          setPaymentNotice({
+            status: 'paid',
+            orderId,
+            message: 'Pagamento confirmado. Seus arquivos digitais ja estao liberados para download.',
+          });
+          setHighlightedOrderId(orderId);
+          setIsOrdersOpen(true);
           setCart([]);
         } catch (error: any) {
           console.error('Erro ao confirmar pagamento:', error);
-          alert('Recebemos o retorno do checkout. Se o pagamento foi aprovado, suas fotos serao liberadas assim que a InfinitePay confirmar.');
+          setPaymentNotice({
+            status: 'pending',
+            orderId: params.get('order') || params.get('order_nsu'),
+            message: 'Recebemos o retorno do checkout. Se o pagamento foi aprovado, a liberacao acontecera quando a InfinitePay confirmar.',
+          });
+          setIsOrdersOpen(true);
         } finally {
           window.history.replaceState({}, '', window.location.pathname);
         }
@@ -116,7 +153,12 @@ function Storefront() {
 
       confirmCheckoutPayment();
     } else if (params.get('payment') === 'cancel') {
-      alert('O pagamento foi cancelado. Voce pode tentar novamente quando desejar.');
+      setPaymentNotice({
+        status: 'cancelled',
+        orderId: params.get('order') || params.get('order_nsu'),
+        message: 'O pagamento foi cancelado. O pedido continua disponivel para uma nova tentativa.',
+      });
+      setIsOrdersOpen(true);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -217,6 +259,11 @@ function Storefront() {
       }
 
       // 1. Criar sessão de pagamento no backend enviando os dados do comprador
+      const checkoutTotal = cart.reduce((sum, item) => sum + Number(item.price || 0), 0);
+      if (checkoutTotal <= 1) {
+        throw new Error('A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.');
+      }
+
       const response = await fetch('/api/checkout/create-session', {
         method: 'POST',
         headers: {
@@ -258,6 +305,27 @@ function Storefront() {
 
   const selectedPhotographer = null; // Replaced by profile view logic
   const photographerPhotos: Product[] = [];
+
+  if (location.pathname === '/checkout') {
+    return (
+      <>
+        <CheckoutPage
+          cartItems={cart}
+          onRemoveItem={handleRemoveFromCart}
+          onCheckout={handleCheckout}
+          onLoginRequested={() => setIsAuthOpen(true)}
+        />
+        <AnimatePresence>
+          {isAuthOpen && (
+            <AuthView
+              onClose={() => setIsAuthOpen(false)}
+              onSuccess={() => setIsAuthOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      </>
+    );
+  }
 
   if (showDashboard) {
     if (loggedInPhotographer) {
@@ -403,15 +471,26 @@ function Storefront() {
         cartItems={cart}
         onRemoveItem={handleRemoveFromCart}
         isAuthenticated={Boolean(user)}
-        customerName={user?.displayName}
-        customerEmail={user?.email}
         onLoginRequested={() => setIsAuthOpen(true)}
-        onCheckout={handleCheckout}
+        onOpenCheckout={() => {
+          setIsCartOpen(false);
+          navigate('/checkout');
+        }}
       />
 
       <CustomerOrdersDrawer
         isOpen={isOrdersOpen}
         onClose={() => setIsOrdersOpen(false)}
+        highlightedOrderId={highlightedOrderId}
+      />
+
+      <PaymentNoticeModal
+        notice={paymentNotice}
+        onClose={() => setPaymentNotice(null)}
+        onOpenOrders={() => {
+          setPaymentNotice(null);
+          setIsOrdersOpen(true);
+        }}
       />
 
       <AnimatePresence>
@@ -428,6 +507,89 @@ function Storefront() {
   );
 }
 
+function PaymentNoticeModal({
+  notice,
+  onClose,
+  onOpenOrders,
+}: {
+  notice: { status: 'paid' | 'pending' | 'cancelled'; orderId?: string | null; message: string } | null;
+  onClose: () => void;
+  onOpenOrders: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {notice && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ scale: 0.92, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.92, y: 20 }}
+            className="relative w-full max-w-xl bg-white brutal-border brutal-shadow-heavy p-8"
+          >
+            <button
+              onClick={onClose}
+              className="absolute right-4 top-4 p-2 text-gray-400 hover:text-brutal-black transition-colors cursor-pointer"
+              aria-label="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex items-start gap-5">
+              <div className={`p-4 brutal-border ${
+                notice.status === 'paid' ? 'bg-green-50 text-green-600' :
+                notice.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
+                'bg-red-50 text-red-600'
+              }`}>
+                {notice.status === 'paid' ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">
+                  Retorno da InfinitePay
+                </p>
+                <h2 className="font-display text-4xl uppercase tracking-tighter">
+                  {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
+                </h2>
+                <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">
+                  {notice.message}
+                </p>
+                {notice.orderId && (
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-4">
+                    Pedido #{notice.orderId.slice(0, 8)}
+                  </p>
+                )}
+
+                <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                  <button
+                    onClick={onOpenOrders}
+                    className="h-12 px-5 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                  >
+                    <ReceiptText className="w-4 h-4" />
+                    Abrir minhas compras
+                  </button>
+                  <button
+                    onClick={onClose}
+                    className="h-12 px-5 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer"
+                  >
+                    Continuar na loja
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 function PhotographerRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -439,15 +601,28 @@ function PhotographerRoute() {
       setIsLoading(true);
       try {
         const storedPhotographerId = localStorage.getItem('funpace:photographer-id');
-        const photographerId = user?.id ?? storedPhotographerId;
+        const photographerId = isMockMode ? (storedPhotographerId ?? user?.id) : user?.id;
 
         if (!photographerId) {
+          if (!isMockMode) {
+            localStorage.removeItem('funpace:photographer-id');
+            localStorage.removeItem('funpace:photographer-panel-active');
+          }
           setPhotographer(null);
           return;
         }
 
         const currentPhotographer = await photographerService.getPhotographerById(photographerId);
-        setPhotographer(currentPhotographer?.verified ? currentPhotographer : null);
+        if (currentPhotographer?.verified) {
+          localStorage.setItem('funpace:photographer-id', currentPhotographer.id);
+          setPhotographer(currentPhotographer);
+        } else {
+          if (!isMockMode) {
+            localStorage.removeItem('funpace:photographer-id');
+            localStorage.removeItem('funpace:photographer-panel-active');
+          }
+          setPhotographer(null);
+        }
       } catch (error) {
         console.error('Error restoring photographer session:', error);
         setPhotographer(null);
@@ -509,6 +684,7 @@ function AdminRoute() {
   const [photos, setPhotos] = useState<Product[]>([]);
   const [videos, setVideos] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [metrics, setMetrics] = useState<AdminMetrics>({
     grossRevenue: 0,
     platformFee: 0,
@@ -526,10 +702,11 @@ function AdminRoute() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [allPhotographers, allProducts, allOrders] = await Promise.all([
+      const [allPhotographers, allProducts, allOrders, allWithdrawals] = await Promise.all([
         photographerService.getAllPhotographers(),
         productService.getAdminProducts(1000),
-        orderService.getAdminOrders(200)
+        orderService.getAdminOrders(200),
+        withdrawalService.getAdminWithdrawals(200)
       ]);
 
       // Compute photographer stats from real data to avoid relying on stored `photographers.stats` (which may be stale).
@@ -575,6 +752,7 @@ function AdminRoute() {
       setPhotos(allProducts.filter(p => p.type === 'IMG'));
       setVideos(allProducts.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
       setOrders(allOrders);
+      setWithdrawals(allWithdrawals);
       setMetrics({
         grossRevenue,
         platformFee: grossRevenue * 0.3,
@@ -632,6 +810,7 @@ function AdminRoute() {
       photos={photos}
       videos={videos}
       orders={orders}
+      withdrawals={withdrawals}
       metrics={metrics}
       onLogout={handleAdminLogout}
       onRefresh={loadData}
@@ -645,6 +824,7 @@ export default function App() {
       <Routes>
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
+        <Route path="/checkout" element={<Storefront />} />
         <Route path="/" element={<Storefront />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

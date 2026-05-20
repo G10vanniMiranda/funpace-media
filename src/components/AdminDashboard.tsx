@@ -21,8 +21,8 @@ import {
   Mail,
   User as UserIcon
 } from 'lucide-react';
-import { AdminMetrics, Order, Photographer, PlatformSettings, Product } from '../types';
-import { orderService, photographerService, platformSettingsService } from '../lib/services';
+import { AdminMetrics, Order, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
+import { orderService, photographerService, platformSettingsService, productService, withdrawalService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 
 interface AdminDashboardProps {
@@ -30,12 +30,92 @@ interface AdminDashboardProps {
   photos: Product[];
   videos: Product[];
   orders: Order[];
+  withdrawals: WithdrawalRequest[];
   metrics: AdminMetrics;
   onLogout: () => void;
   onRefresh: () => void;
 }
 
-export function AdminDashboard({ photographers, photos, videos, orders, metrics, onLogout, onRefresh }: AdminDashboardProps) {
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+async function createThumbnailFromMedia(product: Product): Promise<File> {
+  const sourceUrl = product.thumbnailUrl || product.url;
+  const response = await fetch(sourceUrl, { mode: 'cors' });
+  if (!response.ok) throw new Error('Nao foi possivel baixar a midia para gerar preview.');
+  const blob = await response.blob();
+  const objectUrl = URL.createObjectURL(blob);
+
+  try {
+    if (product.type === 'IMG') {
+      return await new Promise<File>((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => {
+          const maxSide = 1000;
+          const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+          const width = Math.max(1, Math.round(image.width * scale));
+          const height = Math.max(1, Math.round(image.height * scale));
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const context = canvas.getContext('2d');
+          if (!context) {
+            reject(new Error('Canvas indisponivel.'));
+            return;
+          }
+          context.drawImage(image, 0, 0, width, height);
+          canvas.toBlob((thumbBlob) => {
+            if (!thumbBlob) {
+              reject(new Error('Nao foi possivel gerar preview.'));
+              return;
+            }
+            resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
+          }, 'image/jpeg', 0.78);
+        };
+        image.onerror = () => reject(new Error('Imagem invalida.'));
+        image.src = objectUrl;
+      });
+    }
+
+    return await new Promise<File>((resolve, reject) => {
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.src = objectUrl;
+      video.onerror = () => reject(new Error('Video invalido.'));
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.min(1, Math.max(0, (video.duration || 1) / 4));
+      };
+      video.onseeked = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth || 1280;
+        canvas.height = video.videoHeight || 720;
+        const context = canvas.getContext('2d');
+        if (!context) {
+          reject(new Error('Canvas indisponivel.'));
+          return;
+        }
+        context.drawImage(video, 0, 0, canvas.width, canvas.height);
+        canvas.toBlob((thumbBlob) => {
+          if (!thumbBlob) {
+            reject(new Error('Nao foi possivel gerar preview.'));
+            return;
+          }
+          resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.78);
+      };
+    });
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+export function AdminDashboard({ photographers, photos, videos, orders, withdrawals, metrics, onLogout, onRefresh }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<'overview' | 'photographers' | 'sales' | 'settings'>('overview');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPhotographer, setNewPhotographer] = useState({ name: '', email: '', bio: '' });
@@ -45,6 +125,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, metrics,
   const [editForm, setEditForm] = useState({ name: '', bio: '', cpf: '', phone: '', avatar: '' });
   const [isUpdatingPhotographer, setIsUpdatingPhotographer] = useState(false);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [updatingWithdrawalId, setUpdatingWithdrawalId] = useState<string | null>(null);
+  const [isBackfillingThumbnails, setIsBackfillingThumbnails] = useState(false);
+  const [thumbnailBackfillProgress, setThumbnailBackfillProgress] = useState('');
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
@@ -57,6 +140,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, metrics,
   const recentOrders = orders.slice(0, 5);
   const pendingOrders = orders.filter((order) => order.status === 'pending');
   const paidOrders = orders.filter((order) => order.status === 'paid');
+  const productsMissingThumbnails = [...photos, ...videos].filter((product) => !product.thumbnailUrl && (product.status ?? 'published') !== 'removed');
+  const pendingWithdrawals = withdrawals.filter((withdrawal) => withdrawal.status === 'pending');
+  const processedWithdrawals = withdrawals.filter((withdrawal) => withdrawal.status !== 'pending');
+  const photographerById = React.useMemo(
+    () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
+    [photographers],
+  );
   const recentActivity = React.useMemo(() => {
     type Activity = { id: string; kind: 'photographer' | 'product' | 'order'; at: number; title: string; meta: string };
 
@@ -330,6 +420,67 @@ export function AdminDashboard({ photographers, photos, videos, orders, metrics,
     }
   };
 
+  const handleWithdrawalStatus = async (withdrawal: WithdrawalRequest, status: WithdrawalRequest['status']) => {
+    const photographer = photographerById.get(withdrawal.photographerId);
+    const actionLabel = status === 'paid' ? 'marcar como pago' : 'recusar';
+    const confirmed = window.confirm(
+      `Deseja ${actionLabel} o saque de ${formatCurrency(Number(withdrawal.amount))}${photographer ? ` para ${photographer.name}` : ''}?`,
+    );
+    if (!confirmed) return;
+
+    setUpdatingWithdrawalId(withdrawal.id);
+    try {
+      await withdrawalService.updateWithdrawalStatus(
+        withdrawal.id,
+        status,
+        status === 'paid' ? 'Transferencia Pix realizada pelo admin.' : 'Solicitacao recusada pelo admin.',
+      );
+      await onRefresh();
+      alert(status === 'paid' ? 'Saque marcado como pago.' : 'Saque recusado.');
+    } catch (error) {
+      console.error(error);
+      alert('Erro ao atualizar saque.');
+    } finally {
+      setUpdatingWithdrawalId(null);
+    }
+  };
+
+  const handleBackfillThumbnails = async () => {
+    const targets = productsMissingThumbnails.slice(0, 25);
+    if (targets.length === 0) return;
+
+    const confirmed = window.confirm(`Gerar previews para ${targets.length} produto(s) sem thumbnail?`);
+    if (!confirmed) return;
+
+    setIsBackfillingThumbnails(true);
+    setThumbnailBackfillProgress(`0/${targets.length}`);
+
+    let completed = 0;
+    let failed = 0;
+
+    try {
+      for (const product of targets) {
+        try {
+          const thumbnail = await createThumbnailFromMedia(product);
+          const uploaded = await productService.uploadProductThumbnail(product.vendedorId, thumbnail);
+          await productService.updateProductThumbnail(product.id, uploaded.path);
+          completed += 1;
+        } catch (error) {
+          failed += 1;
+          console.error(`Erro ao gerar preview do produto ${product.id}:`, error);
+        }
+        setThumbnailBackfillProgress(`${completed + failed}/${targets.length}`);
+      }
+
+      await onRefresh();
+      alert(failed > 0
+        ? `Previews gerados: ${completed}. Falhas: ${failed}.`
+        : `Previews gerados com sucesso: ${completed}.`);
+    } finally {
+      setIsBackfillingThumbnails(false);
+    }
+  };
+
   const handleSaveSettings = async () => {
     if (settingsForm.platformFeePercent < 0 || settingsForm.platformFeePercent > 100) {
       alert('A taxa da plataforma deve ficar entre 0 e 100%.');
@@ -508,6 +659,33 @@ export function AdminDashboard({ photographers, photos, videos, orders, metrics,
                       ))
                     )}
                   </div>
+                </div>
+
+                <div className="bg-white p-8 brutal-border space-y-6">
+                  <h3 className="font-display text-2xl uppercase">Manutencao de Midias</h3>
+                  <div className="bg-gray-50 brutal-border-thin p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <p className="font-display text-xl uppercase">Previews antigos</p>
+                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">
+                        {productsMissingThumbnails.length} produto(s) sem thumbnail dedicado.
+                      </p>
+                      {thumbnailBackfillProgress && (
+                        <p className="font-mono text-[10px] uppercase text-brutal-accent mt-2">
+                          Processando {thumbnailBackfillProgress}
+                        </p>
+                      )}
+                    </div>
+                    <button
+                      onClick={handleBackfillThumbnails}
+                      disabled={isBackfillingThumbnails || productsMissingThumbnails.length === 0}
+                      className="h-12 px-5 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                    >
+                      {isBackfillingThumbnails ? 'Gerando...' : 'Gerar Previews'}
+                    </button>
+                  </div>
+                  <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
+                    Processa ate 25 itens por vez. Reexecute ate zerar a fila.
+                  </p>
                 </div>
 
                 <div className="bg-brutal-black text-white p-8 brutal-border shadow-[12px_12px_0px_#FFD100]">
@@ -704,6 +882,74 @@ export function AdminDashboard({ photographers, photos, videos, orders, metrics,
               animate={{ opacity: 1, y: 0 }}
               className="grid grid-cols-1 md:grid-cols-2 gap-8"
             >
+              <div className="md:col-span-2 bg-white p-8 brutal-border space-y-6">
+                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div>
+                    <h3 className="font-display text-2xl uppercase">Saques Pendentes</h3>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mt-1">
+                      Transferencias Pix solicitadas pelos fotografos
+                    </p>
+                  </div>
+                  <div className="bg-brutal-black text-white brutal-border px-4 py-3">
+                    <p className="font-mono text-[9px] uppercase text-gray-400">Total pendente</p>
+                    <p className="font-display text-2xl text-brutal-accent">
+                      {formatCurrency(pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0))}
+                    </p>
+                  </div>
+                </div>
+
+                {pendingWithdrawals.length > 0 ? (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                    {pendingWithdrawals.map((withdrawal) => {
+                      const photographer = photographerById.get(withdrawal.photographerId);
+                      return (
+                        <div key={withdrawal.id} className="p-4 bg-gray-50 brutal-border-thin space-y-4">
+                          <div className="flex items-start justify-between gap-4">
+                            <div className="min-w-0">
+                              <p className="font-display text-lg uppercase truncate">{photographer?.name ?? 'Fotografo'}</p>
+                              <p className="font-mono text-[10px] text-gray-400 truncate">{photographer?.email ?? withdrawal.photographerId}</p>
+                              <p className="font-mono text-[10px] text-gray-500 uppercase mt-2">
+                                Solicitado em {new Date(withdrawal.createdAt).toLocaleString('pt-BR')}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="font-display text-2xl text-brutal-accent">{formatCurrency(Number(withdrawal.amount))}</p>
+                              <p className="font-mono text-[9px] text-yellow-700 uppercase">Pendente</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-white brutal-border-thin p-3">
+                            <p className="font-mono text-[9px] uppercase text-gray-400">Chave Pix</p>
+                            <p className="font-mono text-xs break-all">{withdrawal.pixKey}</p>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <button
+                              disabled={updatingWithdrawalId === withdrawal.id}
+                              onClick={() => handleWithdrawalStatus(withdrawal, 'paid')}
+                              className="h-10 bg-green-600 text-white brutal-border-thin font-mono text-[10px] uppercase font-bold hover:bg-green-700 disabled:bg-gray-400 transition-colors cursor-pointer"
+                            >
+                              {updatingWithdrawalId === withdrawal.id ? 'Salvando...' : 'Marcar Pago'}
+                            </button>
+                            <button
+                              disabled={updatingWithdrawalId === withdrawal.id}
+                              onClick={() => handleWithdrawalStatus(withdrawal, 'rejected')}
+                              className="h-10 bg-white text-red-600 brutal-border-thin font-mono text-[10px] uppercase font-bold hover:bg-red-50 disabled:text-gray-400 transition-colors cursor-pointer"
+                            >
+                              Recusar
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <div className="p-6 bg-gray-50 brutal-border-thin text-center">
+                    <p className="font-mono text-[10px] text-gray-400 uppercase">Nenhum saque pendente.</p>
+                  </div>
+                )}
+              </div>
+
               <div className="bg-white p-8 brutal-border space-y-6">
                 <h3 className="font-display text-2xl uppercase">Pagamentos Pendentes</h3>
                 <div className="space-y-4">
@@ -774,6 +1020,25 @@ export function AdminDashboard({ photographers, photos, videos, orders, metrics,
                     </div>
                   )) : (
                     <div className="text-xs font-mono text-gray-500 uppercase">Nenhuma transacao registrada.</div>
+                  )}
+                </div>
+                <div className="border-t border-white/10 pt-6 space-y-4">
+                  <h4 className="font-display text-lg uppercase text-white">Historico de Saques</h4>
+                  {processedWithdrawals.length > 0 ? processedWithdrawals.slice(0, 6).map((withdrawal) => {
+                    const photographer = photographerById.get(withdrawal.photographerId);
+                    return (
+                      <div key={withdrawal.id} className="flex justify-between items-center text-xs font-mono border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                        <div className="min-w-0">
+                          <p className="uppercase truncate max-w-[180px]">{photographer?.name ?? 'Fotografo'}</p>
+                          <p className="text-gray-500 text-[10px]">{withdrawal.status} - {new Date(withdrawal.createdAt).toLocaleDateString('pt-BR')}</p>
+                        </div>
+                        <p className={withdrawal.status === 'paid' ? 'text-green-500' : 'text-red-400'}>
+                          {formatCurrency(Number(withdrawal.amount))}
+                        </p>
+                      </div>
+                    );
+                  }) : (
+                    <div className="text-xs font-mono text-gray-500 uppercase">Nenhum saque processado.</div>
                   )}
                 </div>
               </div>

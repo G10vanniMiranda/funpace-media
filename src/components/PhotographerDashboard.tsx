@@ -21,8 +21,8 @@ import {
   Video as VideoIcon,
   Trash2
 } from 'lucide-react';
-import { Product, Photographer } from '../types';
-import { productService } from '../lib/services';
+import { Product, Photographer, PhotographerDashboardMetrics, PhotographerSale } from '../types';
+import { photographerDashboardService, productService } from '../lib/services';
 
 interface PhotographerDashboardProps {
   photographer: Photographer;
@@ -47,6 +47,37 @@ type ProductEditForm = {
 
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
+
+function getInitialDashboardMetrics(photographer: Photographer): PhotographerDashboardMetrics {
+  return {
+    totalEarnings: Number(photographer.stats.totalEarnings) || 0,
+    pendingEarnings: Number(photographer.stats.pendingEarnings) || 0,
+    salesCount: Number(photographer.stats.salesCount) || 0,
+    todaySalesCount: 0,
+    publishedMediaCount: Number(photographer.stats.photos) || 0,
+    photoCount: Number(photographer.stats.photos) || 0,
+    videoCount: 0,
+    rating: Number(photographer.stats.rating) || 5,
+    downloads: Number(photographer.stats.salesCount) || 0,
+    platformFeePercent: 30,
+  };
+}
+
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(value);
+}
+
+function formatSaleDate(value: string) {
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(value));
+}
 
 async function generateVideoThumbnail(file: File): Promise<File | null> {
   if (!file.type.startsWith('video')) return null;
@@ -108,6 +139,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'earnings'>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
+  const [dashboardMetrics, setDashboardMetrics] = useState<PhotographerDashboardMetrics>(() => getInitialDashboardMetrics(photographer));
+  const [recentSales, setRecentSales] = useState<PhotographerSale[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -153,6 +186,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       try {
         const pProducts = await productService.getVendedorProducts(photographer.id);
         setProducts(pProducts);
+        const dashboard = await photographerDashboardService.getDashboard(photographer.id, pProducts);
+        setDashboardMetrics(dashboard.metrics);
+        setRecentSales(dashboard.recentSales);
       } catch (error) {
         console.error("Error loading photographer content:", error);
       } finally {
@@ -313,6 +349,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
       setProducts(updatedProducts);
+      const dashboard = await photographerDashboardService.getDashboard(photographer.id, updatedProducts);
+      setDashboardMetrics(dashboard.metrics);
+      setRecentSales(dashboard.recentSales);
       clearSelectedFiles();
       setPreviewIndex(0);
       setShowUploadModal(false);
@@ -434,26 +473,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard 
                   label="Ganhos Totais" 
-                  value={`R$ ${photographer.stats.totalEarnings.toFixed(2)}`} 
+                  value={formatCurrency(dashboardMetrics.totalEarnings)} 
                   icon={<DollarSign />} 
-                  trend="+12% este mês"
+                  trend={`${dashboardMetrics.platformFeePercent}% taxa plataforma`}
                   accent 
                 />
                 <StatCard 
                   label="Vendas Realizadas" 
-                  value={photographer.stats.salesCount} 
+                  value={dashboardMetrics.salesCount} 
                   icon={<TrendingUp />} 
-                  trend="+5 hoje"
+                  trend={`+${dashboardMetrics.todaySalesCount} hoje`}
                 />
                 <StatCard 
                   label="Fotos No Ar" 
-                  value={photographer.stats.photos} 
+                  value={dashboardMetrics.publishedMediaCount} 
                   icon={<ImageIcon />} 
-                  trend="Capacidade 80%"
+                  trend={`${dashboardMetrics.photoCount} fotos / ${dashboardMetrics.videoCount} videos`}
                 />
                 <StatCard 
                   label="Aguardando Resgate" 
-                  value={`R$ ${photographer.stats.pendingEarnings.toFixed(2)}`} 
+                  value={formatCurrency(dashboardMetrics.pendingEarnings)} 
                   icon={<AlertCircle />} 
                   trend="Liberação em 7 dias"
                   warning
@@ -468,18 +507,27 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <button className="font-mono text-[10px] uppercase text-gray-400 hover:text-brutal-black">Ver todas</button>
                   </div>
                   <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="bg-white p-4 brutal-border flex items-center gap-4 group hover:bg-gray-50 transition-colors">
+                    {recentSales.length === 0 ? (
+                      <div className="bg-white p-8 brutal-border text-center">
+                        <p className="font-display text-xl uppercase">Nenhuma venda paga ainda</p>
+                        <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
+                          As vendas aparecem aqui quando o pagamento for confirmado.
+                        </p>
+                      </div>
+                    ) : recentSales.map((sale) => (
+                      <div key={sale.id} className="bg-white p-4 brutal-border flex items-center gap-4 group hover:bg-gray-50 transition-colors">
                         <div className="w-16 h-16 brutal-border bg-gray-100 overflow-hidden">
-                          <img src={products[i]?.url} alt="Sold" className="w-full h-full object-cover" />
+                          <img src={sale.thumbnailUrl || sale.url} alt={sale.name} className="w-full h-full object-cover" />
                         </div>
                         <div className="flex-1">
-                          <p className="font-display text-lg">Venda Digital #859{i}</p>
-                          <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest leading-none">ID {products[i]?.id?.substring(0,4)} • {products[i]?.event}</p>
+                          <p className="font-display text-lg">{sale.name}</p>
+                          <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest leading-none">
+                            ID {sale.orderId.substring(0, 8)} - {sale.event}
+                          </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-display text-xl text-green-600">+ R$ {(24.90 * 0.7).toFixed(2)}</p>
-                          <p className="font-mono text-[10px] text-gray-400 uppercase">24 de Mai, 14:00</p>
+                          <p className="font-display text-xl text-green-600">+ {formatCurrency(sale.netAmount)}</p>
+                          <p className="font-mono text-[10px] text-gray-400 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
                         </div>
                       </div>
                     ))}
@@ -501,11 +549,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <div className="space-y-6">
                       <div className="flex justify-between items-end border-b border-white/10 pb-4">
                         <span className="font-mono text-xs uppercase text-gray-400">Score Geral</span>
-                        <span className="font-display text-4xl text-brutal-accent">{photographer.stats.rating}</span>
+                        <span className="font-display text-4xl text-brutal-accent">{dashboardMetrics.rating}</span>
                       </div>
                       <div className="flex justify-between items-end border-b border-white/10 pb-4">
                         <span className="font-mono text-xs uppercase text-gray-400">Downloads</span>
-                        <span className="font-display text-4xl">842</span>
+                        <span className="font-display text-4xl">{dashboardMetrics.downloads}</span>
                       </div>
                       <button className="w-full py-4 mt-4 bg-white text-brutal-black font-display text-sm uppercase tracking-widest hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer">
                         Ver Relatório

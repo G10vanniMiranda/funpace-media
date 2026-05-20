@@ -99,6 +99,38 @@ export interface PlatformSettings {
   updatedAt?: string;
 }
 
+export interface PhotographerSale {
+  id: string;
+  orderId: string;
+  productId: string;
+  name: string;
+  type: ProductType;
+  price: number;
+  url: string;
+  vendedorId: string;
+  bib: string;
+  event: string;
+  checkpoint: string;
+  thumbnailUrl?: string | null;
+  createdAt: string;
+  orderCreatedAt: string;
+  orderStatus: Order['status'];
+  netAmount: number;
+}
+
+export interface PhotographerDashboardMetrics {
+  totalEarnings: number;
+  pendingEarnings: number;
+  salesCount: number;
+  todaySalesCount: number;
+  publishedMediaCount: number;
+  photoCount: number;
+  videoCount: number;
+  rating: number;
+  downloads: number;
+  platformFeePercent: number;
+}
+
 export interface Photo extends Product {
   type: 'IMG';
 }

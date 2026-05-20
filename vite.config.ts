@@ -18,6 +18,7 @@ export default defineConfig(({mode}) => {
         ''
       ),
       __APP_DATA_MODE__: JSON.stringify(env.VITE_DATA_MODE || 'production'),
+      __GOOGLE_AUTH_ENABLED__: JSON.stringify(env.VITE_ENABLE_GOOGLE_AUTH === 'true'),
     },
     resolve: {
       alias: {

@@ -1,4 +1,12 @@
-import { Product, Photographer, Order, OrderItem, PlatformSettings } from '../types';
+import {
+  Product,
+  Photographer,
+  Order,
+  OrderItem,
+  PlatformSettings,
+  PhotographerDashboardMetrics,
+  PhotographerSale,
+} from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
 import { getCurrentUser, supabaseRest, supabaseStorage } from './supabase';
@@ -233,6 +241,135 @@ export const orderService = {
   },
 };
 
+export const photographerDashboardService = {
+  async getDashboard(vendedorId: string, products: Product[]): Promise<{
+    metrics: PhotographerDashboardMetrics;
+    recentSales: PhotographerSale[];
+  }> {
+    const publishedProducts = products.filter((product) => (product.status ?? 'published') === 'published');
+
+    if (isMockMode) {
+      const mockSales = mockProducts
+        .filter((product) => product.vendedorId === vendedorId)
+        .slice(0, 3)
+        .map((product, index): PhotographerSale => ({
+          id: `mock-sale-${index + 1}`,
+          orderId: `mock-order-${index + 1}`,
+          productId: product.id,
+          name: product.name,
+          type: product.type,
+          price: product.price,
+          url: product.url,
+          vendedorId: product.vendedorId,
+          bib: product.bib,
+          event: product.event,
+          checkpoint: product.checkpoint,
+          thumbnailUrl: product.thumbnailUrl,
+          createdAt: new Date().toISOString(),
+          orderCreatedAt: new Date().toISOString(),
+          orderStatus: 'paid',
+          netAmount: product.price * 0.7,
+        }));
+
+      return {
+        metrics: {
+          totalEarnings: mockSales.reduce((total, sale) => total + sale.netAmount, 0),
+          pendingEarnings: mockSales.reduce((total, sale) => total + sale.netAmount, 0),
+          salesCount: mockSales.length,
+          todaySalesCount: mockSales.length,
+          publishedMediaCount: publishedProducts.length,
+          photoCount: publishedProducts.filter((product) => product.type === 'IMG').length,
+          videoCount: publishedProducts.filter((product) => product.type === 'VIDEO').length,
+          rating: mockPhotographers.find((photographer) => photographer.id === vendedorId)?.stats.rating ?? 5,
+          downloads: mockSales.length,
+          platformFeePercent: 30,
+        },
+        recentSales: mockSales,
+      };
+    }
+
+    const settings = await platformSettingsService.getPublicSettings();
+    const feePercent = Number(settings.platformFeePercent);
+    const params = new URLSearchParams({
+      select: '*',
+      vendedorId: `eq.${vendedorId}`,
+      order: 'createdAt.desc',
+      limit: '200',
+    });
+    const saleItems = await supabaseRest.get<SupabaseRow<OrderItem>[]>(
+      `/rest/v1/order_items?${params.toString()}`,
+      true,
+    );
+
+    if (saleItems.length === 0) {
+      return {
+        metrics: {
+          totalEarnings: 0,
+          pendingEarnings: 0,
+          salesCount: 0,
+          todaySalesCount: 0,
+          publishedMediaCount: publishedProducts.length,
+          photoCount: publishedProducts.filter((product) => product.type === 'IMG').length,
+          videoCount: publishedProducts.filter((product) => product.type === 'VIDEO').length,
+          rating: 5,
+          downloads: 0,
+          platformFeePercent: feePercent,
+        },
+        recentSales: [],
+      };
+    }
+
+    const orderIds = [...new Set(saleItems.map((item) => item.orderId))];
+    const orderParams = new URLSearchParams({
+      select: 'id,status,createdAt',
+      id: `in.(${orderIds.join(',')})`,
+      order: 'createdAt.desc',
+    });
+    const orders = await supabaseRest.get<Array<Pick<Order, 'id' | 'status' | 'createdAt'>>>(
+      `/rest/v1/orders?${orderParams.toString()}`,
+      true,
+    );
+    const ordersById = new Map(orders.map((order) => [order.id, order]));
+    const todayKey = new Date().toISOString().slice(0, 10);
+    const paidSales = saleItems
+      .map((item): PhotographerSale | null => {
+        const order = ordersById.get(item.orderId);
+        if (!order || order.status !== 'paid') return null;
+
+        const netAmount = Number(item.price) * (1 - feePercent / 100);
+        return {
+          ...item,
+          orderCreatedAt: order.createdAt,
+          orderStatus: order.status,
+          netAmount,
+        } satisfies PhotographerSale;
+      })
+      .filter((sale): sale is PhotographerSale => Boolean(sale))
+      .sort((a, b) => new Date(b.orderCreatedAt).getTime() - new Date(a.orderCreatedAt).getTime());
+
+    const totalEarnings = paidSales.reduce((total, sale) => total + sale.netAmount, 0);
+    const pendingEarnings = paidSales
+      .filter((sale) => Date.now() - new Date(sale.orderCreatedAt).getTime() < 7 * 24 * 60 * 60 * 1000)
+      .reduce((total, sale) => total + sale.netAmount, 0);
+
+    return {
+      metrics: {
+        totalEarnings,
+        pendingEarnings,
+        salesCount: paidSales.length,
+        todaySalesCount: paidSales.filter((sale) => sale.orderCreatedAt.slice(0, 10) === todayKey).length,
+        publishedMediaCount: publishedProducts.length,
+        photoCount: publishedProducts.filter((product) => product.type === 'IMG').length,
+        videoCount: publishedProducts.filter((product) => product.type === 'VIDEO').length,
+        rating: 5,
+        downloads: paidSales.length,
+        platformFeePercent: feePercent,
+      },
+      recentSales: paidSales.slice(0, 5),
+    };
+  },
+};
+
 export const platformSettingsService = {
   async getSettings(): Promise<PlatformSettings> {
     if (isMockMode) {
@@ -272,6 +409,19 @@ export const platformSettingsService = {
 
     if (!updated) throw new Error('Configuracoes da plataforma nao encontradas.');
     return updated;
+  },
+
+  async getPublicSettings(): Promise<Pick<PlatformSettings, 'platformFeePercent'>> {
+    if (isMockMode) {
+      return { platformFeePercent: 30 };
+    }
+
+    try {
+      const settings = await this.getSettings();
+      return { platformFeePercent: settings.platformFeePercent };
+    } catch {
+      return { platformFeePercent: 30 };
+    }
   },
 };
 

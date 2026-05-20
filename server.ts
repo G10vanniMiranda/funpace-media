@@ -143,6 +143,18 @@ function mapPaymentStatus(status: unknown) {
   return "pending";
 }
 
+function getRequestOrigin(req: express.Request) {
+  return `${req.protocol}://${req.get("host")}`;
+}
+
+function getInfinitePayBaseUrl() {
+  return (process.env.INFINITEPAY_BASE_URL || "https://api.infinitepay.io").replace(/\/+$/, "");
+}
+
+function getInfinitePayWebhookUrl(req: express.Request) {
+  return `${getRequestOrigin(req)}/api/webhooks/infinitepay`;
+}
+
 app.get("/api/health", async (req, res) => {
   const dbConfig = getDbConfig();
   const status: any = {
@@ -169,6 +181,81 @@ app.get("/api/health", async (req, res) => {
   }
 
   res.json(status);
+});
+
+app.get("/api/auth/google/status", async (req, res) => {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+
+  if (!supabaseUrl) {
+    return res.status(500).json({
+      enabled: false,
+      error: "Supabase nao configurado.",
+    });
+  }
+
+  try {
+    const origin = `${req.protocol}://${req.get("host")}`;
+    const authorizeUrl = new URL(`${supabaseUrl}/auth/v1/authorize`);
+    authorizeUrl.searchParams.set("provider", "google");
+    authorizeUrl.searchParams.set("redirect_to", origin);
+    authorizeUrl.searchParams.set("response_type", "token");
+
+    const response = await fetch(authorizeUrl.toString(), {
+      method: "GET",
+      redirect: "manual",
+    });
+
+    if (response.status >= 300 && response.status < 400) {
+      const googleLocation = response.headers.get("location") || "";
+      const googleRedirectUri = googleLocation
+        ? new URL(googleLocation).searchParams.get("redirect_uri")
+        : `${supabaseUrl}/auth/v1/callback`;
+
+      if (googleLocation) {
+        const googleResponse = await fetch(googleLocation, {
+          method: "GET",
+          redirect: "manual",
+        });
+        const googleBody = await googleResponse.text();
+
+        if (
+          googleResponse.status >= 400 &&
+          googleBody.toLowerCase().includes("redirect_uri_mismatch")
+        ) {
+          return res.status(400).json({
+            enabled: false,
+            error: `Google OAuth nao aceita a URL de callback. Cadastre esta URL no Google Cloud: ${googleRedirectUri}`,
+            redirectUri: googleRedirectUri,
+          });
+        }
+      }
+
+      return res.json({
+        enabled: true,
+        redirectUri: googleRedirectUri,
+      });
+    }
+
+    const raw = await response.text();
+    let message = "Login com Google nao esta habilitado no Supabase.";
+
+    try {
+      const parsed = JSON.parse(raw);
+      message = parsed?.msg || parsed?.message || parsed?.error_description || message;
+    } catch {
+      if (raw) message = raw;
+    }
+
+    return res.status(400).json({
+      enabled: false,
+      error: message,
+    });
+  } catch (error: any) {
+    return res.status(502).json({
+      enabled: false,
+      error: error?.message || "Nao foi possivel validar o Google no Supabase.",
+    });
+  }
 });
 
 app.post("/api/checkout/create-session", async (req, res) => {
@@ -296,7 +383,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
     }
 
-    const fallbackSuccessUrl = `${req.protocol}://${req.get("host")}`;
+    const fallbackSuccessUrl = getRequestOrigin(req);
     const successRedirect = new URL(successUrl || fallbackSuccessUrl);
     successRedirect.searchParams.set("payment", "success");
     successRedirect.searchParams.set("order", orderId);
@@ -309,10 +396,11 @@ app.post("/api/checkout/create-session", async (req, res) => {
       handle,
       order_nsu: orderId,
       redirect_url: successRedirect.toString(),
+      webhook_url: getInfinitePayWebhookUrl(req),
       items: products.map((product: any) => ({
         quantity: 1,
         price: Math.round(Number(product.price) * 100),
-        description: String(product.name || "Produto").slice(0, 120),
+        description: `Download digital - ${String(product.name || "Foto").slice(0, 100)}`,
       })),
     };
 
@@ -325,7 +413,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
       };
     }
 
-    const checkoutResponse = await fetch("https://api.checkout.infinitepay.io/links", {
+    const checkoutResponse = await fetch(`${getInfinitePayBaseUrl()}/invoices/public/checkout/links`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(checkoutPayload),
@@ -372,6 +460,64 @@ app.post("/api/checkout/create-session", async (req, res) => {
   } finally {
     if (pool) await pool.end();
   }
+});
+
+app.post("/api/checkout/confirm", async (req, res) => {
+  const handle = process.env.INFINITEPAY_HANDLE;
+  const orderId = String(req.body?.order || req.body?.order_nsu || "");
+  const transactionNsu = String(req.body?.transaction_nsu || req.body?.transactionNSU || "");
+  const slug = String(req.body?.slug || req.body?.invoice_slug || "");
+
+  if (!handle) {
+    return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
+  }
+
+  if (!isUuid(orderId)) {
+    return res.status(400).json({ error: "Pedido invalido." });
+  }
+
+  if (!transactionNsu || !slug) {
+    return res.status(400).json({ error: "Dados de confirmacao do pagamento incompletos." });
+  }
+
+  const paymentCheckResponse = await fetch(`${getInfinitePayBaseUrl()}/invoices/public/checkout/payment_check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      handle,
+      order_nsu: orderId,
+      transaction_nsu: transactionNsu,
+      slug,
+    }),
+  });
+
+  if (!paymentCheckResponse.ok) {
+    const message = await paymentCheckResponse.text();
+    return res.status(502).json({ error: message || "Falha ao confirmar pagamento na InfinitePay." });
+  }
+
+  const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
+
+  if (!paymentCheck?.paid) {
+    return res.status(409).json({ paid: false, message: "Pagamento ainda nao confirmado." });
+  }
+
+  const pool = new Pool(getDbConfig());
+  try {
+    await pool.query(
+      `
+        update public.orders
+        set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
+        where id = $2
+          and status in ('pending', 'failed', 'cancelled')
+      `,
+      [transactionNsu, orderId],
+    );
+  } finally {
+    await pool.end();
+  }
+
+  return res.json({ paid: true });
 });
 
 // Photographer signup can require email confirmation, which may prevent the client from getting an auth session

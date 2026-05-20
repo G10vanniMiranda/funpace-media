@@ -286,8 +286,31 @@ async function fetchUserWithToken(accessToken: string) {
   return response.json() as Promise<SupabaseUserResponse>;
 }
 
-export const loginWithGoogle = () => {
+export const validateGoogleAuth = async () => {
+  const response = await fetch('/api/auth/google/status');
+  const payload = await response.json().catch(() => ({}));
+
+  if (!response.ok || !payload?.enabled) {
+    const providerDisabled = String(payload?.error || '').toLowerCase().includes('provider is not enabled') ||
+      String(payload?.error || '').toLowerCase().includes('unsupported provider');
+    const redirectMismatch = String(payload?.error || '').toLowerCase().includes('callback') ||
+      String(payload?.error || '').toLowerCase().includes('redirect_uri');
+
+    throw new Error(
+      providerDisabled
+        ? 'Login com Google ainda nao esta habilitado no Supabase. Ative o provider Google em Authentication > Providers.'
+        : redirectMismatch
+          ? `Google OAuth precisa autorizar a URL de callback: ${payload?.redirectUri || 'confira o redirect URI no Google Cloud.'}`
+        : payload?.error || 'Nao foi possivel validar o login com Google.',
+    );
+  }
+
+  return true;
+};
+
+export const loginWithGoogle = async () => {
   assertSupabaseConfig();
+  await validateGoogleAuth();
   const redirectTo = `${window.location.origin}/`;
   const url = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
   url.searchParams.set('provider', 'google');
@@ -300,13 +323,14 @@ export const loginWithGoogle = () => {
 // Call on app start: when returning from Supabase OAuth, the session comes in the URL hash.
 export const handleOAuthCallbackFromUrl = async () => {
   const parsed = parseHashParams(window.location.hash);
-  if (!parsed.access_token) return false;
 
   if (parsed.error) {
     // Clear hash so it doesn't loop.
     window.history.replaceState({}, '', window.location.pathname + window.location.search);
     throw new Error(decodeURIComponent(parsed.error_description || parsed.error));
   }
+
+  if (!parsed.access_token) return false;
 
   const expiresAt = parsed.expires_at
     ? Number(parsed.expires_at)

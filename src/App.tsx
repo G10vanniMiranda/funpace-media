@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { PhotoGrid } from './components/PhotoGrid';
@@ -50,6 +50,7 @@ function handleDataError(error: unknown, operationType: OperationType, path: str
 // Main Storefront Component
 function Storefront() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [cart, setCart] = useState<Product[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
@@ -85,12 +86,37 @@ function Storefront() {
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('payment') === 'success') {
-      alert("Pagamento confirmado! Suas fotos estarão disponíveis em breve no seu painel.");
-      setCart([]);
-      // Limpar URL
-      window.history.replaceState({}, '', window.location.pathname);
+      async function confirmCheckoutPayment() {
+        try {
+          const response = await fetch('/api/checkout/confirm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              order: params.get('order') || params.get('order_nsu'),
+              order_nsu: params.get('order_nsu'),
+              transaction_nsu: params.get('transaction_nsu'),
+              slug: params.get('slug'),
+            }),
+          });
+
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
+          }
+
+          alert('Pagamento confirmado! Suas fotos ja estao liberadas em Minhas Compras.');
+          setCart([]);
+        } catch (error: any) {
+          console.error('Erro ao confirmar pagamento:', error);
+          alert('Recebemos o retorno do checkout. Se o pagamento foi aprovado, suas fotos serao liberadas assim que a InfinitePay confirmar.');
+        } finally {
+          window.history.replaceState({}, '', window.location.pathname);
+        }
+      }
+
+      confirmCheckoutPayment();
     } else if (params.get('payment') === 'cancel') {
-      alert("O pagamento foi cancelado. Você pode tentar novamente quando desejar.");
+      alert('O pagamento foi cancelado. Voce pode tentar novamente quando desejar.');
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -104,12 +130,19 @@ function Storefront() {
     : [];
 
   const handlePhotographerLogin = (photographer: Photographer) => {
+    localStorage.setItem('funpace:photographer-id', photographer.id);
+    localStorage.setItem('funpace:photographer-panel-active', 'true');
     setLoggedInPhotographer(photographer);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    localStorage.removeItem('funpace:photographer-id');
+    localStorage.removeItem('funpace:photographer-panel-active');
     setLoggedInPhotographer(null);
     setShowDashboard(false);
+    if (!isMockMode) {
+      await logout();
+    }
   };
 
   const displayPhotos = photos;
@@ -175,7 +208,7 @@ function Storefront() {
     }
   };
 
-  const handleCheckout = async (cpf: string) => {
+  const handleCheckout = async (buyer: Buyer) => {
     setIsLoading(true);
     try {
       if (!user?.email) {
@@ -183,12 +216,6 @@ function Storefront() {
         return;
       }
 
-      const buyer: Buyer = {
-        fullName: user.displayName || user.email,
-        email: user.email,
-        phone: 'nao_informado',
-        cpf,
-      };
       // 1. Criar sessão de pagamento no backend enviando os dados do comprador
       const response = await fetch('/api/checkout/create-session', {
         method: 'POST',
@@ -255,13 +282,18 @@ function Storefront() {
         cartItemCount={cart.length}
         onOpenCart={() => setIsCartOpen(true)}
         onNavigateHome={() => {
+          localStorage.removeItem('funpace:photographer-panel-active');
           clearSearch();
           setActiveView('photos');
+          navigate('/');
         }}
         onOpenAuth={() => setIsAuthOpen(true)}
         onSearch={handleSearch}
         onSelfieSearch={handleSelfieSearch}
-        onOpenDashboard={() => setShowDashboard(true)}
+        onOpenDashboard={() => {
+          localStorage.setItem('funpace:photographer-panel-active', 'true');
+          navigate('/fotografo');
+        }}
         onOpenOrders={handleOpenOrders}
       />
 
@@ -371,6 +403,8 @@ function Storefront() {
         cartItems={cart}
         onRemoveItem={handleRemoveFromCart}
         isAuthenticated={Boolean(user)}
+        customerName={user?.displayName}
+        customerEmail={user?.email}
         onLoginRequested={() => setIsAuthOpen(true)}
         onCheckout={handleCheckout}
       />
@@ -391,6 +425,79 @@ function Storefront() {
 
       <Footer />
     </div>
+  );
+}
+
+function PhotographerRoute() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [photographer, setPhotographer] = useState<Photographer | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  React.useEffect(() => {
+    async function loadLoggedPhotographer() {
+      setIsLoading(true);
+      try {
+        const storedPhotographerId = localStorage.getItem('funpace:photographer-id');
+        const photographerId = user?.id ?? storedPhotographerId;
+
+        if (!photographerId) {
+          setPhotographer(null);
+          return;
+        }
+
+        const currentPhotographer = await photographerService.getPhotographerById(photographerId);
+        setPhotographer(currentPhotographer?.verified ? currentPhotographer : null);
+      } catch (error) {
+        console.error('Error restoring photographer session:', error);
+        setPhotographer(null);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    loadLoggedPhotographer();
+  }, [user?.id]);
+
+  const handleLoginSuccess = (loggedPhotographer: Photographer) => {
+    localStorage.setItem('funpace:photographer-id', loggedPhotographer.id);
+    localStorage.setItem('funpace:photographer-panel-active', 'true');
+    setPhotographer(loggedPhotographer);
+  };
+
+  const handleLogout = async () => {
+    localStorage.removeItem('funpace:photographer-id');
+    localStorage.removeItem('funpace:photographer-panel-active');
+    setPhotographer(null);
+    if (!isMockMode) {
+      await logout();
+    }
+    navigate('/');
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-brutal-white flex flex-col items-center justify-center p-6">
+        <Loader2 className="w-12 h-12 text-brutal-accent animate-spin mb-4" />
+        <p className="font-mono text-sm uppercase tracking-widest text-gray-500 animate-pulse">Carregando painel...</p>
+      </div>
+    );
+  }
+
+  if (photographer) {
+    return (
+      <PhotographerDashboard
+        photographer={photographer}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
+  return (
+    <PhotographerLogin
+      onLoginSuccess={handleLoginSuccess}
+      onBack={() => navigate('/')}
+    />
   );
 }
 
@@ -537,6 +644,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/admin" element={<AdminRoute />} />
+        <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/" element={<Storefront />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

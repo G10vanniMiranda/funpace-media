@@ -1,0 +1,6 @@
+{
+  "name": "FunPace Media",
+  "description": "Marketplace para compra e venda de fotos e vídeos de eventos esportivos, com busca por peito e reconhecimento facial.",
+  "requestFramePermissions": ["camera"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -14,17 +14,30 @@ interface CheckoutPageProps {
 
 const MIN_CHECKOUT_TOTAL = 1;
 
+function titleCaseFromEmail(email?: string | null) {
+  const local = (email?.split('@')[0] || '').trim();
+  if (!local) return '';
+  return local
+    .replace(/[._-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase())
+    .join(' ');
+}
+
 export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginRequested }: CheckoutPageProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [fullName, setFullName] = useState(user?.displayName ?? '');
+  const [fullName, setFullName] = useState(user?.displayName || titleCaseFromEmail(user?.email));
   const [email, setEmail] = useState(user?.email ?? '');
   const [phone, setPhone] = useState('');
   const [cpf, setCpf] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    setFullName(user?.displayName ?? '');
+    setFullName(user?.displayName || titleCaseFromEmail(user?.email));
     setEmail(user?.email ?? '');
   }, [user?.displayName, user?.email]);
 

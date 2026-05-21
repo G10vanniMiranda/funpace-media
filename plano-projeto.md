@@ -192,14 +192,14 @@ Esse modelo cobre os dados basicos de uma midia vendavel. Para producao, recomen
 
 ### 8.1 Prioridade Alta
 
-1. Executar uma compra real de ponta a ponta com o link de pagamento.
-2. Definir como sera feita a confirmacao operacional do pagamento sem depender de webhook nesta fase.
+1. Compra real de ponta a ponta com link de pagamento da InfinitePay: concluida em 20/05/2026.
+2. Confirmacao operacional sem depender de webhook nesta fase: usar a verificacao automatica no retorno do checkout quando disponivel e, como fallback operacional, o painel administrativo em **Fluxo de Caixa > Pagamentos Pendentes** para confirmar manualmente pedidos pagos ou cancelar pedidos nao pagos.
 
 ### 8.2 Prioridade Media
 
-1. Criar historico de vendas real para o fotografo.
-2. Criar fluxo de repasse/saque para fotografos.
-3. Criar fluxo de entrega/download protegido para midias compradas.
+1. Validar em producao o fluxo completo apos pagamento confirmado: pedido pago, download protegido em **Minhas Compras**, venda no painel do fotografo e receita no admin.
+2. Criar ou revisar testes automatizados para checkout, confirmacao de pagamento, historico de compras, historico financeiro do fotografo e download protegido.
+3. Evoluir o fluxo de repasse/saque para fotografos com regras operacionais finais.
 
 ### 8.3 Prioridade Baixa
 

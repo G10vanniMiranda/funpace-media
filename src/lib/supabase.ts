@@ -20,6 +20,8 @@ export type SupabaseAuthUser = {
   user_metadata?: {
     name?: string;
     full_name?: string;
+    display_name?: string;
+    preferred_username?: string;
     avatar_url?: string;
     cpf?: string;
   };
@@ -141,7 +143,12 @@ async function getAuthToken(useAuth: boolean) {
 function toAppUser(user: SupabaseAuthUser | null): AppUser | null {
   if (!user) return null;
 
-  const metadataName = user.user_metadata?.name ?? user.user_metadata?.full_name ?? null;
+  const metadataName =
+    user.user_metadata?.name ||
+    user.user_metadata?.full_name ||
+    user.user_metadata?.display_name ||
+    user.user_metadata?.preferred_username ||
+    null;
 
   return {
     uid: user.id,
@@ -356,6 +363,11 @@ export const supabaseStorage = {
 
 export const getCurrentUser = () => toAppUser(getStoredSession()?.user ?? null);
 
+function clearOAuthParamsFromUrl() {
+  const nextPath = window.location.pathname === '/auth/callback' ? '/' : window.location.pathname;
+  window.history.replaceState({}, '', nextPath);
+}
+
 function parseHashParams(hash: string) {
   const raw = hash.startsWith('#') ? hash.slice(1) : hash;
   const params = new URLSearchParams(raw);
@@ -368,6 +380,68 @@ function parseHashParams(hash: string) {
     error: params.get('error') ?? undefined,
     error_description: params.get('error_description') ?? undefined,
   };
+}
+
+function parseSearchParams(search: string) {
+  const params = new URLSearchParams(search);
+  return {
+    code: params.get('code') ?? '',
+    error: params.get('error') ?? '',
+    error_description: params.get('error_description') ?? '',
+  };
+}
+
+function isJwtLikeToken(token: string) {
+  return token.split('.').length === 3;
+}
+
+function base64UrlEncode(input: ArrayBuffer) {
+  return btoa(String.fromCharCode(...new Uint8Array(input)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+}
+
+function randomCodeVerifier() {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return base64UrlEncode(bytes.buffer);
+}
+
+async function createCodeChallenge(verifier: string) {
+  const data = new TextEncoder().encode(verifier);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return base64UrlEncode(digest);
+}
+
+async function exchangeOAuthCodeForSession(code: string) {
+  assertSupabaseConfig();
+  const codeVerifier = sessionStorage.getItem('funpace:oauth-code-verifier');
+  sessionStorage.removeItem('funpace:oauth-code-verifier');
+
+  if (!codeVerifier) {
+    throw new Error('Sessao OAuth expirada. Tente entrar com Google novamente.');
+  }
+
+  const response = await fetch(`${supabaseConfig.url}/auth/v1/token?grant_type=pkce`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseConfig.anonKey,
+      Authorization: `Bearer ${supabaseConfig.anonKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      auth_code: code,
+      code_verifier: codeVerifier,
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || `Supabase OAuth exchange failed with status ${response.status}`);
+  }
+
+  return response.json() as Promise<SupabaseSession>;
 }
 
 async function fetchUserWithToken(accessToken: string) {
@@ -414,26 +488,53 @@ export const validateGoogleAuth = async () => {
 export const loginWithGoogle = async () => {
   assertSupabaseConfig();
   await validateGoogleAuth();
-  const redirectTo = `${window.location.origin}/`;
+  const redirectTo = `${window.location.origin}/auth/callback`;
+  const codeVerifier = randomCodeVerifier();
+  const codeChallenge = await createCodeChallenge(codeVerifier);
+  sessionStorage.setItem('funpace:oauth-code-verifier', codeVerifier);
+
   const url = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
   url.searchParams.set('provider', 'google');
   url.searchParams.set('redirect_to', redirectTo);
-  // Use implicit flow for a lightweight integration without supabase-js.
-  url.searchParams.set('response_type', 'token');
+  url.searchParams.set('code_challenge', codeChallenge);
+  url.searchParams.set('code_challenge_method', 's256');
   window.location.assign(url.toString());
 };
 
-// Call on app start: when returning from Supabase OAuth, the session comes in the URL hash.
+// Call on app start: Supabase can return either PKCE `code` in query or legacy token data in hash.
 export const handleOAuthCallbackFromUrl = async () => {
+  const query = parseSearchParams(window.location.search);
+  if (query.error) {
+    clearOAuthParamsFromUrl();
+    throw new Error(decodeURIComponent(query.error_description || query.error));
+  }
+
+  if (query.code) {
+    const session = await exchangeOAuthCodeForSession(query.code);
+    if (!session?.access_token || !session?.user) {
+      clearOAuthParamsFromUrl();
+      throw new Error('Supabase nao retornou uma sessao valida no login com Google.');
+    }
+
+    setStoredSession(session);
+    clearOAuthParamsFromUrl();
+    window.dispatchEvent(new Event('supabase-auth-changed'));
+    return true;
+  }
+
   const parsed = parseHashParams(window.location.hash);
 
   if (parsed.error) {
-    // Clear hash so it doesn't loop.
-    window.history.replaceState({}, '', window.location.pathname + window.location.search);
+    clearOAuthParamsFromUrl();
     throw new Error(decodeURIComponent(parsed.error_description || parsed.error));
   }
 
   if (!parsed.access_token) return false;
+
+  if (!isJwtLikeToken(parsed.access_token)) {
+    clearOAuthParamsFromUrl();
+    throw new Error('Retorno OAuth invalido: o Supabase nao retornou um access_token JWT valido.');
+  }
 
   const expiresAt = parsed.expires_at
     ? Number(parsed.expires_at)
@@ -449,8 +550,7 @@ export const handleOAuthCallbackFromUrl = async () => {
     user,
   });
 
-  // Remove hash after successful login.
-  window.history.replaceState({}, '', window.location.pathname + window.location.search);
+  clearOAuthParamsFromUrl();
   window.dispatchEvent(new Event('supabase-auth-changed'));
   return true;
 };

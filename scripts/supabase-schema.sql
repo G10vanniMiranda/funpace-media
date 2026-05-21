@@ -312,6 +312,15 @@ for select
 using (
   public.is_admin()
   or "vendedorId" = auth.uid()::text
+  or exists (
+    select 1
+    from public.orders o
+    where o.id = order_items."orderId"
+      and (
+        (o."userId" is not null and o."userId" = auth.uid()::text)
+        or o."buyerEmail" = (auth.jwt() ->> 'email')
+      )
+  )
 );
 
 drop policy if exists "payment_events_select_admin_only" on public.payment_events;

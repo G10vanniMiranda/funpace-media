@@ -35,24 +35,21 @@ function getDbConfig() {
       };
 }
 
-const mediaBucket = process.env.SUPABASE_BUCKET || "funpace-media";
+const mediaBucket = process.env.SUPABASE_BUCKET || process.env.BUCKET || "funpace-media";
 
 function getSupabaseApiConfig() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
-  const supabaseKey =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SERVICE_ROLE_KEY ||
-    process.env.ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
-    process.env.VITE_SUPABASE_ANON_KEY ||
-    "";
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || "";
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase Storage nao configurado para assinar URLs.");
+    throw new Error("Supabase Storage nao configurado para assinar URLs. Defina SUPABASE_SERVICE_ROLE_KEY no .env do servidor.");
   }
 
   return { supabaseUrl, supabaseKey };
+}
+
+function getSupabaseStorageUrl() {
+  return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 }
 
 function extractStoragePathFromUrl(value: string) {
@@ -99,6 +96,16 @@ async function createSignedMediaUrl(rawPathOrUrl: string, expiresIn = 900) {
   const signedPath = payload?.signedURL || payload?.signedUrl || payload?.url || "";
   if (!signedPath) throw new Error("Supabase nao retornou URL assinada.");
   return signedPath.startsWith("http") ? signedPath : `${supabaseUrl}${signedPath}`;
+}
+
+function createPublicMediaUrl(rawPathOrUrl: string) {
+  if (/^https?:\/\//i.test(rawPathOrUrl)) return rawPathOrUrl;
+
+  const supabaseUrl = getSupabaseStorageUrl();
+  const path = extractStoragePathFromUrl(rawPathOrUrl);
+  if (!supabaseUrl || !path) return rawPathOrUrl;
+
+  return `${supabaseUrl}/storage/v1/object/public/${mediaBucket}/${encodeURI(path)}`;
 }
 
 function isUuid(value: unknown) {
@@ -627,9 +634,17 @@ app.post("/api/media/sign", async (req, res) => {
       return res.json({ urls: {} });
     }
 
-    const entries = await Promise.all(
-      signablePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
-    );
+    const hasSigningKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY);
+    const entries = hasSigningKey
+      ? await Promise.all(
+          signablePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
+        )
+      : signablePaths.map((path) => [path, createPublicMediaUrl(path)] as const);
+
+    if (!hasSigningKey) {
+      console.warn("SUPABASE_SERVICE_ROLE_KEY ausente. /api/media/sign retornou URLs publicas; downloads protegidos exigem a service role key.");
+    }
+
     return res.json({ urls: Object.fromEntries(entries) });
   } catch (error: any) {
     console.error("Erro ao assinar midias:", error);

@@ -44,6 +44,11 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
       body: JSON.stringify({ paths }),
     });
 
+    if (response.status === 404 || response.status === 405) {
+      console.warn('/api/media/sign indisponivel neste deploy; usando URLs originais das midias.');
+      return items;
+    }
+
     if (!response.ok) throw new Error(await response.text());
     const payload = await response.json() as { urls?: Record<string, string> };
     const urls = payload.urls ?? {};

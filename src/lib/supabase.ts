@@ -505,7 +505,6 @@ export const validateGoogleAuth = async () => {
 
 export const loginWithGoogle = async () => {
   assertSupabaseConfig();
-  await validateGoogleAuth();
   const redirectTo = `${window.location.origin}/auth/callback`;
   const codeVerifier = randomCodeVerifier();
   const codeChallenge = await createCodeChallenge(codeVerifier);

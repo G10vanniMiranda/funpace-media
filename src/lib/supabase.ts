@@ -464,8 +464,26 @@ async function fetchUserWithToken(accessToken: string) {
 }
 
 export const validateGoogleAuth = async () => {
-  const response = await fetch('/api/auth/google/status');
-  const payload = await response.json().catch(() => ({}));
+  let response: Response;
+  let payload: any = {};
+
+  try {
+    response = await fetch('/api/auth/google/status', {
+      headers: { Accept: 'application/json' },
+    });
+    const contentType = response.headers.get('content-type') || '';
+    payload = contentType.includes('application/json')
+      ? await response.json().catch(() => ({}))
+      : {};
+  } catch (error) {
+    console.warn('Nao foi possivel validar Google OAuth no backend; continuando pelo Supabase.', error);
+    return true;
+  }
+
+  if (response.status === 404 || response.status === 405) {
+    console.warn('Endpoint /api/auth/google/status indisponivel; continuando pelo Supabase.');
+    return true;
+  }
 
   if (!response.ok || !payload?.enabled) {
     const providerDisabled = String(payload?.error || '').toLowerCase().includes('provider is not enabled') ||

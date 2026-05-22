@@ -4,7 +4,7 @@ import { Camera, Lock, Mail, ArrowRight, Loader2, AlertCircle, Check } from 'luc
 import { Photographer } from '../types';
 import { photographerService } from '../lib/services';
 import { isMockMode } from '../lib/config';
-import { getCurrentUser, loginWithEmail, registerWithEmail } from '../lib/supabase';
+import { loginWithEmail, registerWithEmail } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 
 interface PhotographerLoginProps {
@@ -115,26 +115,6 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             bio,
             cpf: onlyCpfDigits(cpf),
             avatar: avatarUrl,
-          });
-        }
-
-        // Best-effort: if we have a session already, also create via Supabase REST (keeps auth-aligned flows).
-        const currentUser = getCurrentUser();
-        if (currentUser?.id) {
-          await photographerService.addPhotographer({
-            name,
-            email: currentUser.email ?? email,
-            bio,
-            cpf: onlyCpfDigits(cpf),
-            avatar: avatarUrl,
-            stats: {
-              photos: 0,
-              events: 0,
-              rating: 5.0,
-              totalEarnings: 0,
-              pendingEarnings: 0,
-              salesCount: 0
-            }
           });
         }
 

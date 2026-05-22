@@ -13,14 +13,26 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const { Pool } = pg;
-const allowedOrigins = new Set([
-  "https://funpace.media",
-  "http://localhost:3000",
-]);
+
+function getAllowedOrigins() {
+  return new Set([
+    "https://funpace.media",
+    "https://www.funpace.media",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    process.env.FRONTEND_URL,
+    process.env.VITE_FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || "").split(","),
+  ].filter((origin): origin is string => Boolean(origin)).map((origin) => origin.replace(/\/+$/, "")));
+}
+
+const allowedOrigins = getAllowedOrigins();
 
 app.use(cors({
   origin(origin, callback) {
-    if (!origin || allowedOrigins.has(origin)) {
+    const normalizedOrigin = origin?.replace(/\/+$/, "");
+
+    if (!normalizedOrigin || allowedOrigins.has(normalizedOrigin)) {
       callback(null, true);
       return;
     }

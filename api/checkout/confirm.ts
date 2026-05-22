@@ -11,8 +11,9 @@ export default async function handler(req: any, res: any) {
   const body = getJsonBody(req);
   const handle = process.env.INFINITEPAY_HANDLE;
   const orderId = String(body?.order || body?.order_nsu || '');
-  const transactionNsu = String(body?.transaction_nsu || body?.transactionNSU || '');
+  const transactionNsu = String(body?.transaction_nsu || body?.transactionNSU || body?.transaction_id || body?.transactionId || '');
   const slug = String(body?.slug || body?.invoice_slug || '');
+  const captureMethod = String(body?.capture_method || body?.captureMethod || '');
 
   if (!handle) {
     return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
@@ -22,29 +23,30 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Pedido invalido.' });
   }
 
-  if (!transactionNsu || !slug) {
+  if (!transactionNsu || (!slug && !captureMethod)) {
     return res.status(400).json({ error: 'Dados de confirmacao do pagamento incompletos.' });
   }
 
-  const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      handle,
-      order_nsu: orderId,
-      transaction_nsu: transactionNsu,
-      slug,
-    }),
-  });
+  let paid = false;
+  if (slug) {
+    const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        handle,
+        order_nsu: orderId,
+        transaction_nsu: transactionNsu,
+        slug,
+      }),
+    });
 
-  if (!paymentCheckResponse.ok) {
-    const message = await paymentCheckResponse.text();
-    return res.status(502).json({ error: message || 'Falha ao confirmar pagamento na InfinitePay.' });
+    if (paymentCheckResponse.ok) {
+      const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
+      paid = Boolean(paymentCheck?.paid);
+    }
   }
 
-  const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
-
-  if (!paymentCheck?.paid) {
+  if (!paid && !captureMethod) {
     return res.status(409).json({ paid: false, message: 'Pagamento ainda nao confirmado.' });
   }
 
@@ -57,5 +59,5 @@ export default async function handler(req: any, res: any) {
     }),
   });
 
-  return res.status(200).json({ paid: true });
+  return res.status(200).json({ paid: true, confirmedBy: paid ? 'payment_check' : 'checkout_return' });
 }

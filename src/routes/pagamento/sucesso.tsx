@@ -14,8 +14,9 @@ export function PagamentoSucesso() {
     async function confirmPayment() {
       const params = new URLSearchParams(window.location.search);
       const order = params.get('order') || params.get('order_nsu');
-      const transactionNsu = params.get('transaction_nsu');
-      const slug = params.get('slug');
+      const transactionNsu = params.get('transaction_nsu') || params.get('transaction_id') || params.get('transactionId');
+      const slug = params.get('slug') || params.get('invoice_slug');
+      const captureMethod = params.get('capture_method');
 
       setOrderId(order);
 
@@ -33,7 +34,10 @@ export function PagamentoSucesso() {
             order,
             order_nsu: params.get('order_nsu'),
             transaction_nsu: transactionNsu,
+            transaction_id: params.get('transaction_id'),
             slug,
+            invoice_slug: params.get('invoice_slug'),
+            capture_method: captureMethod,
           }),
         });
 

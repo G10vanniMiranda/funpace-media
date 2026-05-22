@@ -1,7 +1,3 @@
-import pg from 'pg';
-
-const { Pool } = pg;
-
 export function setCors(req: any, res: any) {
   const allowedOrigins = new Set([
     'https://funpace.media',
@@ -46,7 +42,9 @@ export function getDbConfig() {
       };
 }
 
-export function createPool() {
+export async function createPool() {
+  const pg = await import('pg');
+  const Pool = pg.default?.Pool || pg.Pool;
   return new Pool(getDbConfig());
 }
 

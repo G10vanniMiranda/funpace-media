@@ -47,7 +47,7 @@ export default async function handler(req: any, res: any) {
     return res.status(409).json({ paid: false, message: 'Pagamento ainda nao confirmado.' });
   }
 
-  const pool = createPool();
+  const pool = await createPool();
   try {
     await pool.query(
       `

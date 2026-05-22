@@ -9,7 +9,7 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
-  let pool: ReturnType<typeof createPool> | null = null;
+  let pool: Awaited<ReturnType<typeof createPool>> | null = null;
 
   try {
     const { items, successUrl, userId, buyer } = req.body || {};
@@ -31,7 +31,7 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Carrinho contem produto invalido.' });
     }
 
-    pool = createPool();
+    pool = await createPool();
     await pool.query('begin');
 
     const productsResult = await pool.query(

@@ -13,7 +13,7 @@ export default async function handler(req: any, res: any) {
     database: 'unchecked',
   };
 
-  const pool = createPool();
+  const pool = await createPool();
   try {
     const result = await pool.query('select now()');
     status.database = 'connected';

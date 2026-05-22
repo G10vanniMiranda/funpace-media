@@ -57,7 +57,24 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           return;
         }
 
-        const authUser = await registerWithEmail(email, password, name, onlyCpfDigits(cpf));
+        let authUser = null;
+        let requiresEmailConfirmation = false;
+        try {
+          authUser = await registerWithEmail(email, password, name, onlyCpfDigits(cpf));
+        } catch (registerError: any) {
+          const registerMessage = String(registerError?.message || registerError || '');
+          if (
+            registerMessage.toUpperCase().includes('EMAIL_NOT_CONFIRMED') ||
+            registerMessage.toUpperCase().includes('E-MAIL NAO CONFIRMADO') ||
+            registerMessage.toUpperCase().includes('EMAIL NAO CONFIRMADO') ||
+            registerMessage.toUpperCase().includes('NOT CONFIRMED')
+          ) {
+            requiresEmailConfirmation = true;
+          } else {
+            throw registerError;
+          }
+        }
+
         const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
 
         // Always register a pending photographer record so admin can approve, even if email confirmation blocks a session.
@@ -99,8 +116,8 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           });
         }
 
-        if (!authUser?.id) {
-          setSuccess('CONTA CRIADA: confirme seu e-mail no Supabase/Auth. Seu cadastro ja ficou pendente para aprovacao no admin.');
+        if (!authUser?.id || requiresEmailConfirmation) {
+          setSuccess('SOLICITACAO ENVIADA: confirme seu e-mail e aguarde a aprovacao do administrador para acessar o painel.');
           setIsRegistering(false);
           return;
         }
@@ -150,7 +167,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         }
       }
     } catch (err: any) {
-      setError(err?.message || 'ERRO DE CONEXAO: Tente novamente mais tarde.');
+      const rawMessage = String(err?.message || 'ERRO DE CONEXAO: Tente novamente mais tarde.');
+      if (rawMessage.toUpperCase().includes('EMAIL_NOT_CONFIRMED') || rawMessage.toUpperCase().includes('NOT CONFIRMED')) {
+        setError('E-mail ainda nao confirmado. Verifique sua caixa de entrada e SPAM.');
+      } else {
+        setError(rawMessage);
+      }
       console.error(err);
     } finally {
       setIsLoading(false);

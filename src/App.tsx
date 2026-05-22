@@ -133,8 +133,13 @@ function Storefront() {
             body: JSON.stringify({
               order: params.get('order') || params.get('order_nsu'),
               order_nsu: params.get('order_nsu'),
-              transaction_nsu: params.get('transaction_nsu'),
+              transaction_nsu: params.get('transaction_nsu') || params.get('transaction_id') || params.get('transactionId'),
+              transaction_id: params.get('transaction_id'),
               slug: params.get('slug'),
+              invoice_slug: params.get('invoice_slug'),
+              capture_method: params.get('capture_method'),
+              payment: params.get('payment'),
+              raw_query: Object.fromEntries(params.entries()),
             }),
           });
 

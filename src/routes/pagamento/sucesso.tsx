@@ -20,9 +20,9 @@ export function PagamentoSucesso() {
 
       setOrderId(order);
 
-      if (!order || !transactionNsu || !slug) {
+      if (!order) {
         setStatus('pending');
-        setMessage('Recebemos o retorno do checkout, mas ainda faltam dados para confirmar automaticamente. A liberacao acontecera quando a InfinitePay confirmar o pagamento.');
+        setMessage('Recebemos o retorno do checkout, mas nao identificamos o pedido. A liberacao acontecera quando a InfinitePay confirmar o pagamento.');
         return;
       }
 
@@ -38,13 +38,15 @@ export function PagamentoSucesso() {
             slug,
             invoice_slug: params.get('invoice_slug'),
             capture_method: captureMethod,
+            payment: params.get('payment'),
+            raw_query: Object.fromEntries(params.entries()),
           }),
         });
 
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          setStatus(response.status === 409 ? 'pending' : 'error');
+          setStatus(response.status === 409 || response.status === 400 ? 'pending' : 'error');
           setMessage(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
           return;
         }

@@ -20,30 +20,34 @@ export default async function handler(req: any, res: any) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
-    const pendingId = `pending:${normalizedEmail}`;
-
-    const pendingRows = await supabaseRequest<any[]>(
-      `/rest/v1/photographers?select=*&id=eq.${encodeURIComponent(pendingId)}&limit=1`,
+    const authRows = await supabaseRequest<any[]>(
+      `/rest/v1/photographers?select=id,verified&id=eq.${encodeURIComponent(userId.trim())}&limit=1`,
     );
 
-    if (pendingRows.length === 0) {
+    if (authRows.length > 0) {
+      return res.status(200).json({ ok: true, moved: 0, alreadyLinked: true });
+    }
+
+    const photographerRows = await supabaseRequest<any[]>(
+      `/rest/v1/photographers?select=id,verified&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+    );
+
+    if (photographerRows.length === 0) {
       return res.status(200).json({ ok: true, moved: 0 });
     }
 
-    const pending = pendingRows[0];
-    await supabaseRequest('/rest/v1/photographers?on_conflict=id', {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    const photographer = photographerRows[0];
+    if (photographer.id === userId.trim()) {
+      return res.status(200).json({ ok: true, moved: 0, alreadyLinked: true });
+    }
+
+    await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(photographer.id)}`, {
+      method: 'PATCH',
+      headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({
-        ...pending,
         id: userId.trim(),
         email: normalizedEmail,
       }),
-    });
-
-    await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(pendingId)}`, {
-      method: 'DELETE',
-      headers: { Prefer: 'return=minimal' },
     });
 
     return res.status(200).json({ ok: true, moved: 1 });

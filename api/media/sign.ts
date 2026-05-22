@@ -78,7 +78,10 @@ async function signedMediaUrl(rawPathOrUrl: string) {
 
   const payload: any = await response.json().catch(() => ({}));
   const signedPath = payload?.signedURL || payload?.signedUrl || payload?.url || '';
-  return signedPath && signedPath.startsWith('http') ? signedPath : `${supabaseUrl}${signedPath}`;
+  if (!signedPath) return publicMediaUrl(rawPathOrUrl);
+  if (signedPath.startsWith('http')) return signedPath;
+  if (signedPath.startsWith('/storage/v1/')) return `${supabaseUrl}${signedPath}`;
+  return `${supabaseUrl}/storage/v1${signedPath.startsWith('/') ? signedPath : `/${signedPath}`}`;
 }
 
 export default async function handler(req: any, res: any) {

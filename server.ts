@@ -140,7 +140,9 @@ async function createSignedMediaUrl(rawPathOrUrl: string, expiresIn = 900) {
   const payload: any = await response.json().catch(() => ({}));
   const signedPath = payload?.signedURL || payload?.signedUrl || payload?.url || "";
   if (!signedPath) throw new Error("Supabase nao retornou URL assinada.");
-  return signedPath.startsWith("http") ? signedPath : `${supabaseUrl}${signedPath}`;
+  if (signedPath.startsWith("http")) return signedPath;
+  if (signedPath.startsWith("/storage/v1/")) return `${supabaseUrl}${signedPath}`;
+  return `${supabaseUrl}/storage/v1${signedPath.startsWith("/") ? signedPath : `/${signedPath}`}`;
 }
 
 function createPublicMediaUrl(rawPathOrUrl: string) {

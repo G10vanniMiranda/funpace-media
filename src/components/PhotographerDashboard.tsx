@@ -375,8 +375,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     const normalizedBib = editForm.bib.trim();
     const normalizedPrice = Number(editForm.price);
 
-    if (!normalizedName || !normalizedEvent || !normalizedCheckpoint || !normalizedBib) {
-      alert('Preencha nome, evento, checkpoint e numero de peito.');
+    if (!normalizedName || !normalizedEvent || !normalizedCheckpoint) {
+      alert('Preencha nome, evento e checkpoint.');
       return;
     }
 
@@ -442,14 +442,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     const invalidFileIndex = selectedFiles.findIndex((item) => (
       !item.description.trim() ||
-      !item.bib.trim() ||
       !Number.isFinite(Number(item.price)) ||
       Number(item.price) <= 0
     ));
 
     if (invalidFileIndex >= 0) {
       setPreviewIndex(invalidFileIndex);
-      alert(`Preencha descricao, numero de peito e preco valido para o arquivo ${invalidFileIndex + 1}.`);
+      alert(`Preencha descricao e preco valido para o arquivo ${invalidFileIndex + 1}.`);
       return;
     }
 
@@ -1271,7 +1270,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   value={item.bib}
                                   onClick={(event) => event.stopPropagation()}
                                   onChange={(event) => updateSelectedFile(idx, { bib: event.target.value.replace(/[^\w-]/g, '').slice(0, 32) })}
-                                  placeholder="N PEITO"
+                                  placeholder="N PEITO OPC."
                                   className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] uppercase"
                                  />
                                  <div className="flex items-center gap-1">

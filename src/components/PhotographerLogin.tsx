@@ -1,4 +1,4 @@
-import { useEffect, useState, FormEvent } from 'react';
+import { useState, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { Camera, Lock, Mail, ArrowRight, Loader2, AlertCircle, Check } from 'lucide-react';
 import { Photographer } from '../types';
@@ -44,39 +44,6 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
       throw new Error(payload?.error || 'Erro ao registrar cadastro pendente.');
     }
   }
-
-  useEffect(() => {
-    async function finalizeGooglePhotographerRequest() {
-      const raw = sessionStorage.getItem('funpace:photographer-google-request');
-      const authUser = getCurrentUser();
-      if (!raw || !authUser?.email) return;
-
-      setIsLoading(true);
-      setError(null);
-      setSuccess(null);
-
-      try {
-        const payload = JSON.parse(raw) as { name: string; bio: string; cpf: string; avatar: string };
-        await requestPendingPhotographer({
-          userId: authUser.id,
-          email: authUser.email,
-          name: payload.name,
-          bio: payload.bio,
-          cpf: payload.cpf,
-          avatar: payload.avatar,
-        });
-        sessionStorage.removeItem('funpace:photographer-google-request');
-        setSuccess('SOLICITACAO ENVIADA: aguarde a aprovacao do administrador para acessar o painel.');
-        setIsRegistering(false);
-      } catch (error: any) {
-        setError(error?.message || 'Erro ao registrar cadastro com Google.');
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    finalizeGooglePhotographerRequest();
-  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -231,19 +198,6 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
     setIsLoading(true);
 
     try {
-      if (isRegistering) {
-        if (!name.trim()) throw new Error('Informe seu nome completo.');
-        if (!bio.trim()) throw new Error('Informe sua bio/portfolio.');
-        if (!isValidCpf(cpf)) throw new Error('CPF invalido.');
-
-        sessionStorage.setItem('funpace:photographer-google-request', JSON.stringify({
-          name: name.trim(),
-          bio: bio.trim(),
-          cpf: onlyCpfDigits(cpf),
-          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name.trim())}&background=random`,
-        }));
-      }
-
       await loginWithGoogle('/fotografo');
     } catch (err: any) {
       setError(err?.message || 'Nao foi possivel entrar com Google.');
@@ -390,7 +344,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             )}
           </button>
 
-          {googleEnabled && (
+          {googleEnabled && !isRegistering && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <div className="h-px flex-1 bg-gray-200" />

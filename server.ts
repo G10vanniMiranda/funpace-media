@@ -1328,7 +1328,7 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
   res.status(200).send("OK");
 });
 
-async function setupVite() {
+async function setupViteAndListen() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
       // In middleware mode, Vite may try to bind an HMR WebSocket server (default 24678).
@@ -1350,4 +1350,8 @@ async function setupVite() {
   });
 }
 
-setupVite();
+if (!process.env.VERCEL) {
+  setupViteAndListen();
+}
+
+export default app;

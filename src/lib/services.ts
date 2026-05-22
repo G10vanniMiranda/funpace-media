@@ -354,9 +354,17 @@ export const paymentService = {
       body: JSON.stringify(input),
     });
 
-    const data = await response.json().catch(() => ({}));
+    const raw = await response.text();
+    let data: any = {};
+    try {
+      data = raw ? JSON.parse(raw) : {};
+    } catch {
+      data = { error: raw };
+    }
+
     if (!response.ok || !data?.url) {
-      throw new Error(data?.error || 'Nao foi possivel iniciar o pagamento.');
+      const detail = data?.error || data?.message || data?.msg || raw;
+      throw new Error(detail ? `Nao foi possivel iniciar o pagamento: ${detail}` : `Nao foi possivel iniciar o pagamento. HTTP ${response.status}`);
     }
 
     return {

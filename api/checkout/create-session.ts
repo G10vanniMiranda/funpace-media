@@ -22,11 +22,6 @@ function getJsonBody(req: any) {
   return {};
 }
 
-function isUuid(value: unknown) {
-  return typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
-}
-
 function onlyCpfDigits(value: string | null | undefined) {
   return (value ?? '').replace(/\D/g, '').slice(0, 11);
 }
@@ -116,8 +111,8 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Carrinho vazio.' });
     }
 
-    const productIds = [...new Set(items.map((item: any) => item.id))];
-    if (!productIds.every(isUuid)) {
+    const productIds = [...new Set(items.map((item: any) => String(item.id || '').trim()))].filter(Boolean);
+    if (productIds.length !== items.length || productIds.some((id) => id.length > 120 || /[(),]/.test(id))) {
       return res.status(400).json({ error: 'Carrinho contem produto invalido.' });
     }
 

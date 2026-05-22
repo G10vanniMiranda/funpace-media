@@ -21,12 +21,28 @@ const mediaBucket = 'funpace-media';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
 
+function createPublicMediaUrl(rawPathOrUrl?: string | null) {
+  const value = rawPathOrUrl || '';
+  if (!value || /^https?:\/\//i.test(value)) return value;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  if (!supabaseUrl) return value;
+
+  return `${String(supabaseUrl).replace(/\/+$/, '')}/storage/v1/object/public/${mediaBucket}/${encodeURI(value.replace(/^\/+/, ''))}`;
+}
+
 function mediaPathKey(value?: string | null) {
   return value || '';
 }
 
 async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null }>(items: T[]): Promise<T[]> {
   if (isMockMode || items.length === 0) return items;
+
+  const withPublicFallback = () => items.map((item) => ({
+    ...item,
+    url: createPublicMediaUrl(item.url),
+    thumbnailUrl: item.thumbnailUrl ? createPublicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl,
+  }));
 
   const paths = Array.from(new Set(items.flatMap((item) => {
     const thumbnail = mediaPathKey(item.thumbnailUrl);
@@ -47,7 +63,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
 
     if (response.status === 404 || response.status === 405) {
       console.warn('/api/media/sign indisponivel neste deploy; usando URLs originais das midias.');
-      return items;
+      return withPublicFallback();
     }
 
     if (!response.ok) throw new Error(await response.text());
@@ -61,7 +77,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
     }));
   } catch (error) {
     console.error('Erro ao assinar URLs de midia:', error);
-    return items;
+    return withPublicFallback();
   }
 }
 

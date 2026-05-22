@@ -41,9 +41,11 @@ interface DataErrorInfo {
 
 const cartStorageKey = 'funpace:cart';
 
-function isUuid(value: unknown) {
+function isValidCartProductId(value: unknown) {
   return typeof value === 'string' &&
-    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
+    value.trim().length > 0 &&
+    value.length <= 120 &&
+    !/[(),]/.test(value);
 }
 
 function loadStoredCart(): Product[] {
@@ -51,7 +53,7 @@ function loadStoredCart(): Product[] {
     const raw = localStorage.getItem(cartStorageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((item) => isUuid(item?.id)) : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => isValidCartProductId(item?.id)) : [];
   } catch {
     return [];
   }
@@ -95,7 +97,7 @@ function Storefront() {
   } | null>(null);
 
   React.useEffect(() => {
-    const validCart = cart.filter((item) => isUuid(item.id));
+    const validCart = cart.filter((item) => isValidCartProductId(item.id));
     if (validCart.length !== cart.length) {
       setCart(validCart);
       return;
@@ -203,7 +205,7 @@ function Storefront() {
   const displayVideos = videos;
 
   const handleAddToCart = (item: Product) => {
-    if (!isUuid(item.id)) {
+    if (!isValidCartProductId(item.id)) {
       alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
       return;
     }
@@ -281,9 +283,9 @@ function Storefront() {
         throw new Error('A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.');
       }
 
-      const checkoutItems = cart.filter((item) => isUuid(item.id)).map(item => ({ id: item.id }));
+      const checkoutItems = cart.filter((item) => isValidCartProductId(item.id)).map(item => ({ id: item.id }));
       if (checkoutItems.length !== cart.length) {
-        setCart(cart.filter((item) => isUuid(item.id)));
+        setCart(cart.filter((item) => isValidCartProductId(item.id)));
         throw new Error('Removemos midias antigas do carrinho. Adicione novamente as midias publicadas e tente outra vez.');
       }
 

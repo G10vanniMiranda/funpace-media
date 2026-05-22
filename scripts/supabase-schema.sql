@@ -290,12 +290,6 @@ using (
   public.is_admin()
   or ("userId" is not null and "userId" = auth.uid()::text)
   or ("buyerEmail" = (auth.jwt() ->> 'email'))
-  or exists (
-    select 1
-    from public.order_items oi
-    where oi."orderId" = orders.id
-      and oi."vendedorId" = auth.uid()::text
-  )
 );
 
 drop policy if exists "orders_update_admin_only" on public.orders;

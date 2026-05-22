@@ -322,8 +322,6 @@ export const orderService = {
   },
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
-
 export interface InfinitePayCheckoutItem {
   description: string;
   quantity: number;
@@ -350,7 +348,7 @@ export const paymentService = {
     orderId: string;
     total: number;
   }> {
-    const response = await fetch(`${apiBaseUrl}/api/checkout/create-session`, {
+    const response = await fetch('/api/checkout/create-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),

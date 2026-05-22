@@ -84,6 +84,49 @@ async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise
   return data as T;
 }
 
+function photographerPayload(input: {
+  id?: string;
+  name: string;
+  email: string;
+  bio: string;
+  avatar: string;
+  cpf: string;
+}) {
+  return {
+    ...(input.id ? { id: input.id } : {}),
+    name: input.name,
+    email: input.email,
+    bio: input.bio,
+    avatar: input.avatar,
+    cpf: input.cpf,
+    verified: false,
+    stats: {
+      photos: 0,
+      events: 0,
+      rating: 5,
+      totalEarnings: 0,
+      pendingEarnings: 0,
+      salesCount: 0,
+    },
+  };
+}
+
+function photographerUpdatePayload(input: {
+  name: string;
+  email: string;
+  bio: string;
+  avatar: string;
+  cpf: string;
+}) {
+  return {
+    name: input.name,
+    email: input.email,
+    bio: input.bio,
+    avatar: input.avatar,
+    cpf: input.cpf,
+  };
+}
+
 export default async function handler(req: any, res: any) {
   setCors(req, res);
 
@@ -91,13 +134,28 @@ export default async function handler(req: any, res: any) {
     return res.status(204).end();
   }
 
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      ok: true,
+      env: {
+        SUPABASE_URL: Boolean(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+        SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY),
+      },
+      time: new Date().toISOString(),
+    });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
+  let step = 'inicio';
+
   try {
+    step = 'parse_body';
     const { userId, email, name, bio, cpf, avatar } = getJsonBody(req);
 
+    step = 'validacao';
     if (typeof email !== 'string' || !email.includes('@') || email.length > 256) {
       return res.status(400).json({ error: 'Email invalido.' });
     }
@@ -112,39 +170,74 @@ export default async function handler(req: any, res: any) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    step = 'buscar_por_email';
+    const emailParams = new URLSearchParams({
+      select: 'id,verified',
+      email: `eq.${normalizedEmail}`,
+      limit: '1',
+    });
     const existingByEmail = await supabaseRequest<any[]>(
-      `/rest/v1/photographers?select=id,verified&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+      `/rest/v1/photographers?${emailParams.toString()}`,
     );
     const resolvedId = existingByEmail[0]?.id ||
       (typeof userId === 'string' && userId.trim().length >= 8 ? userId.trim() : `pending:${normalizedEmail}`);
 
-    await supabaseRequest('/rest/v1/photographers?on_conflict=id', {
-      method: 'POST',
-      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-      body: JSON.stringify({
-        id: resolvedId,
-        name: name.trim(),
-        email: normalizedEmail,
-        bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
-        avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',
-        cpf: cpfDigits,
-        verified: false,
-        stats: {
-          photos: 0,
-          events: 0,
-          rating: 5,
-          totalEarnings: 0,
-          pendingEarnings: 0,
-          salesCount: 0,
-        },
-      }),
-    });
+    step = 'gravar_fotografo';
+    if (existingByEmail[0]?.id) {
+      if (existingByEmail[0]?.verified) {
+        return res.status(409).json({ error: 'Este e-mail ja pertence a um fotografo aprovado.' });
+      }
+
+      await supabaseRequest(`/rest/v1/photographers?email=eq.${encodeURIComponent(normalizedEmail)}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify(photographerUpdatePayload({
+          name: name.trim(),
+          email: normalizedEmail,
+          bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
+          avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',
+          cpf: cpfDigits,
+        })),
+      });
+    } else {
+      try {
+        await supabaseRequest('/rest/v1/photographers', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify(photographerPayload({
+            id: resolvedId,
+            name: name.trim(),
+            email: normalizedEmail,
+            bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
+            avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',
+            cpf: cpfDigits,
+          })),
+        });
+      } catch (insertError: any) {
+        if (!String(insertError?.message || '').includes('photographers_email_key')) {
+          throw insertError;
+        }
+
+        await supabaseRequest(`/rest/v1/photographers?email=eq.${encodeURIComponent(normalizedEmail)}`, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify(photographerUpdatePayload({
+            name: name.trim(),
+            email: normalizedEmail,
+            bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
+            avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',
+            cpf: cpfDigits,
+          })),
+        });
+      }
+    }
 
     return res.status(200).json({ ok: true, id: resolvedId });
   } catch (error: any) {
     return res.status(500).json({
       error: error?.message || 'Erro ao registrar fotografo pendente.',
       source: 'photographers-request',
+      step,
     });
   }
 }

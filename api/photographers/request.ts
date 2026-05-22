@@ -32,11 +32,17 @@ export default async function handler(req: any, res: any) {
     const safeBio = typeof bio === 'string' ? bio.slice(0, 1000) : '';
     const safeAvatar = typeof avatar === 'string' ? avatar.slice(0, 2048) : '';
 
-    await supabaseRequest('/rest/v1/photographers?on_conflict=id', {
+    const existingByEmail = await supabaseRequest<any[]>(
+      `/rest/v1/photographers?select=id,verified&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+    );
+    const existingId = existingByEmail[0]?.id;
+    const finalId = existingId || resolvedId;
+
+    await supabaseRequest(`/rest/v1/photographers?on_conflict=id`, {
       method: 'POST',
       headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
       body: JSON.stringify({
-        id: resolvedId,
+        id: finalId,
         name: name.trim(),
         email: normalizedEmail,
         bio: safeBio,
@@ -54,8 +60,11 @@ export default async function handler(req: any, res: any) {
       }),
     });
 
-    return res.status(200).json({ ok: true, id: resolvedId });
+    return res.status(200).json({ ok: true, id: finalId });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Erro ao registrar fotografo pendente.' });
+    return res.status(500).json({
+      error: error?.message || 'Erro ao registrar fotografo pendente.',
+      source: 'photographers-request',
+    });
   }
 }

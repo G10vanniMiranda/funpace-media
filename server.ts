@@ -4,6 +4,8 @@ import crypto from "crypto";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import pg from "pg";
+import cors from "cors";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
 
 dotenv.config();
@@ -11,6 +13,21 @@ dotenv.config();
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const { Pool } = pg;
+const allowedOrigins = new Set([
+  "https://funpace.media",
+  "http://localhost:3000",
+]);
+
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.has(origin)) {
+      callback(null, true);
+      return;
+    }
+
+    callback(new Error("Origem nao permitida pelo CORS."));
+  },
+}));
 
 app.use(express.json({
   verify: (req, _res, buffer) => {
@@ -19,7 +36,7 @@ app.use(express.json({
 }));
 
 function getDbConfig() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const supabaseRef = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/)?.[1];
 
   return process.env.DATABASE_URL
@@ -38,7 +55,7 @@ function getDbConfig() {
 const mediaBucket = process.env.SUPABASE_BUCKET || process.env.BUCKET || "funpace-media";
 
 function getSupabaseApiConfig() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || "";
 
   if (!supabaseUrl || !supabaseKey) {
@@ -48,8 +65,24 @@ function getSupabaseApiConfig() {
   return { supabaseUrl, supabaseKey };
 }
 
+let supabaseAdmin: SupabaseClient | null = null;
+
+function getSupabaseAdmin() {
+  if (!supabaseAdmin) {
+    const { supabaseUrl, supabaseKey } = getSupabaseApiConfig();
+    supabaseAdmin = createClient(supabaseUrl, supabaseKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false,
+      },
+    });
+  }
+
+  return supabaseAdmin;
+}
+
 function getSupabaseStorageUrl() {
-  return process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 }
 
 function extractStoragePathFromUrl(value: string) {
@@ -227,6 +260,218 @@ function getInfinitePayBaseUrl() {
 function getInfinitePayWebhookUrl(req: express.Request) {
   return `${getRequestOrigin(req)}/api/webhooks/infinitepay`;
 }
+
+function getFrontendUrl() {
+  return (process.env.FRONTEND_URL || "https://funpace.media").replace(/\/+$/, "");
+}
+
+function getApiUrl() {
+  return (process.env.API_URL || "https://api.funpace.media").replace(/\/+$/, "");
+}
+
+function getInfinitePayCheckoutEndpoint() {
+  return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || "https://api.checkout.infinitepay.io/links";
+}
+
+function isValidCheckoutItem(item: any) {
+  return typeof item?.description === "string" &&
+    item.description.trim().length > 0 &&
+    Number.isInteger(item?.quantity) &&
+    item.quantity > 0 &&
+    Number.isInteger(item?.price) &&
+    item.price > 0;
+}
+
+function normalizeCheckoutItems(items: any[]) {
+  return items.map((item) => ({
+    description: String(item.description).trim().slice(0, 180),
+    quantity: item.quantity,
+    price: item.price,
+  }));
+}
+
+function isMissingColumnError(error: any) {
+  const message = String(error?.message || error?.details || "");
+  return error?.code === "PGRST204" ||
+    error?.code === "42703" ||
+    message.toLowerCase().includes("could not find") ||
+    message.toLowerCase().includes("column");
+}
+
+async function updateOrderWithFallback(orderId: string, primaryPayload: Record<string, any>, legacyPayload: Record<string, any>) {
+  const supabase = getSupabaseAdmin();
+  const primary = await supabase
+    .from("orders")
+    .update(primaryPayload)
+    .eq("id", orderId)
+    .select("id")
+    .maybeSingle();
+
+  if (!primary.error) {
+    if (!primary.data) throw new Error("Pedido nao encontrado no Supabase.");
+    return;
+  }
+
+  if (!isMissingColumnError(primary.error)) {
+    throw primary.error;
+  }
+
+  const legacy = await supabase
+    .from("orders")
+    .update(legacyPayload)
+    .eq("id", orderId)
+    .select("id")
+    .maybeSingle();
+
+  if (legacy.error) throw legacy.error;
+  if (!legacy.data) throw new Error("Pedido nao encontrado no Supabase.");
+}
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "online", api: "Funpace API" });
+});
+
+app.post("/payments/infinitepay/create", async (req, res) => {
+  try {
+    const orderId = String(req.body?.orderId || "").trim();
+    const items = req.body?.items;
+
+    if (!orderId) {
+      return res.status(400).json({
+        success: false,
+        error: "orderId e obrigatorio.",
+      });
+    }
+
+    if (!Array.isArray(items) || items.length === 0 || !items.every(isValidCheckoutItem)) {
+      return res.status(400).json({
+        success: false,
+        error: "items deve conter ao menos um item com description, quantity e price em centavos.",
+      });
+    }
+
+    const handle = process.env.INFINITEPAY_HANDLE;
+    if (!handle) {
+      return res.status(500).json({
+        success: false,
+        error: "INFINITEPAY_HANDLE nao configurado no servidor.",
+      });
+    }
+
+    const redirectUrl = `${getFrontendUrl()}/pagamento/sucesso?order_id=${encodeURIComponent(orderId)}`;
+    const webhookUrl = `${getApiUrl()}/payments/infinitepay/webhook`;
+    const checkoutPayload = {
+      handle,
+      redirect_url: redirectUrl,
+      webhook_url: webhookUrl,
+      order_nsu: orderId,
+      items: normalizeCheckoutItems(items),
+    };
+
+    const checkoutResponse = await fetch(getInfinitePayCheckoutEndpoint(), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(checkoutPayload),
+    });
+
+    const checkoutRaw = await checkoutResponse.text();
+    let checkoutData: any = {};
+    try {
+      checkoutData = checkoutRaw ? JSON.parse(checkoutRaw) : {};
+    } catch {
+      checkoutData = { message: checkoutRaw };
+    }
+
+    if (!checkoutResponse.ok) {
+      console.error("Erro InfinitePay create link:", checkoutResponse.status, checkoutData);
+      return res.status(502).json({
+        success: false,
+        error: checkoutData?.message || checkoutData?.error || "Falha ao criar link na InfinitePay.",
+      });
+    }
+
+    const paymentUrl = checkoutData?.url;
+    if (typeof paymentUrl !== "string" || !paymentUrl.startsWith("http")) {
+      console.error("Resposta invalida da InfinitePay:", checkoutData);
+      return res.status(502).json({
+        success: false,
+        error: "InfinitePay nao retornou uma URL de pagamento valida.",
+      });
+    }
+
+    const now = new Date().toISOString();
+    await updateOrderWithFallback(
+      orderId,
+      {
+        status: "pending",
+        payment_provider: "infinitepay",
+        payment_url: paymentUrl,
+        updated_at: now,
+      },
+      {
+        status: "pending",
+        paymentProvider: "infinitepay",
+        checkoutUrl: paymentUrl,
+        updatedAt: now,
+      },
+    );
+
+    return res.json({
+      success: true,
+      paymentUrl,
+    });
+  } catch (error: any) {
+    console.error("Erro ao criar pagamento InfinitePay:", error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || "Erro interno ao criar pagamento.",
+    });
+  }
+});
+
+app.post("/payments/infinitepay/webhook", async (req, res) => {
+  const payload = req.body ?? {};
+  const orderId = String(payload?.order_nsu || "").trim();
+
+  try {
+    if (!orderId) {
+      return res.status(400).json({
+        received: false,
+        error: "order_nsu ausente no webhook.",
+      });
+    }
+
+    const now = new Date().toISOString();
+    await updateOrderWithFallback(
+      orderId,
+      {
+        status: "paid",
+        payment_provider: "infinitepay",
+        payment_id: payload?.transaction_nsu ?? null,
+        receipt_url: payload?.receipt_url ?? null,
+        paid_amount: payload?.paid_amount ?? null,
+        payment_method: payload?.capture_method ?? null,
+        webhook_payload: payload,
+        paid_at: now,
+        updated_at: now,
+      },
+      {
+        status: "paid",
+        paymentProvider: "infinitepay",
+        paymentExternalId: payload?.transaction_nsu ?? null,
+        updatedAt: now,
+      },
+    );
+
+    return res.status(200).json({ received: true });
+  } catch (error: any) {
+    console.error("Erro no webhook InfinitePay:", error, { orderId, payload });
+    return res.status(500).json({
+      received: false,
+      error: error?.message || "Erro interno ao processar webhook.",
+    });
+  }
+});
 
 app.get("/api/health", async (req, res) => {
   const dbConfig = getDbConfig();

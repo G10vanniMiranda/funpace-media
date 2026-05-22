@@ -321,6 +321,41 @@ export const orderService = {
   },
 };
 
+const apiBaseUrl = (import.meta.env.VITE_API_URL || 'https://api.funpace.media').replace(/\/+$/, '');
+
+export interface InfinitePayCheckoutItem {
+  description: string;
+  quantity: number;
+  price: number;
+}
+
+export interface InfinitePayCustomer {
+  name: string;
+  email: string;
+  phone: string;
+}
+
+export const paymentService = {
+  async createInfinitePayCheckout(input: {
+    orderId: string;
+    items: InfinitePayCheckoutItem[];
+    customer: InfinitePayCustomer;
+  }): Promise<{ paymentUrl: string }> {
+    const response = await fetch(`${apiBaseUrl}/payments/infinitepay/create`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data?.success || !data?.paymentUrl) {
+      throw new Error(data?.error || 'Nao foi possivel iniciar o pagamento.');
+    }
+
+    return { paymentUrl: data.paymentUrl };
+  },
+};
+
 export const photographerDashboardService = {
   async getDashboard(vendedorId: string, products: Product[]): Promise<{
     metrics: PhotographerDashboardMetrics;

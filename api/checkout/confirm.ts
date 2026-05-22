@@ -1,4 +1,4 @@
-import { createPool, getInfinitePayPaymentCheckEndpoint, handleOptions, isUuid, setCors } from '../_utils';
+import { getInfinitePayPaymentCheckEndpoint, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
@@ -47,20 +47,14 @@ export default async function handler(req: any, res: any) {
     return res.status(409).json({ paid: false, message: 'Pagamento ainda nao confirmado.' });
   }
 
-  const pool = await createPool();
-  try {
-    await pool.query(
-      `
-        update public.orders
-        set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
-        where id = $2
-          and status in ('pending', 'failed', 'cancelled')
-      `,
-      [transactionNsu, orderId],
-    );
-  } finally {
-    await pool.end().catch(() => undefined);
-  }
+  await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}&status=in.(pending,failed,cancelled)`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      status: 'paid',
+      paymentExternalId: transactionNsu,
+    }),
+  });
 
   return res.status(200).json({ paid: true });
 }

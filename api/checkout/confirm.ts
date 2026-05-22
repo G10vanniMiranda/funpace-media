@@ -1,4 +1,4 @@
-import { getInfinitePayPaymentCheckEndpoint, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
+import { getInfinitePayPaymentCheckEndpoint, getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
@@ -8,10 +8,11 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
+  const body = getJsonBody(req);
   const handle = process.env.INFINITEPAY_HANDLE;
-  const orderId = String(req.body?.order || req.body?.order_nsu || '');
-  const transactionNsu = String(req.body?.transaction_nsu || req.body?.transactionNSU || '');
-  const slug = String(req.body?.slug || req.body?.invoice_slug || '');
+  const orderId = String(body?.order || body?.order_nsu || '');
+  const transactionNsu = String(body?.transaction_nsu || body?.transactionNSU || '');
+  const slug = String(body?.slug || body?.invoice_slug || '');
 
   if (!handle) {
     return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });

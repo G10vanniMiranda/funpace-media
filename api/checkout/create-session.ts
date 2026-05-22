@@ -1,15 +1,108 @@
-import { getInfinitePayCheckoutEndpoint, handleOptions, isUuid, isValidCpf, onlyCpfDigits, setCors, supabaseRequest } from '../_utils';
+function setCors(req: any, res: any) {
+  const origins = new Set([
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+
+  if (origin && origins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+function getJsonBody(req: any) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
+  return {};
+}
+
+function isUuid(value: unknown) {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
+}
+
+function onlyCpfDigits(value: string | null | undefined) {
+  return (value ?? '').replace(/\D/g, '').slice(0, 11);
+}
+
+function isValidCpf(value: string | null | undefined) {
+  const cpf = onlyCpfDigits(value);
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+
+  const calcDigit = (baseLength: number) => {
+    let sum = 0;
+    for (let i = 0; i < baseLength; i += 1) {
+      sum += Number(cpf[i]) * (baseLength + 1 - i);
+    }
+    const remainder = (sum * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+
+  return calcDigit(9) === Number(cpf[9]) && calcDigit(10) === Number(cpf[10]);
+}
+
+function getSupabaseConfig() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase Service Role nao configurado na Vercel.');
+  }
+
+  return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), supabaseKey };
+}
+
+async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
+  const response = await fetch(`${supabaseUrl}${path}`, {
+    ...init,
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+  });
+  const raw = await response.text();
+  let data: any = null;
+
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = raw;
+  }
+
+  if (!response.ok) {
+    const message = typeof data === 'string' ? data : data?.message || data?.hint || raw;
+    throw new Error(message || `Erro Supabase HTTP ${response.status}`);
+  }
+
+  return data as T;
+}
+
+function getCheckoutEndpoint() {
+  return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || 'https://api.checkout.infinitepay.io/links';
+}
 
 export default async function handler(req: any, res: any) {
-  if (handleOptions(req, res)) return;
   setCors(req, res);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
   try {
-    const { items, successUrl, userId, buyer } = req.body || {};
+    const { items, successUrl, userId, buyer } = getJsonBody(req);
 
     if (!buyer?.cpf || !isValidCpf(buyer.cpf)) {
       return res.status(400).json({ error: 'CPF valido e obrigatorio para pagamento.' });
@@ -37,28 +130,24 @@ export default async function handler(req: any, res: any) {
     }
 
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
-
     if (total <= 1) {
       return res.status(400).json({ error: 'A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.' });
     }
 
-    const [order] = await supabaseRequest<any[]>(
-      '/rest/v1/orders?select=id',
-      {
-        method: 'POST',
-        headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({
-          userId: userId && userId !== 'guest' ? userId : null,
-          buyerName: String(buyer.fullName).trim(),
-          buyerEmail: String(buyer.email).trim().toLowerCase(),
-          buyerPhone: String(buyer.phone || 'nao_informado').trim(),
-          buyerCpf: onlyCpfDigits(buyer.cpf),
-          total,
-          status: 'pending',
-          paymentProvider: 'infinitepay',
-        }),
-      },
-    );
+    const [order] = await supabaseRequest<any[]>('/rest/v1/orders?select=id', {
+      method: 'POST',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({
+        userId: userId && userId !== 'guest' ? userId : null,
+        buyerName: String(buyer.fullName).trim(),
+        buyerEmail: String(buyer.email).trim().toLowerCase(),
+        buyerPhone: String(buyer.phone || 'nao_informado').trim(),
+        buyerCpf: onlyCpfDigits(buyer.cpf),
+        total,
+        status: 'pending',
+        paymentProvider: 'infinitepay',
+      }),
+    });
 
     const orderId = order?.id;
     if (!orderId) {
@@ -87,19 +176,18 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
     }
 
-    const fallbackSuccessUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/pagamento/sucesso`;
-    const successRedirect = new URL(successUrl || fallbackSuccessUrl);
+    const proto = req.headers['x-forwarded-proto'] || 'https';
+    const host = req.headers.host;
+    const successRedirect = new URL(successUrl || `${proto}://${host}/pagamento/sucesso`);
     successRedirect.searchParams.set('payment', 'success');
     successRedirect.searchParams.set('order', orderId);
 
     const phoneDigits = typeof buyer.phone === 'string' ? String(buyer.phone).replace(/\D/g, '') : '';
-    const phoneE164 = phoneDigits.length >= 10 ? `+55${phoneDigits}` : '';
-
     const checkoutPayload: any = {
       handle,
       order_nsu: orderId,
       redirect_url: successRedirect.toString(),
-      webhook_url: `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/webhooks/infinitepay`,
+      webhook_url: `${proto}://${host}/api/webhooks/infinitepay`,
       items: products.map((product: any) => ({
         quantity: 1,
         price: Math.round(Number(product.price) * 100),
@@ -107,22 +195,22 @@ export default async function handler(req: any, res: any) {
       })),
     };
 
-    if (phoneE164) {
+    if (phoneDigits.length >= 10) {
       checkoutPayload.customer = {
         name: String(buyer.fullName || '').slice(0, 120),
         email: String(buyer.email || '').slice(0, 256),
-        phone_number: phoneE164,
+        phone_number: `+55${phoneDigits}`,
       };
     }
 
-    const checkoutResponse = await fetch(getInfinitePayCheckoutEndpoint(), {
+    const checkoutResponse = await fetch(getCheckoutEndpoint(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(checkoutPayload),
     });
-
     const checkoutRaw = await checkoutResponse.text();
     let checkoutData: any = {};
+
     try {
       checkoutData = checkoutRaw ? JSON.parse(checkoutRaw) : {};
     } catch {
@@ -135,7 +223,10 @@ export default async function handler(req: any, res: any) {
         headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({ status: 'failed' }),
       }).catch(() => undefined);
-      return res.status(502).json({ error: checkoutData?.message || checkoutData?.error || checkoutRaw || 'Falha ao gerar link na InfinitePay.' });
+
+      return res.status(502).json({
+        error: checkoutData?.message || checkoutData?.error || checkoutRaw || 'Falha ao gerar link na InfinitePay.',
+      });
     }
 
     const checkoutUrl = checkoutData?.url || checkoutData?.link || checkoutData?.checkout_url || checkoutData?.payment_url || '';
@@ -145,6 +236,7 @@ export default async function handler(req: any, res: any) {
         headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({ status: 'failed' }),
       }).catch(() => undefined);
+
       return res.status(502).json({ error: 'Resposta invalida da InfinitePay ao criar link.' });
     }
 
@@ -156,6 +248,9 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ url: checkoutUrl, orderId, total });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Erro interno ao criar checkout.' });
+    return res.status(500).json({
+      error: error?.message || 'Erro interno ao criar checkout.',
+      source: 'checkout-create-session',
+    });
   }
 }

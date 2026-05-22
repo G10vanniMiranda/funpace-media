@@ -147,6 +147,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           : null;
 
         if (authUser?.id && loginEmail) {
+          let claimDetail = '';
           try {
             const claimResponse = await fetch('/api/photographers/claim', {
               method: 'POST',
@@ -156,19 +157,24 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
             if (claimResponse.ok) {
               photographer = await photographerService.getPhotographerById(authUser.id);
+            } else {
+              const claimPayload = await claimResponse.json().catch(() => null);
+              const claimMessage = claimPayload?.error || claimPayload?.message || `HTTP ${claimResponse.status}`;
+              claimDetail = claimPayload?.step ? `${claimMessage} (${claimPayload.step})` : claimMessage;
             }
           } catch (claimError) {
             console.warn('Nao foi possivel sincronizar cadastro do fotografo.', claimError);
+            claimDetail = claimError instanceof Error ? claimError.message : String(claimError);
           }
-        }
 
-        if (!photographer && loginEmail) {
-          const photographerByEmail = await photographerService.getPhotographerByEmail(loginEmail);
-          if (photographerByEmail?.verified && authUser?.id && photographerByEmail.id !== authUser.id) {
-            setError('CADASTRO APROVADO, MAS A CONTA AINDA NAO FOI SINCRONIZADA. SAIA, ENTRE NOVAMENTE E TENTE OUTRA VEZ.');
-            return;
+          if (!photographer) {
+            const photographerByEmail = await photographerService.getPhotographerByEmail(loginEmail);
+            if (photographerByEmail?.verified && photographerByEmail.id !== authUser.id) {
+              setError(`CADASTRO APROVADO, MAS A CONTA AINDA NAO FOI SINCRONIZADA.${claimDetail ? ` ${claimDetail}` : ''}`);
+              return;
+            }
+            photographer = photographerByEmail;
           }
-          photographer = photographerByEmail;
         }
         
         if (photographer) {

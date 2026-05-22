@@ -8,6 +8,7 @@ import {
   PhotographerProductPerformance,
   PhotographerSale,
   WithdrawalRequest,
+  Buyer,
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
@@ -321,7 +322,7 @@ export const orderService = {
   },
 };
 
-const apiBaseUrl = (import.meta.env.VITE_API_URL || 'https://api.funpace.media').replace(/\/+$/, '');
+const apiBaseUrl = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 export interface InfinitePayCheckoutItem {
   description: string;
@@ -335,24 +336,36 @@ export interface InfinitePayCustomer {
   phone: string;
 }
 
+export interface CreateInfinitePayCheckoutInput {
+  userId: string;
+  buyer: Buyer;
+  items: { id: string }[];
+  successUrl: string;
+  cancelUrl?: string;
+}
+
 export const paymentService = {
-  async createInfinitePayCheckout(input: {
+  async createInfinitePayCheckout(input: CreateInfinitePayCheckoutInput): Promise<{
+    paymentUrl: string;
     orderId: string;
-    items: InfinitePayCheckoutItem[];
-    customer: InfinitePayCustomer;
-  }): Promise<{ paymentUrl: string }> {
-    const response = await fetch(`${apiBaseUrl}/payments/infinitepay/create`, {
+    total: number;
+  }> {
+    const response = await fetch(`${apiBaseUrl}/api/checkout/create-session`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(input),
     });
 
     const data = await response.json().catch(() => ({}));
-    if (!response.ok || !data?.success || !data?.paymentUrl) {
+    if (!response.ok || !data?.url) {
       throw new Error(data?.error || 'Nao foi possivel iniciar o pagamento.');
     }
 
-    return { paymentUrl: data.paymentUrl };
+    return {
+      paymentUrl: data.url,
+      orderId: data.orderId,
+      total: Number(data.total || 0),
+    };
   },
 };
 

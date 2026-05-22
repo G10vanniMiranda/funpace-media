@@ -15,10 +15,11 @@ import { PhotographerDashboard } from './components/PhotographerDashboard';
 import { PhotographerLogin } from './components/PhotographerLogin';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLogin } from './components/AdminLogin';
+import { PagamentoSucesso } from './routes/pagamento/sucesso';
 import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { productService, photographerService, orderService, withdrawalService } from './lib/services';
+import { productService, photographerService, orderService, withdrawalService, paymentService } from './lib/services';
 import { logout } from './lib/supabase';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, CheckCircle2, Loader2, ReceiptText, Scan, X, XCircle } from 'lucide-react';
@@ -264,27 +265,15 @@ function Storefront() {
         throw new Error('A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.');
       }
 
-      const response = await fetch('/api/checkout/create-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId: user.uid,
-          buyer,
-          items: cart.map(item => ({ id: item.id })),
-          successUrl: `${window.location.origin}?payment=success`,
-          cancelUrl: `${window.location.origin}?payment=cancel`,
-        }),
+      const result = await paymentService.createInfinitePayCheckout({
+        userId: user.uid,
+        buyer,
+        items: cart.map(item => ({ id: item.id })),
+        successUrl: `${window.location.origin}/pagamento/sucesso`,
+        cancelUrl: `${window.location.origin}?payment=cancel`,
       });
 
-      const data = await response.json();
-
-      if (data.url) {
-        window.location.href = data.url;
-      } else {
-        throw new Error(data.error || 'Erro ao iniciar pagamento');
-      }
+      window.location.href = result.paymentUrl;
 
     } catch (error: any) {
       console.error("Erro no checkout:", error);
@@ -825,6 +814,7 @@ export default function App() {
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
+        <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
         <Route path="/" element={<Storefront />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

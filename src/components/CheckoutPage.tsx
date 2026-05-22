@@ -210,7 +210,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 : 'bg-gray-200 text-gray-400 opacity-70 cursor-not-allowed'
             }`}
           >
-            {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <span>IR PARA INFINITEPAY</span>}
+            {isSubmitting ? <Loader2 className="w-6 h-6 animate-spin" /> : <span>FINALIZAR COMPRA</span>}
             {!isSubmitting && <ArrowRight className="w-6 h-6 mt-1" />}
           </button>
           {user && cartItems.length > 0 && !contactValid && (

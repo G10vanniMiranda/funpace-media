@@ -221,7 +221,8 @@ function isValidWebhookSignature(req: express.Request) {
 }
 
 function getWebhookOrderId(payload: any) {
-  return payload?.order ||
+  return payload?.order_nsu ||
+    payload?.order ||
     payload?.orderId ||
     payload?.reference ||
     payload?.external_reference ||
@@ -232,10 +233,12 @@ function getWebhookOrderId(payload: any) {
 function getWebhookEventId(payload: any, orderId: string, status: string) {
   return String(
     payload?.id ||
-      payload?.event_id ||
+    payload?.event_id ||
       payload?.eventId ||
+      payload?.transaction_nsu ||
       payload?.transaction_id ||
       payload?.transactionId ||
+      payload?.invoice_slug ||
       `${orderId || "unknown"}:${status || "unknown"}`,
   );
 }
@@ -254,7 +257,7 @@ function getRequestOrigin(req: express.Request) {
 }
 
 function getInfinitePayBaseUrl() {
-  return (process.env.INFINITEPAY_BASE_URL || "https://api.infinitepay.io").replace(/\/+$/, "");
+  return (process.env.INFINITEPAY_BASE_URL || "https://api.checkout.infinitepay.io").replace(/\/+$/, "");
 }
 
 function getInfinitePayWebhookUrl(req: express.Request) {
@@ -271,6 +274,35 @@ function getApiUrl() {
 
 function getInfinitePayCheckoutEndpoint() {
   return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || "https://api.checkout.infinitepay.io/links";
+}
+
+function getInfinitePayPaymentCheckEndpoint() {
+  return process.env.INFINITEPAY_PAYMENT_CHECK_ENDPOINT || `${getInfinitePayBaseUrl()}/payment_check`;
+}
+
+async function checkInfinitePayPayment(input: {
+  handle: string;
+  orderId: string;
+  transactionNsu: string;
+  slug: string;
+}) {
+  const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      handle: input.handle,
+      order_nsu: input.orderId,
+      transaction_nsu: input.transactionNsu,
+      slug: input.slug,
+    }),
+  });
+
+  if (!paymentCheckResponse.ok) {
+    const message = await paymentCheckResponse.text();
+    throw new Error(message || "Falha ao confirmar pagamento na InfinitePay.");
+  }
+
+  return paymentCheckResponse.json().catch(() => ({}));
 }
 
 function isValidCheckoutItem(item: any) {
@@ -737,7 +769,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
       };
     }
 
-    const checkoutResponse = await fetch(`${getInfinitePayBaseUrl()}/invoices/public/checkout/links`, {
+    const checkoutResponse = await fetch(getInfinitePayCheckoutEndpoint(), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(checkoutPayload),
@@ -804,23 +836,12 @@ app.post("/api/checkout/confirm", async (req, res) => {
     return res.status(400).json({ error: "Dados de confirmacao do pagamento incompletos." });
   }
 
-  const paymentCheckResponse = await fetch(`${getInfinitePayBaseUrl()}/invoices/public/checkout/payment_check`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      handle,
-      order_nsu: orderId,
-      transaction_nsu: transactionNsu,
-      slug,
-    }),
-  });
-
-  if (!paymentCheckResponse.ok) {
-    const message = await paymentCheckResponse.text();
-    return res.status(502).json({ error: message || "Falha ao confirmar pagamento na InfinitePay." });
+  let paymentCheck: any = {};
+  try {
+    paymentCheck = await checkInfinitePayPayment({ handle, orderId, transactionNsu, slug });
+  } catch (error: any) {
+    return res.status(502).json({ error: error?.message || "Falha ao confirmar pagamento na InfinitePay." });
   }
-
-  const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
 
   if (!paymentCheck?.paid) {
     return res.status(409).json({ paid: false, message: "Pagamento ainda nao confirmado." });
@@ -1206,17 +1227,44 @@ app.post("/api/photographers/claim", async (req, res) => {
 app.post("/api/webhooks/infinitepay", async (req, res) => {
   const payload = req.body;
   const orderId = getWebhookOrderId(payload);
-  const status = mapPaymentStatus(payload?.status);
-  const eventId = getWebhookEventId(payload, orderId, status);
-  const paymentExternalId = payload?.transaction_id || payload?.transactionId || payload?.id || null;
+  const transactionNsu = String(
+    payload?.transaction_nsu ||
+      payload?.transactionNSU ||
+      payload?.transaction_id ||
+      payload?.transactionId ||
+      payload?.id ||
+      "",
+  );
+  const slug = String(payload?.invoice_slug || payload?.invoiceSlug || payload?.slug || "");
+  const signatureHeader = getWebhookSignature(req);
 
-  if (!getWebhookSecret()) {
-    return res.status(500).json({ error: "INFINITEPAY_WEBHOOK_SECRET nao configurado." });
-  }
-
-  if (!isValidWebhookSignature(req)) {
+  if (getWebhookSecret() && signatureHeader && !isValidWebhookSignature(req)) {
     return res.status(401).json({ error: "Assinatura do webhook invalida." });
   }
+
+  if (!isUuid(orderId)) {
+    return res.status(400).json({ error: "Pedido invalido no webhook." });
+  }
+
+  if (!transactionNsu || !slug) {
+    return res.status(400).json({ error: "Dados de pagamento incompletos no webhook." });
+  }
+
+  const handle = process.env.INFINITEPAY_HANDLE;
+  if (!handle) {
+    return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
+  }
+
+  let paymentCheck: any = {};
+  try {
+    paymentCheck = await checkInfinitePayPayment({ handle, orderId, transactionNsu, slug });
+  } catch (error: any) {
+    return res.status(502).json({ error: error?.message || "Falha ao validar webhook na InfinitePay." });
+  }
+
+  const status = paymentCheck?.paid ? "paid" : mapPaymentStatus(payload?.status);
+  const eventId = getWebhookEventId(payload, orderId, status);
+  const paymentExternalId = transactionNsu || null;
 
   const pool = new Pool(getDbConfig());
   try {
@@ -1233,35 +1281,33 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
         on conflict (provider, "eventId") do nothing
         returning id
       `,
-      [eventId, isUuid(orderId) ? orderId : null, status, JSON.stringify(payload)],
+      [eventId, orderId, status, JSON.stringify({ ...payload, payment_check: paymentCheck })],
     );
 
     if (eventResult.rowCount === 0) {
       return res.status(200).send("OK");
     }
 
-    if (isUuid(orderId)) {
-      if (status === "paid") {
-        await pool.query(
-          `
-            update public.orders
-            set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
-            where id = $2
-              and status in ('pending', 'failed', 'cancelled')
-          `,
-          [paymentExternalId, orderId],
-        );
-      } else if (["failed", "cancelled", "refunded"].includes(status)) {
-        await pool.query(
-          `
-            update public.orders
-            set status = $1, "paymentExternalId" = coalesce($2, "paymentExternalId")
-            where id = $3
-              and status <> 'paid'
-          `,
-          [status, paymentExternalId, orderId],
-        );
-      }
+    if (status === "paid") {
+      await pool.query(
+        `
+          update public.orders
+          set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
+          where id = $2
+            and status in ('pending', 'failed', 'cancelled')
+        `,
+        [paymentExternalId, orderId],
+      );
+    } else if (["failed", "cancelled", "refunded"].includes(status)) {
+      await pool.query(
+        `
+          update public.orders
+          set status = $1, "paymentExternalId" = coalesce($2, "paymentExternalId")
+          where id = $3
+            and status <> 'paid'
+        `,
+        [status, paymentExternalId, orderId],
+      );
     }
   } finally {
     await pool.end();

@@ -78,6 +78,17 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           return;
         }
 
+        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+
+        await requestPendingPhotographer({
+          userId: null,
+          email,
+          name,
+          bio,
+          cpf: onlyCpfDigits(cpf),
+          avatar: avatarUrl,
+        });
+
         let authUser = null;
         let requiresEmailConfirmation = false;
         try {
@@ -96,17 +107,16 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           }
         }
 
-        const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
-
-        // Always register a pending photographer record so admin can approve, even if email confirmation blocks a session.
-        await requestPendingPhotographer({
-          userId: authUser?.id ?? null,
-          email: authUser?.email ?? email,
-          name,
-          bio,
-          cpf: onlyCpfDigits(cpf),
-          avatar: avatarUrl,
-        });
+        if (authUser?.id) {
+          await requestPendingPhotographer({
+            userId: authUser.id,
+            email: authUser.email ?? email,
+            name,
+            bio,
+            cpf: onlyCpfDigits(cpf),
+            avatar: avatarUrl,
+          });
+        }
 
         // Best-effort: if we have a session already, also create via Supabase REST (keeps auth-aligned flows).
         const currentUser = getCurrentUser();

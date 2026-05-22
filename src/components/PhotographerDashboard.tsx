@@ -236,6 +236,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     return products.filter((product) => {
       const productStatus = product.status ?? 'published';
+      if (productStatus === 'removed') return false;
+
       const matchesSearch = !normalizedSearch || [
         product.name,
         product.event,
@@ -255,8 +257,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setIsLoading(true);
       try {
         const pProducts = await productService.getVendedorProducts(photographer.id);
-        setProducts(pProducts);
-        const dashboard = await photographerDashboardService.getDashboard(photographer.id, pProducts);
+        const visibleProducts = pProducts.filter((product) => (product.status ?? 'published') !== 'removed');
+        setProducts(visibleProducts);
+        const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
         const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
         setDashboardMetrics(dashboard.metrics);
         setRecentSales(dashboard.recentSales);
@@ -407,16 +410,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const handleRemoveProduct = async (product: Product) => {
-    const shouldRemove = window.confirm('Remover este produto da vitrine? Ele ficara preservado no historico como removido.');
+    const shouldRemove = window.confirm('Remover este produto? Ele nao aparecera mais no painel nem na vitrine.');
     if (!shouldRemove) return;
 
     setIsLoading(true);
     try {
-      const updatedProduct = await productService.removeProduct(product.id);
-      setProducts((current) => current.map((item) => (
-        item.id === updatedProduct.id ? updatedProduct : item
-      )));
-      alert('Produto removido da vitrine.');
+      await productService.removeProduct(product.id);
+      setProducts((current) => current.filter((item) => item.id !== product.id));
+      alert('Produto removido.');
     } catch (error) {
       console.error('Erro ao remover produto:', error);
       alert('Erro ao remover produto.');
@@ -482,8 +483,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       }
       
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
-      setProducts(updatedProducts);
-      const dashboard = await photographerDashboardService.getDashboard(photographer.id, updatedProducts);
+      const visibleProducts = updatedProducts.filter((product) => (product.status ?? 'published') !== 'removed');
+      setProducts(visibleProducts);
+      const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
       setDashboardMetrics(dashboard.metrics);
       setRecentSales(dashboard.recentSales);
       setProductPerformance(dashboard.productPerformance);
@@ -744,10 +746,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     onChange={(event) => setProductStatusFilter(event.target.value as ProductStatusFilter)}
                     className="w-full md:w-40 h-14 px-4 bg-white brutal-border font-mono text-xs uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
                   >
-                    <option value="all">Todos status</option>
+                    <option value="all">Ativos</option>
                     <option value="published">Publicado</option>
                     <option value="draft">Rascunho</option>
-                    <option value="removed">Removido</option>
                   </select>
                 </div>
               </div>
@@ -1129,7 +1130,6 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       >
                         <option value="published">Publicado</option>
                         <option value="draft">Rascunho</option>
-                        <option value="removed">Removido</option>
                       </select>
                     </div>
                   </div>

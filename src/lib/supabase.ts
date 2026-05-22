@@ -364,7 +364,9 @@ export const supabaseStorage = {
 export const getCurrentUser = () => toAppUser(getStoredSession()?.user ?? null);
 
 function clearOAuthParamsFromUrl() {
-  const nextPath = window.location.pathname === '/auth/callback' ? '/' : window.location.pathname;
+  const storedReturnPath = sessionStorage.getItem('funpace:oauth-return-path');
+  sessionStorage.removeItem('funpace:oauth-return-path');
+  const nextPath = storedReturnPath || (window.location.pathname === '/auth/callback' ? '/' : window.location.pathname);
   window.history.replaceState({}, '', nextPath);
 }
 
@@ -503,12 +505,13 @@ export const validateGoogleAuth = async () => {
   return true;
 };
 
-export const loginWithGoogle = async () => {
+export const loginWithGoogle = async (returnPath = window.location.pathname) => {
   assertSupabaseConfig();
   const redirectTo = `${window.location.origin}/auth/callback`;
   const codeVerifier = randomCodeVerifier();
   const codeChallenge = await createCodeChallenge(codeVerifier);
   sessionStorage.setItem('funpace:oauth-code-verifier', codeVerifier);
+  sessionStorage.setItem('funpace:oauth-return-path', returnPath || '/');
 
   const url = new URL(`${supabaseConfig.url}/auth/v1/authorize`);
   url.searchParams.set('provider', 'google');

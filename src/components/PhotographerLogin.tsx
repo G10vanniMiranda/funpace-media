@@ -1,10 +1,11 @@
-import { useState, FormEvent } from 'react';
+import { useEffect, useState, FormEvent } from 'react';
 import { motion } from 'motion/react';
 import { Camera, Lock, Mail, ArrowRight, Loader2, AlertCircle, Check } from 'lucide-react';
 import { Photographer } from '../types';
 import { photographerService } from '../lib/services';
 import { isMockMode } from '../lib/config';
-import { getCurrentUser, loginWithEmail, registerWithEmail } from '../lib/supabase';
+import { isGoogleAuthEnabled } from '../lib/config';
+import { getCurrentUser, loginWithEmail, loginWithGoogle, registerWithEmail } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 
 interface PhotographerLoginProps {
@@ -22,6 +23,60 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const googleEnabled = !isMockMode && isGoogleAuthEnabled;
+
+  async function requestPendingPhotographer(input: {
+    userId?: string | null;
+    email: string;
+    name: string;
+    bio: string;
+    cpf: string;
+    avatar: string;
+  }) {
+    const pendingResponse = await fetch('/api/photographers/request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(input),
+    });
+
+    if (!pendingResponse.ok) {
+      const payload = await pendingResponse.json().catch(() => ({}));
+      throw new Error(payload?.error || 'Erro ao registrar cadastro pendente.');
+    }
+  }
+
+  useEffect(() => {
+    async function finalizeGooglePhotographerRequest() {
+      const raw = sessionStorage.getItem('funpace:photographer-google-request');
+      const authUser = getCurrentUser();
+      if (!raw || !authUser?.email) return;
+
+      setIsLoading(true);
+      setError(null);
+      setSuccess(null);
+
+      try {
+        const payload = JSON.parse(raw) as { name: string; bio: string; cpf: string; avatar: string };
+        await requestPendingPhotographer({
+          userId: authUser.id,
+          email: authUser.email,
+          name: payload.name,
+          bio: payload.bio,
+          cpf: payload.cpf,
+          avatar: payload.avatar,
+        });
+        sessionStorage.removeItem('funpace:photographer-google-request');
+        setSuccess('SOLICITACAO ENVIADA: aguarde a aprovacao do administrador para acessar o painel.');
+        setIsRegistering(false);
+      } catch (error: any) {
+        setError(error?.message || 'Erro ao registrar cadastro com Google.');
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    finalizeGooglePhotographerRequest();
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -78,23 +133,14 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         const avatarUrl = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
 
         // Always register a pending photographer record so admin can approve, even if email confirmation blocks a session.
-        const pendingResponse = await fetch('/api/photographers/request', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            userId: authUser?.id ?? null,
-            email: authUser?.email ?? email,
-            name,
-            bio,
-            cpf: onlyCpfDigits(cpf),
-            avatar: avatarUrl,
-          }),
+        await requestPendingPhotographer({
+          userId: authUser?.id ?? null,
+          email: authUser?.email ?? email,
+          name,
+          bio,
+          cpf: onlyCpfDigits(cpf),
+          avatar: avatarUrl,
         });
-
-        if (!pendingResponse.ok) {
-          const payload = await pendingResponse.json().catch(() => ({}));
-          throw new Error(payload?.error || 'Erro ao registrar cadastro pendente.');
-        }
 
         // Best-effort: if we have a session already, also create via Supabase REST (keeps auth-aligned flows).
         const currentUser = getCurrentUser();
@@ -175,6 +221,32 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
       }
       console.error(err);
     } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleGoogleAuth = async () => {
+    setError(null);
+    setSuccess(null);
+    setIsLoading(true);
+
+    try {
+      if (isRegistering) {
+        if (!name.trim()) throw new Error('Informe seu nome completo.');
+        if (!bio.trim()) throw new Error('Informe sua bio/portfolio.');
+        if (!isValidCpf(cpf)) throw new Error('CPF invalido.');
+
+        sessionStorage.setItem('funpace:photographer-google-request', JSON.stringify({
+          name: name.trim(),
+          bio: bio.trim(),
+          cpf: onlyCpfDigits(cpf),
+          avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name.trim())}&background=random`,
+        }));
+      }
+
+      await loginWithGoogle('/fotografo');
+    } catch (err: any) {
+      setError(err?.message || 'Nao foi possivel entrar com Google.');
       setIsLoading(false);
     }
   };
@@ -317,6 +389,32 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
               </>
             )}
           </button>
+
+          {googleEnabled && (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <div className="h-px flex-1 bg-gray-200" />
+                <span className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400">ou</span>
+                <div className="h-px flex-1 bg-gray-200" />
+              </div>
+
+              <button
+                type="button"
+                disabled={isLoading}
+                onClick={handleGoogleAuth}
+                className="w-full h-14 bg-white text-[#3c4043] border border-[#dadce0] hover:bg-[#f8fafd] hover:border-[#d2e3fc] transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-70 disabled:cursor-wait font-sans"
+              >
+                {isLoading ? (
+                  <Loader2 className="w-5 h-5 animate-spin text-[#5f6368]" />
+                ) : (
+                  <GoogleLogo />
+                )}
+                <span className="text-sm font-semibold tracking-normal">
+                  {isRegistering ? 'Cadastrar com Google' : 'Entrar com Google'}
+                </span>
+              </button>
+            </div>
+          )}
         </form>
 
         <div className="mt-8 text-center">
@@ -337,5 +435,16 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         </div>
       </motion.div>
     </div>
+  );
+}
+
+function GoogleLogo() {
+  return (
+    <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
+      <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+      <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+      <path fill="#FBBC05" d="M5.84 14.1c-.22-.66-.35-1.36-.35-2.1s.13-1.44.35-2.1V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l3.66-2.84z" />
+      <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06L5.84 9.9C6.71 7.31 9.14 5.38 12 5.38z" />
+    </svg>
   );
 }

@@ -153,7 +153,7 @@ values (
   'funpace-media',
   'funpace-media',
   false,
-  104857600,
+  524288000,
   array[
     'image/jpeg',
     'image/png',

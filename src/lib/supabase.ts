@@ -348,7 +348,11 @@ export const supabaseStorage = {
       }
 
       if (normalized.includes('payload') || normalized.includes('too large') || response.status === 413) {
-        throw new Error(`Arquivo muito grande para upload: ${file.name}`);
+        throw new Error(`Arquivo muito grande para upload: ${file.name}. O limite atual do bucket foi excedido.`);
+      }
+
+      if (normalized.includes('maximum allowed size') || normalized.includes('exceeded the maximum')) {
+        throw new Error(`Arquivo muito grande para upload: ${file.name}. O limite atual do bucket foi excedido.`);
       }
 
       throw new Error(message);

@@ -41,12 +41,17 @@ interface DataErrorInfo {
 
 const cartStorageKey = 'funpace:cart';
 
+function isUuid(value: unknown) {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(value);
+}
+
 function loadStoredCart(): Product[] {
   try {
     const raw = localStorage.getItem(cartStorageKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    return Array.isArray(parsed) ? parsed.filter((item) => isUuid(item?.id)) : [];
   } catch {
     return [];
   }
@@ -90,7 +95,13 @@ function Storefront() {
   } | null>(null);
 
   React.useEffect(() => {
-    localStorage.setItem(cartStorageKey, JSON.stringify(cart));
+    const validCart = cart.filter((item) => isUuid(item.id));
+    if (validCart.length !== cart.length) {
+      setCart(validCart);
+      return;
+    }
+
+    localStorage.setItem(cartStorageKey, JSON.stringify(validCart));
   }, [cart]);
 
   React.useEffect(() => {
@@ -192,6 +203,11 @@ function Storefront() {
   const displayVideos = videos;
 
   const handleAddToCart = (item: Product) => {
+    if (!isUuid(item.id)) {
+      alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
+      return;
+    }
+
     if (!cart.some(p => p.id === item.id)) {
       setCart([...cart, item]);
       setIsCartOpen(true);
@@ -265,10 +281,16 @@ function Storefront() {
         throw new Error('A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.');
       }
 
+      const checkoutItems = cart.filter((item) => isUuid(item.id)).map(item => ({ id: item.id }));
+      if (checkoutItems.length !== cart.length) {
+        setCart(cart.filter((item) => isUuid(item.id)));
+        throw new Error('Removemos midias antigas do carrinho. Adicione novamente as midias publicadas e tente outra vez.');
+      }
+
       const result = await paymentService.createInfinitePayCheckout({
         userId: user.uid,
         buyer,
-        items: cart.map(item => ({ id: item.id })),
+        items: checkoutItems,
         successUrl: `${window.location.origin}/pagamento/sucesso`,
         cancelUrl: `${window.location.origin}?payment=cancel`,
       });

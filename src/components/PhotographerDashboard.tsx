@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import { Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
 import { photographerDashboardService, productService, withdrawalService } from '../lib/services';
+import { isMockMode } from '../lib/config';
+import { getCurrentUser } from '../lib/supabase';
 
 interface PhotographerDashboardProps {
   photographer: Photographer;
@@ -454,6 +456,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     setIsLoading(true);
     try {
+      const currentUser = getCurrentUser();
+      if (!isMockMode && currentUser?.id && currentUser.id !== photographer.id) {
+        alert('Sessao do fotografo nao sincronizada com o cadastro aprovado. Saia do painel, entre novamente e tente publicar de novo.');
+        return;
+      }
+
       for (const item of selectedFiles) {
         try {
           const uploadedFile = await productService.uploadProductFile(photographer.id, item.file);

@@ -163,7 +163,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         }
 
         if (!photographer && loginEmail) {
-          photographer = await photographerService.getPhotographerByEmail(loginEmail);
+          const photographerByEmail = await photographerService.getPhotographerByEmail(loginEmail);
+          if (photographerByEmail?.verified && authUser?.id && photographerByEmail.id !== authUser.id) {
+            setError('CADASTRO APROVADO, MAS A CONTA AINDA NAO FOI SINCRONIZADA. SAIA, ENTRE NOVAMENTE E TENTE OUTRA VEZ.');
+            return;
+          }
+          photographer = photographerByEmail;
         }
         
         if (photographer) {

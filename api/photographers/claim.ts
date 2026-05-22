@@ -35,7 +35,7 @@ export default async function handler(req: any, res: any) {
 
     step = 'buscar_por_email';
     const photographerRows = await supabaseRequest<any[]>(
-      `/rest/v1/photographers?select=id,verified&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
+      `/rest/v1/photographers?select=*&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
     );
 
     if (photographerRows.length === 0) {
@@ -47,17 +47,18 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, moved: 0, alreadyLinked: true });
     }
 
-    step = 'atualizar_id';
-    await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(photographer.id)}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
+    step = 'atualizar_id_por_email';
+    const [updated] = await supabaseRequest<any[]>('/rest/v1/photographers?on_conflict=email', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
       body: JSON.stringify({
+        ...photographer,
         id: userId.trim(),
         email: normalizedEmail,
       }),
     });
 
-    return res.status(200).json({ ok: true, moved: 1 });
+    return res.status(200).json({ ok: true, moved: 1, id: updated?.id || userId.trim() });
   } catch (error: any) {
     return res.status(500).json({
       error: error?.message || 'Erro ao claim de fotografo pendente.',

@@ -53,6 +53,29 @@ export function isUuid(value: unknown) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+export function onlyCpfDigits(value: string | null | undefined) {
+  return (value ?? '').replace(/\D/g, '').slice(0, 11);
+}
+
+export function isValidCpf(value: string | null | undefined) {
+  const cpf = onlyCpfDigits(value);
+
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) {
+    return false;
+  }
+
+  const calcDigit = (baseLength: number) => {
+    let sum = 0;
+    for (let i = 0; i < baseLength; i += 1) {
+      sum += Number(cpf[i]) * (baseLength + 1 - i);
+    }
+    const remainder = (sum * 10) % 11;
+    return remainder === 10 ? 0 : remainder;
+  };
+
+  return calcDigit(9) === Number(cpf[9]) && calcDigit(10) === Number(cpf[10]);
+}
+
 export function getInfinitePayCheckoutEndpoint() {
   return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || 'https://api.checkout.infinitepay.io/links';
 }

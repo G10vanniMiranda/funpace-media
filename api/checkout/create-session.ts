@@ -1,5 +1,4 @@
-import { createPool, getInfinitePayCheckoutEndpoint, handleOptions, isUuid, setCors } from '../_utils';
-import { isValidCpf, onlyCpfDigits } from '../../src/lib/cpf';
+import { createPool, getInfinitePayCheckoutEndpoint, handleOptions, isUuid, isValidCpf, onlyCpfDigits, setCors } from '../_utils';
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;

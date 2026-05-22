@@ -8,9 +8,13 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
+  let step = 'inicio';
+
   try {
+    step = 'parse_body';
     const { userId, email } = getJsonBody(req);
 
+    step = 'validacao';
     if (typeof userId !== 'string' || userId.trim().length < 8) {
       return res.status(400).json({ error: 'userId invalido.' });
     }
@@ -20,6 +24,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    step = 'buscar_por_id_auth';
     const authRows = await supabaseRequest<any[]>(
       `/rest/v1/photographers?select=id,verified&id=eq.${encodeURIComponent(userId.trim())}&limit=1`,
     );
@@ -28,6 +33,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, moved: 0, alreadyLinked: true });
     }
 
+    step = 'buscar_por_email';
     const photographerRows = await supabaseRequest<any[]>(
       `/rest/v1/photographers?select=id,verified&email=eq.${encodeURIComponent(normalizedEmail)}&limit=1`,
     );
@@ -41,6 +47,7 @@ export default async function handler(req: any, res: any) {
       return res.status(200).json({ ok: true, moved: 0, alreadyLinked: true });
     }
 
+    step = 'atualizar_id';
     await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(photographer.id)}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
@@ -52,6 +59,10 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ ok: true, moved: 1 });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Erro ao claim de fotografo pendente.' });
+    return res.status(500).json({
+      error: error?.message || 'Erro ao claim de fotografo pendente.',
+      source: 'photographers-claim',
+      step,
+    });
   }
 }

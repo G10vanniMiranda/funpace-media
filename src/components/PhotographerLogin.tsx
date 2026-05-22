@@ -141,21 +141,29 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         }
 
         const authUser = await loginWithEmail(email, password);
+        const loginEmail = (authUser?.email ?? email).trim().toLowerCase();
         let photographer = authUser
           ? await photographerService.getPhotographerById(authUser.id)
           : null;
 
-        // If the user exists in Auth but the profile row is still pending:<email>, claim it and retry.
-        if (!photographer && authUser?.id && authUser?.email) {
-          const claimResponse = await fetch('/api/photographers/claim', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ userId: authUser.id, email: authUser.email }),
-          });
+        if (authUser?.id && loginEmail) {
+          try {
+            const claimResponse = await fetch('/api/photographers/claim', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: authUser.id, email: loginEmail }),
+            });
 
-          if (claimResponse.ok) {
-            photographer = await photographerService.getPhotographerById(authUser.id);
+            if (claimResponse.ok) {
+              photographer = await photographerService.getPhotographerById(authUser.id);
+            }
+          } catch (claimError) {
+            console.warn('Nao foi possivel sincronizar cadastro do fotografo.', claimError);
           }
+        }
+
+        if (!photographer && loginEmail) {
+          photographer = await photographerService.getPhotographerByEmail(loginEmail);
         }
         
         if (photographer) {

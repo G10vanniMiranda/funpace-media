@@ -4,6 +4,20 @@ import { ArrowLeft, CheckCircle2, Loader2, ReceiptText, XCircle } from 'lucide-r
 
 type PaymentStatus = 'checking' | 'paid' | 'pending' | 'error';
 
+function getParam(params: URLSearchParams, names: string[]) {
+  for (const name of names) {
+    const value = params.get(name);
+    if (value) return value;
+  }
+
+  const lowerNames = new Set(names.map((name) => name.toLowerCase()));
+  for (const [key, value] of params.entries()) {
+    if (lowerNames.has(key.toLowerCase()) && value) return value;
+  }
+
+  return null;
+}
+
 export function PagamentoSucesso() {
   const navigate = useNavigate();
   const [status, setStatus] = React.useState<PaymentStatus>('checking');
@@ -13,10 +27,10 @@ export function PagamentoSucesso() {
   React.useEffect(() => {
     async function confirmPayment() {
       const params = new URLSearchParams(window.location.search);
-      const order = params.get('order') || params.get('order_nsu');
-      const transactionNsu = params.get('transaction_nsu') || params.get('transaction_id') || params.get('transactionId');
-      const slug = params.get('slug') || params.get('invoice_slug');
-      const captureMethod = params.get('capture_method');
+      const order = getParam(params, ['order', 'order_nsu', 'orderNsu', 'orderNSU', 'order_id', 'orderId']);
+      const transactionNsu = getParam(params, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
+      const slug = getParam(params, ['slug', 'invoice_slug', 'invoiceSlug', 'invoice_id', 'invoiceId']);
+      const captureMethod = getParam(params, ['capture_method', 'captureMethod', 'payment_method', 'paymentMethod']);
 
       setOrderId(order);
 
@@ -46,7 +60,7 @@ export function PagamentoSucesso() {
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          setStatus(response.status === 409 || response.status === 400 ? 'pending' : 'error');
+          setStatus([400, 409, 502].includes(response.status) ? 'pending' : 'error');
           setMessage(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
           return;
         }

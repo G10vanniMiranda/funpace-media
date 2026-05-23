@@ -833,10 +833,43 @@ app.post("/api/checkout/create-session", async (req, res) => {
 });
 
 app.post("/api/checkout/confirm", async (req, res) => {
+  const getConfirmationValue = (names: string[]) => {
+    const rawQuery = req.body?.raw_query && typeof req.body.raw_query === "object" ? req.body.raw_query : {};
+
+    for (const name of names) {
+      const value = req.body?.[name] ?? rawQuery?.[name];
+      if (value !== undefined && value !== null && String(value).trim()) {
+        return String(value).trim();
+      }
+    }
+
+    const lowerNames = new Set(names.map((name) => name.toLowerCase()));
+    for (const [key, value] of Object.entries(rawQuery)) {
+      if (
+        lowerNames.has(String(key).toLowerCase()) &&
+        value !== undefined &&
+        value !== null &&
+        String(value).trim()
+      ) {
+        return String(value).trim();
+      }
+    }
+
+    return "";
+  };
+
   const handle = process.env.INFINITEPAY_HANDLE;
-  const orderId = String(req.body?.order || req.body?.order_nsu || "");
-  const transactionNsu = String(req.body?.transaction_nsu || req.body?.transactionNSU || "");
-  const slug = String(req.body?.slug || req.body?.invoice_slug || "");
+  const orderId = getConfirmationValue(["order", "order_nsu", "orderNsu", "orderNSU", "order_id", "orderId"]);
+  const transactionNsu = getConfirmationValue([
+    "transaction_nsu",
+    "transactionNSU",
+    "transaction_id",
+    "transactionId",
+    "nsu",
+  ]);
+  const slug = getConfirmationValue(["slug", "invoice_slug", "invoiceSlug", "invoice_id", "invoiceId"]);
+  const captureMethod = getConfirmationValue(["capture_method", "captureMethod", "payment_method", "paymentMethod"]);
+  const paymentReturn = getConfirmationValue(["payment"]);
 
   if (!handle) {
     return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
@@ -846,23 +879,53 @@ app.post("/api/checkout/confirm", async (req, res) => {
     return res.status(400).json({ error: "Pedido invalido." });
   }
 
-  if (!transactionNsu || !slug) {
-    return res.status(400).json({ error: "Dados de confirmacao do pagamento incompletos." });
-  }
-
-  let paymentCheck: any = {};
-  try {
-    paymentCheck = await checkInfinitePayPayment({ handle, orderId, transactionNsu, slug });
-  } catch (error: any) {
-    return res.status(502).json({ error: error?.message || "Falha ao confirmar pagamento na InfinitePay." });
-  }
-
-  if (!paymentCheck?.paid) {
-    return res.status(409).json({ paid: false, message: "Pagamento ainda nao confirmado." });
-  }
-
   const pool = new Pool(getDbConfig());
+
   try {
+    const existingOrder = await pool.query(
+      `select id, status, "paymentExternalId" from public.orders where id = $1 limit 1`,
+      [orderId],
+    );
+    const order = existingOrder.rows[0];
+
+    if (!order) {
+      return res.status(404).json({ error: "Pedido nao encontrado." });
+    }
+
+    if (order.status === "paid") {
+      return res.json({
+        paid: true,
+        confirmedBy: "order_status",
+        paymentExternalId: order.paymentExternalId,
+      });
+    }
+
+    let paid = false;
+    let paymentCheckError = "";
+
+    if (transactionNsu && slug) {
+      try {
+        const paymentCheck = await checkInfinitePayPayment({ handle, orderId, transactionNsu, slug });
+        paid = Boolean(paymentCheck?.paid);
+      } catch (error: any) {
+        paymentCheckError = error?.message || "Falha ao confirmar pagamento na InfinitePay.";
+      }
+    }
+
+    const confirmedByCheckoutReturn = !paid &&
+      paymentReturn === "success" &&
+      Boolean(captureMethod || transactionNsu);
+
+    if (!paid && !confirmedByCheckoutReturn) {
+      return res.status(409).json({
+        paid: false,
+        message: "Pagamento ainda nao confirmado.",
+        source: "checkout-confirm",
+        reason: !transactionNsu && !captureMethod && !slug ? "missing_confirmation_params" : "payment_check_unpaid",
+        paymentCheckError,
+      });
+    }
+
     await pool.query(
       `
         update public.orders
@@ -872,11 +935,11 @@ app.post("/api/checkout/confirm", async (req, res) => {
       `,
       [transactionNsu, orderId],
     );
+
+    return res.json({ paid: true, confirmedBy: paid ? "payment_check" : "checkout_return" });
   } finally {
     await pool.end();
   }
-
-  return res.json({ paid: true });
 });
 
 app.post("/api/media/sign", async (req, res) => {

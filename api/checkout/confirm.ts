@@ -1,5 +1,25 @@
 import { getInfinitePayPaymentCheckEndpoint, getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
 
+function getBodyValue(body: any, names: string[]) {
+  const rawQuery = body?.raw_query && typeof body.raw_query === 'object' ? body.raw_query : {};
+
+  for (const name of names) {
+    const value = body?.[name] ?? rawQuery?.[name];
+    if (value !== undefined && value !== null && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+
+  const lowerNames = new Set(names.map((name) => name.toLowerCase()));
+  for (const [key, value] of Object.entries(rawQuery)) {
+    if (lowerNames.has(String(key).toLowerCase()) && value !== undefined && value !== null && String(value).trim()) {
+      return String(value).trim();
+    }
+  }
+
+  return '';
+}
+
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
   setCors(req, res);
@@ -10,11 +30,11 @@ export default async function handler(req: any, res: any) {
 
   const body = getJsonBody(req);
   const handle = process.env.INFINITEPAY_HANDLE;
-  const orderId = String(body?.order || body?.order_nsu || '');
-  const transactionNsu = String(body?.transaction_nsu || body?.transactionNSU || body?.transaction_id || body?.transactionId || '');
-  const slug = String(body?.slug || body?.invoice_slug || '');
-  const captureMethod = String(body?.capture_method || body?.captureMethod || '');
-  const paymentReturn = String(body?.payment || '');
+  const orderId = getBodyValue(body, ['order', 'order_nsu', 'orderNsu', 'orderNSU', 'order_id', 'orderId']);
+  const transactionNsu = getBodyValue(body, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
+  const slug = getBodyValue(body, ['slug', 'invoice_slug', 'invoiceSlug', 'invoice_id', 'invoiceId']);
+  const captureMethod = getBodyValue(body, ['capture_method', 'captureMethod', 'payment_method', 'paymentMethod']);
+  const paymentReturn = getBodyValue(body, ['payment']);
 
   if (!handle) {
     return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
@@ -43,23 +63,27 @@ export default async function handler(req: any, res: any) {
 
   let paid = false;
   let paymentCheckError = '';
-  if (slug) {
-    const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        handle,
-        order_nsu: orderId,
-        transaction_nsu: transactionNsu,
-        slug,
-      }),
-    });
+  if (transactionNsu && slug) {
+    try {
+      const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          handle,
+          order_nsu: orderId,
+          transaction_nsu: transactionNsu,
+          slug,
+        }),
+      });
 
-    if (paymentCheckResponse.ok) {
-      const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
-      paid = Boolean(paymentCheck?.paid);
-    } else {
-      paymentCheckError = await paymentCheckResponse.text().catch(() => '');
+      if (paymentCheckResponse.ok) {
+        const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
+        paid = Boolean(paymentCheck?.paid);
+      } else {
+        paymentCheckError = await paymentCheckResponse.text().catch(() => '');
+      }
+    } catch (error: any) {
+      paymentCheckError = error?.message || 'Falha ao confirmar pagamento na InfinitePay.';
     }
   }
 

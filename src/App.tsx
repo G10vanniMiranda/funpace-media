@@ -549,7 +549,7 @@ function PaymentNoticeModal({
             initial={{ scale: 0.92, y: 20 }}
             animate={{ scale: 1, y: 0 }}
             exit={{ scale: 0.92, y: 20 }}
-            className="relative w-full max-w-xl bg-white brutal-border brutal-shadow-heavy p-8"
+            className="relative w-full max-w-xl overflow-hidden bg-white brutal-border brutal-shadow-heavy p-5 sm:p-8"
           >
             <button
               onClick={onClose}
@@ -559,7 +559,7 @@ function PaymentNoticeModal({
               <X className="w-5 h-5" />
             </button>
 
-            <div className="flex items-start gap-5">
+            <div className="flex flex-col items-start gap-5 sm:flex-row">
               <div className={`p-4 brutal-border ${
                 notice.status === 'paid' ? 'bg-green-50 text-green-600' :
                 notice.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
@@ -569,10 +569,10 @@ function PaymentNoticeModal({
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 break-words">
                   Retorno da InfinitePay
                 </p>
-                <h2 className="font-display text-4xl uppercase tracking-tighter">
+                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] break-words">
                   {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
                 </h2>
                 <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">
@@ -584,17 +584,17 @@ function PaymentNoticeModal({
                   </p>
                 )}
 
-                <div className="flex flex-col sm:flex-row gap-3 mt-8">
+                <div className="flex w-full flex-col gap-3 mt-8 sm:flex-row">
                   <button
                     onClick={onOpenOrders}
-                    className="h-12 px-5 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                    className="min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
                   >
                     <ReceiptText className="w-4 h-4" />
                     Abrir minhas compras
                   </button>
                   <button
                     onClick={onClose}
-                    className="h-12 px-5 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer"
+                    className="min-h-12 w-full px-5 py-3 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer sm:w-auto"
                   >
                     Continuar na loja
                   </button>
@@ -843,6 +843,7 @@ export default function App() {
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
+        <Route path="/pagar" element={<PagamentoSucesso />} />
         <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
         <Route path="/" element={<Storefront />} />
         <Route path="*" element={<Navigate to="/" replace />} />

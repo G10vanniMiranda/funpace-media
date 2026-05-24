@@ -27,6 +27,23 @@ function titleCaseFromEmail(email?: string | null) {
     .join(' ');
 }
 
+function onlyWhatsappDigits(value: string) {
+  const digits = value.replace(/\D/g, '');
+  const withoutCountryCode = digits.length > 11 && digits.startsWith('55') ? digits.slice(2) : digits;
+
+  return withoutCountryCode.slice(0, 11);
+}
+
+function formatWhatsapp(value: string) {
+  const digits = onlyWhatsappDigits(value);
+
+  if (digits.length <= 2) return digits;
+  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
+  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
+
+  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
+}
+
 export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginRequested }: CheckoutPageProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -43,7 +60,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
 
   const total = useMemo(() => cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0), [cartItems]);
   const meetsMinimumTotal = total > MIN_CHECKOUT_TOTAL;
-  const phoneDigits = phone.replace(/\D/g, '');
+  const phoneDigits = onlyWhatsappDigits(phone);
   const contactValid = fullName.trim().length >= 3 &&
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     phoneDigits.length >= 10 &&
@@ -124,11 +141,13 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
               <CheckoutInput
                 label="WhatsApp"
                 value={phone}
-                onChange={(value) => setPhone(value.replace(/[^\d\s()+-]/g, '').slice(0, 20))}
+                onChange={(value) => setPhone(formatWhatsapp(value))}
                 placeholder="(00) 00000-0000"
                 type="tel"
+                inputMode="numeric"
+                maxLength={15}
               />
-              <CheckoutInput label="CPF" value={formatCpf(cpf)} onChange={(value) => setCpf(onlyCpfDigits(value))} placeholder="000.000.000-00" />
+              <CheckoutInput label="CPF" value={formatCpf(cpf)} onChange={(value) => setCpf(onlyCpfDigits(value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} />
             </div>
           </section>
 
@@ -233,12 +252,16 @@ function CheckoutInput({
   onChange,
   placeholder,
   type = 'text',
+  inputMode,
+  maxLength,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   placeholder: string;
   type?: string;
+  inputMode?: React.HTMLAttributes<HTMLInputElement>['inputMode'];
+  maxLength?: number;
 }) {
   return (
     <div>
@@ -248,6 +271,8 @@ function CheckoutInput({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
+        inputMode={inputMode}
+        maxLength={maxLength}
         className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm focus:bg-gray-50 outline-none"
       />
     </div>

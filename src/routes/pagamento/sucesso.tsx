@@ -18,6 +18,17 @@ function getParam(params: URLSearchParams, names: string[]) {
   return null;
 }
 
+function isPendingConfirmation(responseStatus: number, payload: any) {
+  const text = String(payload?.error || payload?.message || '').toLowerCase();
+
+  return payload?.paid === false ||
+    [400, 404, 409, 502].includes(responseStatus) ||
+    text.includes('ainda nao confirmado') ||
+    text.includes('ainda não confirmado') ||
+    text.includes('nao identificamos o pedido') ||
+    text.includes('não identificamos o pedido');
+}
+
 export function PagamentoSucesso() {
   const navigate = useNavigate();
   const [status, setStatus] = React.useState<PaymentStatus>('checking');
@@ -60,7 +71,7 @@ export function PagamentoSucesso() {
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          setStatus([400, 409, 502].includes(response.status) ? 'pending' : 'error');
+          setStatus(isPendingConfirmation(response.status, payload) ? 'pending' : 'error');
           setMessage(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
           return;
         }
@@ -81,9 +92,9 @@ export function PagamentoSucesso() {
   const isChecking = status === 'checking';
 
   return (
-    <main className="min-h-screen bg-brutal-white text-brutal-black flex items-center justify-center px-6 py-10">
-      <section className="w-full max-w-2xl bg-white brutal-border brutal-shadow-heavy p-8 md:p-10">
-        <div className="flex items-start gap-5">
+    <main className="min-h-screen bg-brutal-white text-brutal-black flex items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
+      <section className="w-full max-w-2xl overflow-hidden bg-white brutal-border brutal-shadow-heavy p-5 sm:p-8 md:p-10">
+        <div className="flex flex-col items-start gap-5 sm:flex-row">
           <div className={`p-4 brutal-border ${
             isPaid ? 'bg-green-50 text-green-600' :
             isChecking ? 'bg-gray-50 text-brutal-black' :
@@ -100,10 +111,10 @@ export function PagamentoSucesso() {
           </div>
 
           <div className="min-w-0 flex-1">
-            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 break-words">
               Retorno da InfinitePay
             </p>
-            <h1 className="font-display text-5xl uppercase tracking-tighter">
+            <h1 className="max-w-full font-display text-[clamp(2rem,11vw,3.75rem)] uppercase tracking-normal leading-[0.95] break-words">
               {isChecking ? 'Confirmando' : isPaid ? 'Pagamento confirmado' : status === 'pending' ? 'Confirmacao pendente' : 'Falha na confirmacao'}
             </h1>
             <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-4">
@@ -115,17 +126,17 @@ export function PagamentoSucesso() {
               </p>
             )}
 
-            <div className="flex flex-col sm:flex-row gap-3 mt-8">
+            <div className="flex w-full flex-col gap-3 mt-8 sm:flex-row">
               <button
                 onClick={() => navigate('/')}
-                className="h-12 px-5 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                className="min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
                 <ReceiptText className="w-4 h-4" />
                 Ir para loja
               </button>
               <button
                 onClick={() => navigate('/checkout')}
-                className="h-12 px-5 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                className="min-h-12 w-full px-5 py-3 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Voltar ao checkout

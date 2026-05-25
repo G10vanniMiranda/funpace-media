@@ -156,6 +156,13 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
     await downloadFile(signedUrl, filenameFromItem(item as any));
   };
 
+  const visibleOrders = orders
+    .map((order) => ({
+      ...order,
+      items: (order.items ?? []).filter((item) => !hiddenItemIds.has(item.id)),
+    }))
+    .filter((order) => (order.items?.length ?? 0) > 0);
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -201,7 +208,7 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
                 </div>
               )}
 
-              {!isLoading && !error && orders.length === 0 && (
+              {!isLoading && !error && visibleOrders.length === 0 && (
                 <div className="h-full flex flex-col items-center justify-center text-center px-6">
                   <ReceiptText className="w-14 h-14 text-gray-300 mb-4" />
                   <h3 className="font-display text-2xl uppercase mb-2">Nenhuma compra</h3>
@@ -211,9 +218,9 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
                 </div>
               )}
 
-              {!isLoading && !error && orders.length > 0 && (
+              {!isLoading && !error && visibleOrders.length > 0 && (
                 <div className="space-y-4">
-                  {orders.map((order) => (
+                  {visibleOrders.map((order) => (
                     <article
                       key={order.id}
                       className={`bg-white brutal-border p-4 space-y-4 ${
@@ -264,9 +271,7 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
                         <p className="font-mono text-[10px] text-gray-400 uppercase">
                           {order.items?.length ?? 0} itens comprados
                         </p>
-                        {(order.items ?? [])
-                          .filter((item) => !hiddenItemIds.has(item.id))
-                          .map((item) => (
+                        {(order.items ?? []).map((item) => (
                           <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
                             <div className="w-12 h-12 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
                               {item.thumbnailUrl || item.type === 'IMG' ? (

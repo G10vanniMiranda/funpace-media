@@ -9,6 +9,7 @@
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
     "supabase:schema:apply": "node scripts/apply-supabase-schema.mjs",
     "supabase:schema:validate": "node scripts/validate-supabase-schema.mjs",
     "supabase:admin:set": "node scripts/set-supabase-admin.mjs"

@@ -367,6 +367,11 @@ export const supabaseStorage = {
 
 export const getCurrentUser = () => toAppUser(getStoredSession()?.user ?? null);
 
+export const getCurrentAccessToken = async () => {
+  const session = await refreshStoredSession();
+  return session?.access_token ?? null;
+};
+
 function clearOAuthParamsFromUrl() {
   const storedReturnPath = sessionStorage.getItem('funpace:oauth-return-path');
   sessionStorage.removeItem('funpace:oauth-return-path');

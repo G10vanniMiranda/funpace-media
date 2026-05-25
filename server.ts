@@ -97,6 +97,31 @@ function getSupabaseStorageUrl() {
   return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 }
 
+function getBearerToken(req: express.Request) {
+  const header = req.header("authorization") || "";
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || "";
+}
+
+async function getAuthenticatedRequestUser(req: express.Request): Promise<{ id: string; email: string | null } | null> {
+  const token = getBearerToken(req);
+  if (!token) return null;
+
+  const { supabaseUrl, supabaseKey } = getSupabaseApiConfig();
+  const response = await fetch(`${supabaseUrl.replace(/\/+$/, "")}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const user: any = await response.json().catch(() => null);
+  return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
+}
+
 function extractStoragePathFromUrl(value: string) {
   if (!value) return "";
   if (!/^https?:\/\//i.test(value)) return value.replace(/^\/+/, "");
@@ -627,7 +652,12 @@ app.post("/api/checkout/create-session", async (req, res) => {
   let orderId = "";
 
   try {
-    const { items, successUrl, userId, buyer } = req.body;
+    const { items, successUrl, buyer } = req.body;
+    const authUser = await getAuthenticatedRequestUser(req);
+
+    if (!authUser?.id) {
+      return res.status(401).json({ error: "Entre novamente para iniciar o pagamento." });
+    }
 
     if (!buyer?.cpf || !isValidCpf(buyer.cpf)) {
       return res.status(400).json({ error: "CPF valido e obrigatorio para pagamento." });
@@ -677,6 +707,9 @@ app.post("/api/checkout/create-session", async (req, res) => {
     const products = productsResult.rows;
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
     const buyerCpf = onlyCpfDigits(buyer.cpf);
+    const buyerEmail = authUser.email || String(buyer.email).trim().toLowerCase();
+    const buyerName = String(buyer.fullName).trim();
+    const buyerPhone = String((buyer as any).phone || "nao_informado").trim();
 
     if (total <= 1) {
       await pool.query("rollback");
@@ -684,6 +717,32 @@ app.post("/api/checkout/create-session", async (req, res) => {
         error: "A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.",
       });
     }
+
+    await pool.query(
+      `
+        insert into public.customers (
+          id,
+          email,
+          name,
+          phone,
+          cpf
+        )
+        values ($1, $2, $3, $4, $5)
+        on conflict (id) do update
+        set
+          email = excluded.email,
+          name = excluded.name,
+          phone = excluded.phone,
+          cpf = excluded.cpf
+      `,
+      [
+        authUser.id,
+        buyerEmail,
+        buyerName,
+        buyerPhone,
+        buyerCpf,
+      ],
+    );
 
     const orderResult = await pool.query(
       `
@@ -701,10 +760,10 @@ app.post("/api/checkout/create-session", async (req, res) => {
         returning id
       `,
       [
-        userId && userId !== "guest" ? userId : null,
-        String(buyer.fullName).trim(),
-        String(buyer.email).trim().toLowerCase(),
-        String((buyer as any).phone || "nao_informado").trim(),
+        authUser.id,
+        buyerName,
+        buyerEmail,
+        buyerPhone,
         buyerCpf,
         total,
       ],
@@ -1075,9 +1134,14 @@ app.post("/api/downloads/record", async (req, res) => {
 app.post("/api/downloads/authorize", async (req, res) => {
   const orderId = String(req.body?.orderId || "");
   const orderItemId = String(req.body?.orderItemId || "");
+  const authUser = await getAuthenticatedRequestUser(req);
 
   if (!isUuid(orderId) || !isUuid(orderItemId)) {
     return res.status(400).json({ error: "Download invalido." });
+  }
+
+  if (!authUser?.id) {
+    return res.status(401).json({ error: "Entre novamente para baixar sua compra." });
   }
 
   const pool = new Pool(getDbConfig());
@@ -1110,6 +1174,10 @@ app.post("/api/downloads/authorize", async (req, res) => {
     const item = itemResult.rows[0];
     if (!item || item.status !== "paid") {
       return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
+    }
+
+    if (item.userId !== authUser.id) {
+      return res.status(403).json({ error: "Este pedido nao pertence ao usuario logado." });
     }
 
     const ipSource = req.ip || req.socket.remoteAddress || "";

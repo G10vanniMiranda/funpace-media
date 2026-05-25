@@ -18,15 +18,47 @@ function getParam(params: URLSearchParams, names: string[]) {
   return null;
 }
 
+function normalizePaymentText(value: unknown) {
+  return String(value || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/ã|Ã£/g, 'a');
+}
+
 function isPendingConfirmation(responseStatus: number, payload: any) {
-  const text = String(payload?.error || payload?.message || '').toLowerCase();
+  const text = normalizePaymentText(payload?.error || payload?.message || '');
 
   return payload?.paid === false ||
-    [400, 404, 409, 502].includes(responseStatus) ||
+    [400, 404, 409, 500, 502, 503, 504].includes(responseStatus) ||
     text.includes('ainda nao confirmado') ||
-    text.includes('ainda não confirmado') ||
+    (text.includes('ainda') && text.includes('confirmad')) ||
     text.includes('nao identificamos o pedido') ||
-    text.includes('não identificamos o pedido');
+    (text.includes('identificamos') && text.includes('pedido'));
+}
+
+function getDisplayStatus(status: PaymentStatus, message: string): PaymentStatus {
+  const text = normalizePaymentText(message);
+
+  if (
+    status === 'error' &&
+    (
+      text.includes('ainda nao confirmado') ||
+      (text.includes('ainda') && text.includes('confirmad')) ||
+      text.includes('nao foi possivel confirmar')
+    )
+  ) {
+    return 'pending';
+  }
+
+  return status;
+}
+
+function getTitleLines(status: PaymentStatus) {
+  if (status === 'checking') return ['Confirmando'];
+  if (status === 'paid') return ['Pagamento', 'confirmado'];
+  if (status === 'pending') return ['Confirmacao', 'pendente'];
+  return ['Falha na', 'confirmacao'];
 }
 
 export function PagamentoSucesso() {
@@ -78,44 +110,50 @@ export function PagamentoSucesso() {
 
         setStatus('paid');
         setMessage('Pagamento confirmado. Seus arquivos digitais ja estao liberados para download em Minhas Compras.');
-      } catch (error: any) {
+      } catch (error) {
         console.error('Erro ao confirmar pagamento:', error);
-        setStatus('error');
-        setMessage(error?.message || 'Nao foi possivel confirmar o pagamento agora.');
+        setStatus('pending');
+        setMessage('Pagamento ainda nao confirmado. A liberacao acontecera quando a InfinitePay confirmar.');
       }
     }
 
     confirmPayment();
   }, []);
 
-  const isPaid = status === 'paid';
-  const isChecking = status === 'checking';
+  const displayStatus = getDisplayStatus(status, message);
+  const titleLines = getTitleLines(displayStatus);
+  const isPaid = displayStatus === 'paid';
+  const isChecking = displayStatus === 'checking';
 
   return (
-    <main className="min-h-screen bg-brutal-white text-brutal-black flex items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
-      <section className="w-full max-w-2xl overflow-hidden bg-white brutal-border brutal-shadow-heavy p-5 sm:p-8 md:p-10">
+    <main className="min-h-[100svh] overflow-x-hidden bg-brutal-white text-brutal-black flex items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
+      <section className="w-full max-w-[min(42rem,calc(100vw-2rem))] overflow-hidden bg-white brutal-border brutal-shadow-heavy p-4 sm:p-8 md:p-10">
         <div className="flex flex-col items-start gap-5 sm:flex-row">
-          <div className={`p-4 brutal-border ${
+          <div className={`shrink-0 p-3 sm:p-4 brutal-border ${
             isPaid ? 'bg-green-50 text-green-600' :
             isChecking ? 'bg-gray-50 text-brutal-black' :
-            status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
+            displayStatus === 'pending' ? 'bg-yellow-50 text-yellow-700' :
             'bg-red-50 text-red-600'
           }`}>
             {isChecking ? (
-              <Loader2 className="w-9 h-9 animate-spin" />
+              <Loader2 className="w-8 h-8 sm:w-9 sm:h-9 animate-spin" />
             ) : isPaid ? (
-              <CheckCircle2 className="w-9 h-9" />
+              <CheckCircle2 className="w-8 h-8 sm:w-9 sm:h-9" />
             ) : (
-              <XCircle className="w-9 h-9" />
+              <XCircle className="w-8 h-8 sm:w-9 sm:h-9" />
             )}
           </div>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 w-full flex-1">
             <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 break-words">
               Retorno da InfinitePay
             </p>
-            <h1 className="max-w-full font-display text-[clamp(2rem,11vw,3.75rem)] uppercase tracking-normal leading-[0.95] break-words">
-              {isChecking ? 'Confirmando' : isPaid ? 'Pagamento confirmado' : status === 'pending' ? 'Confirmacao pendente' : 'Falha na confirmacao'}
+            <h1 className="max-w-full font-display text-[clamp(1.85rem,9vw,3.5rem)] uppercase tracking-normal leading-[0.95] [overflow-wrap:anywhere]">
+              {titleLines.map((line) => (
+                <span key={line} className="block">
+                  {line}
+                </span>
+              ))}
             </h1>
             <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-4">
               {message}
@@ -129,16 +167,16 @@ export function PagamentoSucesso() {
             <div className="flex w-full flex-col gap-3 mt-8 sm:flex-row">
               <button
                 onClick={() => navigate('/')}
-                className="min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
+                className="min-h-12 w-full px-4 py-3 bg-brutal-black text-white brutal-border font-display text-xs sm:text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
-                <ReceiptText className="w-4 h-4" />
+                <ReceiptText className="w-4 h-4 shrink-0" />
                 Ir para loja
               </button>
               <button
                 onClick={() => navigate('/checkout')}
-                className="min-h-12 w-full px-5 py-3 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
+                className="min-h-12 w-full px-4 py-3 bg-white text-brutal-black brutal-border font-display text-xs sm:text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
-                <ArrowLeft className="w-4 h-4" />
+                <ArrowLeft className="w-4 h-4 shrink-0" />
                 Voltar ao checkout
               </button>
             </div>

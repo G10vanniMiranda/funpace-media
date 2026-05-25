@@ -1,4 +1,5 @@
-import { ArrowRight, Trash2, X } from 'lucide-react';
+import { ArrowRight, Image as ImageIcon, Trash2, X } from 'lucide-react';
+import { useState } from 'react';
 import { Product } from '../types';
 
 interface CartDrawerProps {
@@ -9,6 +10,22 @@ interface CartDrawerProps {
   isAuthenticated: boolean;
   onLoginRequested: () => void;
   onOpenCheckout: () => void;
+}
+
+const MEDIA_BUCKET = 'funpace-media';
+
+function publicMediaUrl(rawPathOrUrl?: string | null) {
+  const value = rawPathOrUrl || '';
+  if (!value || /^blob:/i.test(value) || /^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  if (!supabaseUrl) return value;
+
+  return `${String(supabaseUrl).replace(/\/+$/, '')}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(value.replace(/^\/+/, ''))}`;
+}
+
+function getProductPreviewUrl(item: Product) {
+  return publicMediaUrl(item.thumbnailUrl || item.url);
 }
 
 export function CartDrawer({
@@ -70,9 +87,7 @@ export function CartDrawer({
             <div className="flex flex-col gap-4">
               {cartItems.map((item) => (
                 <div key={item.id} className="flex gap-4 p-4 bg-brutal-white brutal-border brutal-shadow">
-                  <div className="w-20 h-20 bg-gray-200 border-2 border-brutal-black overflow-hidden flex-shrink-0">
-                    <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                  </div>
+                  <ProductThumbnail item={item} />
                   <div className="flex-1 flex flex-col justify-between min-w-0">
                     <div>
                       <div className="flex justify-between items-start gap-3">
@@ -117,5 +132,27 @@ export function CartDrawer({
         </div>
       </div>
     </>
+  );
+}
+
+function ProductThumbnail({ item }: { item: Product }) {
+  const [failed, setFailed] = useState(false);
+  const previewUrl = getProductPreviewUrl(item);
+
+  return (
+    <div className="w-20 h-20 bg-gray-200 border-2 border-brutal-black overflow-hidden flex-shrink-0">
+      {previewUrl && !failed ? (
+        <img
+          src={previewUrl}
+          alt={item.name}
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <ImageIcon className="w-6 h-6" />
+        </div>
+      )}
+    </div>
   );
 }

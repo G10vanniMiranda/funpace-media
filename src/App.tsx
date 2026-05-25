@@ -83,6 +83,7 @@ function Storefront() {
   const [isAnalyzingSelfie, setIsAnalyzingSelfie] = useState(false);
   const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [searchType, setSearchType] = useState<'bib' | 'selfie' | null>(null);
+  const [selfieNotice, setSelfieNotice] = useState<{ previewUrl: string; fileName: string } | null>(null);
   const [selectedPhotographerId, setSelectedPhotographerId] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [loggedInPhotographer, setLoggedInPhotographer] = useState<Photographer | null>(null);
@@ -249,10 +250,13 @@ function Storefront() {
 
     setTimeout(() => {
       setIsAnalyzingSelfie(false);
-      setSearchType('selfie');
-      setSearchBib(null);
-      setSelectedPhotographerId(null);
-      setShowDashboard(false);
+      setSelfieNotice((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return {
+          previewUrl: URL.createObjectURL(file),
+          fileName: file.name,
+        };
+      });
     }, 3000);
   };
 
@@ -272,6 +276,14 @@ function Storefront() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const closeSelfieNotice = () => {
+    setSelfieNotice((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setSelfieFile(null);
   };
 
   const handleCheckout = async (buyer: Buyer) => {
@@ -511,6 +523,11 @@ function Storefront() {
         }}
       />
 
+      <SelfieNoticeModal
+        notice={selfieNotice}
+        onClose={closeSelfieNotice}
+      />
+
       <AnimatePresence>
         {isAuthOpen && (
           <AuthView
@@ -522,6 +539,69 @@ function Storefront() {
 
       <Footer />
     </div>
+  );
+}
+
+function SelfieNoticeModal({
+  notice,
+  onClose,
+}: {
+  notice: { previewUrl: string; fileName: string } | null;
+  onClose: () => void;
+}) {
+  return (
+    <AnimatePresence>
+      {notice && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6">
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
+          />
+          <motion.div
+            initial={{ scale: 0.92, y: 20 }}
+            animate={{ scale: 1, y: 0 }}
+            exit={{ scale: 0.92, y: 20 }}
+            className="relative w-full max-w-lg overflow-hidden bg-white brutal-border brutal-shadow-heavy p-5 sm:p-8"
+          >
+            <button
+              onClick={onClose}
+              className="absolute right-4 top-4 p-2 text-gray-400 hover:text-brutal-black transition-colors cursor-pointer"
+              aria-label="Fechar"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="flex flex-col gap-5 sm:flex-row">
+              <div className="h-24 w-24 shrink-0 overflow-hidden brutal-border bg-gray-50">
+                <img src={notice.previewUrl} alt={notice.fileName} className="h-full w-full object-cover" />
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">
+                  Busca por selfie
+                </p>
+                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] break-words">
+                  Em preparacao
+                </h2>
+                <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-4">
+                  A busca facial automatica ainda nao esta ativa. Use o numero de peito para encontrar suas fotos enquanto essa etapa e validada.
+                </p>
+
+                <button
+                  onClick={onClose}
+                  className="mt-6 min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer sm:w-auto"
+                >
+                  Buscar por numero
+                </button>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
   );
 }
 

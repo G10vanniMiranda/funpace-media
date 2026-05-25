@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CreditCard, Landmark, Loader2, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, CreditCard, Image as ImageIcon, Landmark, Loader2, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
+import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 
 interface CheckoutPageProps {
   cartItems: Product[];
@@ -13,6 +14,21 @@ interface CheckoutPageProps {
 }
 
 const MIN_CHECKOUT_TOTAL = 1;
+const MEDIA_BUCKET = 'funpace-media';
+
+function publicMediaUrl(rawPathOrUrl?: string | null) {
+  const value = rawPathOrUrl || '';
+  if (!value || /^blob:/i.test(value) || /^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
+
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '';
+  if (!supabaseUrl) return value;
+
+  return `${String(supabaseUrl).replace(/\/+$/, '')}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(value.replace(/^\/+/, ''))}`;
+}
+
+function getProductPreviewUrl(item: Product) {
+  return publicMediaUrl(item.thumbnailUrl || item.url);
+}
 
 function titleCaseFromEmail(email?: string | null) {
   const local = (email?.split('@')[0] || '').trim();
@@ -25,23 +41,6 @@ function titleCaseFromEmail(email?: string | null) {
     .filter(Boolean)
     .map((part) => part.slice(0, 1).toUpperCase() + part.slice(1).toLowerCase())
     .join(' ');
-}
-
-function onlyWhatsappDigits(value: string) {
-  const digits = value.replace(/\D/g, '');
-  const withoutCountryCode = digits.length > 11 && digits.startsWith('55') ? digits.slice(2) : digits;
-
-  return withoutCountryCode.slice(0, 11);
-}
-
-function formatWhatsapp(value: string) {
-  const digits = onlyWhatsappDigits(value);
-
-  if (digits.length <= 2) return digits;
-  if (digits.length <= 6) return `(${digits.slice(0, 2)}) ${digits.slice(2)}`;
-  if (digits.length <= 10) return `(${digits.slice(0, 2)}) ${digits.slice(2, 6)}-${digits.slice(6)}`;
-
-  return `(${digits.slice(0, 2)}) ${digits.slice(2, 7)}-${digits.slice(7)}`;
 }
 
 export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginRequested }: CheckoutPageProps) {
@@ -187,9 +186,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
               {cartItems.map((item) => (
                 <div key={item.id} className="flex gap-3 bg-gray-50 brutal-border-thin p-3">
-                  <div className="w-16 h-16 brutal-border-thin overflow-hidden bg-gray-100 shrink-0">
-                    <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                  </div>
+                  <ProductThumbnail item={item} />
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between items-start gap-2">
                       <p className="font-mono text-xs uppercase font-bold truncate">{item.name}</p>
@@ -243,6 +240,28 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
         </aside>
       </div>
     </main>
+  );
+}
+
+function ProductThumbnail({ item }: { item: Product }) {
+  const [failed, setFailed] = useState(false);
+  const previewUrl = getProductPreviewUrl(item);
+
+  return (
+    <div className="w-16 h-16 brutal-border-thin overflow-hidden bg-gray-100 shrink-0">
+      {previewUrl && !failed ? (
+        <img
+          src={previewUrl}
+          alt={item.name}
+          className="w-full h-full object-cover"
+          onError={() => setFailed(true)}
+        />
+      ) : (
+        <div className="w-full h-full flex items-center justify-center text-gray-400">
+          <ImageIcon className="w-5 h-5" />
+        </div>
+      )}
+    </div>
   );
 }
 

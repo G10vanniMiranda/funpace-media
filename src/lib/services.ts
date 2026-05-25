@@ -12,7 +12,7 @@ import {
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
-import { getCurrentUser, supabaseRest, supabaseStorage } from './supabase';
+import { getCurrentAccessToken, getCurrentUser, supabaseRest, supabaseStorage } from './supabase';
 
 type SupabaseRow<T> = T & { id: string };
 
@@ -298,13 +298,20 @@ export const orderService = {
       return [];
     }
 
+    const user = getCurrentUser();
+    if (!user?.uid) {
+      return [];
+    }
+
     const params = new URLSearchParams({
       select: '*',
+      userId: `eq.${user.uid}`,
       order: 'createdAt.desc',
       limit: String(count),
     });
     const orders = await supabaseRest.get<SupabaseRow<Order>[]>(`/rest/v1/orders?${params.toString()}`, true);
-    return attachOrderItems(orders, true);
+    const ownOrders = orders.filter((order) => order.userId === user.uid);
+    return attachOrderItems(ownOrders, true);
   },
 
   async getAdminOrders(count = 200): Promise<Order[]> {
@@ -364,9 +371,13 @@ export const paymentService = {
     orderId: string;
     total: number;
   }> {
+    const accessToken = await getCurrentAccessToken();
     const response = await fetch('/api/checkout/create-session', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify(input),
     });
 

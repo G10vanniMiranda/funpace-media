@@ -32,6 +32,7 @@ if (!process.env.DATABASE_URL && dbConfig.host && /[a-z]/i.test(dbConfig.host)) 
 
 const requiredColumns = {
   photographers: ["id", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "stats", "createdAt", "updatedAt"],
+  customers: ["id", "email", "name", "phone", "cpf", "createdAt", "updatedAt"],
   products: ["id", "name", "price", "url", "type", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "duration", "storagePath", "status", "createdAt", "updatedAt"],
   orders: ["id", "userId", "buyerName", "buyerEmail", "buyerPhone", "buyerCpf", "total", "status", "paymentProvider", "paymentExternalId", "checkoutUrl", "createdAt", "updatedAt"],
   order_items: ["id", "orderId", "productId", "name", "type", "price", "url", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "createdAt"],
@@ -43,6 +44,9 @@ const requiredPolicies = [
   "photographers_select_public_verified_or_owner_or_admin",
   "photographers_insert_own_profile",
   "photographers_update_own_non_verified_fields",
+  "customers_select_owner_or_admin",
+  "customers_insert_own_profile",
+  "customers_update_owner_or_admin",
   "products_select_published_owner_or_admin",
   "products_insert_own_verified_photographer",
   "products_update_owner_or_admin",

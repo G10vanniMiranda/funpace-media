@@ -44,6 +44,16 @@ export interface Buyer {
   cpf?: string;
 }
 
+export interface Customer {
+  id: string;
+  email: string;
+  name: string;
+  phone?: string | null;
+  cpf?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Order {
   id: string;
   userId?: string | null;

@@ -29,6 +29,16 @@ create table if not exists public.photographers (
   "updatedAt" timestamptz not null default now()
 );
 
+create table if not exists public.customers (
+  id text primary key,
+  email text not null unique check (char_length(email) <= 256),
+  name text not null default '' check (char_length(name) <= 180),
+  phone text,
+  cpf text check (cpf is null or cpf ~ '^[0-9]{11}$'),
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now()
+);
+
 create table if not exists public.products (
   id uuid primary key default gen_random_uuid(),
   name text not null check (char_length(name) between 1 and 180),
@@ -130,6 +140,7 @@ create index if not exists products_created_at_idx on public.products ("createdA
 create index if not exists products_status_idx on public.products (status);
 create index if not exists photographers_email_idx on public.photographers (email);
 create index if not exists photographers_verified_idx on public.photographers (verified);
+create index if not exists customers_email_idx on public.customers (email);
 create index if not exists orders_user_id_idx on public.orders ("userId");
 create index if not exists orders_buyer_email_idx on public.orders ("buyerEmail");
 create index if not exists orders_status_idx on public.orders (status);
@@ -185,6 +196,11 @@ create trigger photographers_set_updated_at
 before update on public.photographers
 for each row execute function public.set_updated_at();
 
+drop trigger if exists customers_set_updated_at on public.customers;
+create trigger customers_set_updated_at
+before update on public.customers
+for each row execute function public.set_updated_at();
+
 drop trigger if exists products_set_updated_at on public.products;
 create trigger products_set_updated_at
 before update on public.products
@@ -206,6 +222,7 @@ before update on public.withdrawal_requests
 for each row execute function public.set_updated_at();
 
 alter table public.photographers enable row level security;
+alter table public.customers enable row level security;
 alter table public.products enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
@@ -245,6 +262,35 @@ with check (
     and verified = (select p.verified from public.photographers p where p.id = auth.uid()::text)
     and cpf is not null
     and cpf ~ '^[0-9]{11}$'
+  )
+);
+
+drop policy if exists "customers_select_owner_or_admin" on public.customers;
+create policy "customers_select_owner_or_admin"
+on public.customers
+for select
+using (id = auth.uid()::text or public.is_admin());
+
+drop policy if exists "customers_insert_own_profile" on public.customers;
+create policy "customers_insert_own_profile"
+on public.customers
+for insert
+with check (
+  auth.uid() is not null
+  and id = auth.uid()::text
+  and email = (auth.jwt() ->> 'email')
+);
+
+drop policy if exists "customers_update_owner_or_admin" on public.customers;
+create policy "customers_update_owner_or_admin"
+on public.customers
+for update
+using (id = auth.uid()::text or public.is_admin())
+with check (
+  public.is_admin()
+  or (
+    id = auth.uid()::text
+    and email = (auth.jwt() ->> 'email')
   )
 );
 
@@ -289,7 +335,6 @@ for select
 using (
   public.is_admin()
   or ("userId" is not null and "userId" = auth.uid()::text)
-  or ("buyerEmail" = (auth.jwt() ->> 'email'))
 );
 
 drop policy if exists "orders_update_admin_only" on public.orders;
@@ -312,7 +357,6 @@ using (
     where o.id = order_items."orderId"
       and (
         (o."userId" is not null and o."userId" = auth.uid()::text)
-        or o."buyerEmail" = (auth.jwt() ->> 'email')
       )
   )
 );

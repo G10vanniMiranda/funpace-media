@@ -59,7 +59,7 @@ export function Hero({ onSearch, onSelfieSearch }: HeroProps) {
         </h1>
         
         <p className="max-w-xl font-mono text-sm md:text-lg mb-12 text-gray-700">
-          Fotografia profissional de corrida. Encontre suas fotos pelo número de peito ou reconhecimento facial.
+          Fotografia profissional de corrida. Encontre suas fotos pelo número de peito.
         </p>
 
         {/* Search Box */}
@@ -102,7 +102,7 @@ export function Hero({ onSearch, onSelfieSearch }: HeroProps) {
               className="hidden" 
             />
             <ImageIcon className="w-5 h-5 group-hover:text-brutal-accent transition-colors" />
-            <span className="font-mono text-sm font-bold mt-0.5">BUSCA POR SELFIE</span>
+            <span className="font-mono text-sm font-bold mt-0.5">ENVIAR SELFIE</span>
           </button>
         </div>
       </div>

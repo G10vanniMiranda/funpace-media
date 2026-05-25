@@ -85,6 +85,31 @@ function getCheckoutEndpoint() {
   return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || 'https://api.checkout.infinitepay.io/links';
 }
 
+function getBearerToken(req: any) {
+  const header = String(req.headers?.authorization || req.headers?.Authorization || '');
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || '';
+}
+
+async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; email: string | null } | null> {
+  const token = getBearerToken(req);
+  if (!token) return null;
+
+  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
+  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const user: any = await response.json().catch(() => null);
+  return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
+}
+
 export default async function handler(req: any, res: any) {
   setCors(req, res);
 
@@ -97,7 +122,12 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { items, successUrl, userId, buyer } = getJsonBody(req);
+    const { items, successUrl, buyer } = getJsonBody(req);
+    const authUser = await getAuthenticatedRequestUser(req);
+
+    if (!authUser?.id) {
+      return res.status(401).json({ error: 'Entre novamente para iniciar o pagamento.' });
+    }
 
     if (!buyer?.cpf || !isValidCpf(buyer.cpf)) {
       return res.status(400).json({ error: 'CPF valido e obrigatorio para pagamento.' });
@@ -129,15 +159,32 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.' });
     }
 
+    const buyerName = String(buyer.fullName).trim();
+    const buyerEmail = authUser.email || String(buyer.email).trim().toLowerCase();
+    const buyerPhone = String(buyer.phone || 'nao_informado').trim();
+    const buyerCpf = onlyCpfDigits(buyer.cpf);
+
+    await supabaseRequest('/rest/v1/customers?on_conflict=id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({
+        id: authUser.id,
+        email: buyerEmail,
+        name: buyerName,
+        phone: buyerPhone,
+        cpf: buyerCpf,
+      }),
+    });
+
     const [order] = await supabaseRequest<any[]>('/rest/v1/orders?select=id', {
       method: 'POST',
       headers: { Prefer: 'return=representation' },
       body: JSON.stringify({
-        userId: userId && userId !== 'guest' ? userId : null,
-        buyerName: String(buyer.fullName).trim(),
-        buyerEmail: String(buyer.email).trim().toLowerCase(),
-        buyerPhone: String(buyer.phone || 'nao_informado').trim(),
-        buyerCpf: onlyCpfDigits(buyer.cpf),
+        userId: authUser.id,
+        buyerName,
+        buyerEmail,
+        buyerPhone,
+        buyerCpf,
         total,
         status: 'pending',
         paymentProvider: 'infinitepay',

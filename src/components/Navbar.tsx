@@ -65,7 +65,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
 
   return (
     <nav className="sticky top-0 z-50 bg-brutal-black text-brutal-white border-b-4 border-brutal-black px-4 md:px-6 py-4 flex items-center justify-between">
-      <div 
+      <div
         className="flex items-center gap-2 cursor-pointer group"
         onClick={() => {
           onNavigateHome();
@@ -77,12 +77,9 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
           FUNPACE MEDIA
         </span>
       </div>
-      
-      {/* Desktop Menu */}
+
       <div className="hidden md:flex items-center gap-6">
-
-
-        <button 
+        <button
           onClick={onOpenDashboard}
           className="bg-brutal-black text-white px-4 py-2 brutal-border font-mono text-[10px] uppercase font-bold hover:bg-brutal-accent transition-colors cursor-pointer"
         >
@@ -90,21 +87,21 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
         </button>
 
         {isSearching ? (
-          <motion.form 
+          <motion.form
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
-            onSubmit={handleSearchSubmit} 
+            onSubmit={handleSearchSubmit}
             className="flex items-center gap-2"
           >
-            <input 
+            <input
               autoFocus
-              type="text" 
+              type="text"
               placeholder="Nº DO PEITO"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="bg-white text-brutal-black px-4 py-1 font-mono text-sm brutal-border focus:outline-none w-32 md:w-48"
             />
-            <button 
+            <button
               type="button"
               onClick={() => setIsSearching(false)}
               className="text-white hover:text-brutal-accent transition-colors cursor-pointer p-1"
@@ -113,7 +110,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
             </button>
           </motion.form>
         ) : (
-          <button 
+          <button
             onClick={() => setIsSearching(true)}
             className="flex items-center gap-2 hover:text-brutal-accent font-mono text-sm uppercase transition-colors cursor-pointer"
           >
@@ -121,7 +118,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
             <span>Buscar Fotos</span>
           </button>
         )}
-        
+
         {user ? (
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2">
@@ -141,7 +138,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
               <ReceiptText className="w-4 h-4" />
               <span>Compras</span>
             </button>
-            <button 
+            <button
               onClick={() => logout()}
               className="hover:text-brutal-accent transition-colors cursor-pointer"
               title="Sair"
@@ -150,7 +147,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
             </button>
           </div>
         ) : (
-          <button 
+          <button
             onClick={onOpenAuth}
             className="flex items-center gap-2 hover:text-brutal-accent font-mono text-sm uppercase transition-colors cursor-pointer"
           >
@@ -158,8 +155,8 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
             <span>Entrar</span>
           </button>
         )}
-        
-        <button 
+
+        <button
           onClick={onOpenCart}
           className="flex items-center gap-2 bg-brutal-white text-brutal-black px-4 py-2 brutal-border hover:bg-brutal-accent hover:text-brutal-white transition-colors relative"
         >
@@ -173,11 +170,11 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
         </button>
       </div>
 
-      {/* Mobile Menu Toggle */}
       <div className="flex md:hidden items-center gap-4">
-        <button 
+        <button
           onClick={onOpenCart}
           className="relative p-2 hover:text-brutal-accent transition-colors cursor-pointer"
+          aria-label="Abrir carrinho"
         >
           <ShoppingCart className="w-6 h-6" />
           {cartItemCount > 0 && (
@@ -186,149 +183,166 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
             </span>
           )}
         </button>
-        <button 
+        <button
           onClick={toggleMenu}
           className="p-2 hover:text-brutal-accent transition-colors cursor-pointer"
+          aria-label={isMenuOpen ? 'Fechar menu' : 'Abrir menu'}
         >
           {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
       </div>
 
-      {/* Mobile Drawer */}
       <AnimatePresence>
         {isMenuOpen && (
           <>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
               className="fixed inset-0 bg-brutal-black/80 backdrop-blur-sm z-[55] md:hidden"
             />
-            <motion.div 
+            <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className="fixed right-0 top-0 h-full w-[85%] sm:w-[320px] bg-brutal-white z-[60] p-6 md:hidden brutal-border-l"
+              className="fixed right-0 top-0 h-full w-[86%] max-w-[360px] bg-brutal-white z-[60] md:hidden brutal-border-l"
             >
-              <div className="flex flex-col gap-8 h-full text-brutal-black">
-                <div className="flex items-center justify-between">
-                  <span className="font-display text-xl tracking-tighter">MENU</span>
-                  <button onClick={() => setIsMenuOpen(false)} className="cursor-pointer p-2">
-                    <X className="w-6 h-6" />
-                  </button>
+              <div className="flex h-full flex-col text-brutal-black">
+                <div className="border-b-2 border-brutal-black px-5 py-5">
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400">Funpace Media</p>
+                      <span className="font-display text-2xl tracking-normal">Menu</span>
+                    </div>
+                    <button
+                      onClick={() => setIsMenuOpen(false)}
+                      className="grid h-10 w-10 shrink-0 place-items-center brutal-border bg-white hover:bg-gray-50 transition-colors cursor-pointer"
+                      aria-label="Fechar menu"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
                 </div>
 
-                <div className="space-y-8">
-                    <div className="flex flex-col gap-4">
-                      <button 
+                <div className="flex-1 overflow-y-auto px-5 py-6">
+                  <div className="space-y-7">
+                    <section className="space-y-3">
+                      <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400">Acesso</p>
+                      <button
                         onClick={() => {
                           onOpenDashboard();
                           setIsMenuOpen(false);
                         }}
-                        className="w-full h-12 bg-brutal-black text-white brutal-border font-mono text-xs font-bold uppercase hover:bg-brutal-accent transition-colors cursor-pointer text-left px-4"
+                        className="w-full min-h-12 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 px-4"
                       >
+                        <Camera className="w-4 h-4" />
                         Painel do Fotógrafo
                       </button>
-                    </div>
+                    </section>
 
-                  {/* Mobile Search */}
-                  <div className="space-y-4">
-                    <h4 className="font-mono text-xs uppercase text-gray-500 font-bold tracking-widest">Encontre suas fotos</h4>
-                    <form onSubmit={handleSearchSubmit} className="flex items-stretch">
-                      <input 
-                        type="text" 
-                        placeholder="Nº DO PEITO"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        className="min-w-0 flex-1 bg-white text-brutal-black px-4 h-12 font-mono text-sm brutal-border border-r-0 focus:outline-none"
-                      />
-                      <button 
-                        type="submit"
-                        className="bg-brutal-black text-white px-4 h-12 brutal-border cursor-pointer hover:bg-brutal-accent transition-colors flex-shrink-0"
+                    <section className="space-y-4 border-t-2 border-dashed border-gray-200 pt-6">
+                      <div>
+                        <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400">Busca</p>
+                        <h4 className="mt-1 font-display text-xl uppercase tracking-normal">Encontre suas fotos</h4>
+                      </div>
+
+                      <form onSubmit={handleSearchSubmit} className="flex items-stretch">
+                        <input
+                          type="text"
+                          placeholder="Nº DO PEITO"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          className="min-w-0 flex-1 bg-white text-brutal-black px-4 h-12 font-mono text-sm brutal-border border-r-0 focus:outline-none focus:bg-gray-50 placeholder:text-gray-400"
+                        />
+                        <button
+                          type="submit"
+                          className="bg-brutal-black text-white w-14 h-12 brutal-border cursor-pointer hover:bg-brutal-accent transition-colors flex-shrink-0 inline-flex items-center justify-center"
+                          aria-label="Buscar fotos"
+                        >
+                          <Search className="w-5 h-5" />
+                        </button>
+                      </form>
+
+                      <div className="flex items-center gap-4">
+                        <div className="h-px flex-1 bg-gray-200" />
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">Ou</span>
+                        <div className="h-px flex-1 bg-gray-200" />
+                      </div>
+
+                      <button
+                        onClick={handleSelfieClick}
+                        className="w-full min-h-12 brutal-border bg-white flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase hover:bg-gray-50 transition-colors cursor-pointer px-4"
                       >
-                        <Search className="w-5 h-5" />
+                        <input
+                          type="file"
+                          ref={fileInputRef}
+                          onChange={handleFileChange}
+                          accept="image/*"
+                          className="hidden"
+                        />
+                        <ImageIcon className="w-4 h-4" />
+                        Enviar Selfie
                       </button>
-                    </form>
+                    </section>
 
-                    <div className="flex items-center gap-4">
-                      <div className="h-[1px] flex-1 bg-gray-100"></div>
-                      <span className="font-mono text-[10px] text-gray-400">OU</span>
-                      <div className="h-[1px] flex-1 bg-gray-100"></div>
-                    </div>
-
-                    <button 
-                      onClick={handleSelfieClick}
-                      className="w-full h-12 brutal-border flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase hover:bg-gray-50 transition-colors cursor-pointer"
-                    >
-                      <input 
-                        type="file" 
-                        ref={fileInputRef} 
-                        onChange={handleFileChange} 
-                        accept="image/*" 
-                        className="hidden" 
-                      />
-                      <ImageIcon className="w-4 h-4" />
-                      Buscar por Selfie
-                    </button>
-                  </div>
-
-                  {/* Mobile Account */}
-                  <div className="pt-6 border-t-2 border-dashed border-gray-200">
-                    {user ? (
-                      <div className="space-y-4">
-                      <div className="flex items-center gap-3">
-                        {user.photoURL ? (
-                          <img src={user.photoURL} alt={userLabel} className="w-10 h-10 rounded-full brutal-border" />
-                        ) : (
-                          <div className="w-10 h-10 bg-brutal-accent flex items-center justify-center rounded-full font-display text-sm">
-                              {userLabel?.[0]}
+                    <section className="border-t-2 border-dashed border-gray-200 pt-6">
+                      {user ? (
+                        <div className="space-y-4">
+                          <div className="flex items-center gap-3 bg-gray-50 brutal-border p-3">
+                            {user.photoURL ? (
+                              <img src={user.photoURL} alt={userLabel} className="w-10 h-10 rounded-full brutal-border" />
+                            ) : (
+                              <div className="w-10 h-10 bg-brutal-accent flex items-center justify-center rounded-full font-display text-sm text-white">
+                                {userLabel?.[0]}
+                              </div>
+                            )}
+                            <div className="min-w-0 flex flex-col">
+                              <span className="font-display text-sm uppercase truncate">{userLabel}</span>
+                              <span className="font-mono text-[10px] text-gray-500 truncate">{user.email}</span>
+                            </div>
                           </div>
-                        )}
-                        <div className="flex flex-col">
-                            <span className="font-display text-sm uppercase">{userLabel}</span>
-                            <span className="font-mono text-[10px] text-gray-500 truncate max-w-[150px]">{user.email}</span>
-                          </div>
+
+                          <button
+                            onClick={() => {
+                              onOpenOrders();
+                              setIsMenuOpen(false);
+                            }}
+                            className="w-full min-h-12 brutal-border flex items-center justify-center gap-2 font-mono text-sm uppercase hover:bg-gray-50 transition-colors cursor-pointer px-4"
+                          >
+                            <ReceiptText className="w-4 h-4" />
+                            Minhas Compras
+                          </button>
+                          <button
+                            onClick={() => {
+                              logout();
+                              setIsMenuOpen(false);
+                            }}
+                            className="w-full min-h-12 brutal-border flex items-center justify-center gap-2 font-mono text-sm uppercase hover:bg-red-50 text-red-500 transition-colors cursor-pointer px-4"
+                          >
+                            <LogOut className="w-4 h-4" />
+                            Sair da Conta
+                          </button>
                         </div>
+                      ) : (
                         <button
                           onClick={() => {
-                            onOpenOrders();
+                            onOpenAuth();
                             setIsMenuOpen(false);
                           }}
-                          className="w-full h-12 brutal-border flex items-center justify-center gap-2 font-mono text-sm uppercase hover:bg-gray-50 transition-colors cursor-pointer"
+                          className="w-full min-h-13 bg-brutal-accent text-white brutal-border brutal-shadow flex items-center justify-center gap-2 font-display text-sm tracking-widest hover:bg-brutal-black transition-colors cursor-pointer px-4 py-3"
                         >
-                          <ReceiptText className="w-4 h-4" />
-                          Minhas Compras
+                          <User className="w-5 h-5" />
+                          Entrar / Cadastrar
                         </button>
-                        <button 
-                          onClick={() => {
-                            logout();
-                            setIsMenuOpen(false);
-                          }}
-                          className="w-full h-12 brutal-border flex items-center justify-center gap-2 font-mono text-sm uppercase hover:bg-red-50 text-red-500 transition-colors cursor-pointer"
-                        >
-                          <LogOut className="w-4 h-4" />
-                          Sair da Conta
-                        </button>
-                      </div>
-                    ) : (
-                      <button 
-                        onClick={() => {
-                          onOpenAuth();
-                          setIsMenuOpen(false);
-                        }}
-                        className="w-full h-12 bg-brutal-accent text-white brutal-border brutal-shadow flex items-center justify-center gap-2 font-display text-sm tracking-widest hover:translate-x-1 hover:translate-y-1 hover:shadow-none transition-all cursor-pointer"
-                      >
-                        <User className="w-5 h-5" />
-                        ENTRAR / CADASTRAR
-                      </button>
-                    )}
+                      )}
+                    </section>
                   </div>
                 </div>
 
-                <div className="mt-auto">
+                <div className="border-t-2 border-brutal-black px-5 py-4">
                   <p className="font-mono text-[10px] text-center text-gray-400 uppercase tracking-widest">
-                    Funpace Media © 2024
+                    Funpace Media © 2026
                   </p>
                 </div>
               </div>

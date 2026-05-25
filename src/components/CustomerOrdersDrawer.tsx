@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Loader2, ReceiptText, X, ExternalLink, Image as ImageIcon, Video, Download, Trash2 } from 'lucide-react';
 import { Order } from '../types';
 import { orderService } from '../lib/services';
+import { getCurrentAccessToken } from '../lib/supabase';
 
 interface CustomerOrdersDrawerProps {
   isOpen: boolean;
@@ -69,9 +70,13 @@ async function downloadFile(url: string, filename: string) {
 }
 
 async function authorizeDownload(orderId: string, orderItemId: string) {
+  const accessToken = await getCurrentAccessToken();
   const response = await fetch('/api/downloads/authorize', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    },
     body: JSON.stringify({ orderId, orderItemId }),
   });
 

@@ -210,6 +210,14 @@ function formatTrendPercent(current: number, previous: number) {
   return `${value > 0 ? '+' : ''}${formatted}%`;
 }
 
+function normalizeEventKey(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 function buildSparklineBuckets<T>(
   items: T[],
   start: Date,
@@ -591,6 +599,77 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
     [photographers],
   );
+  const mediaEvents = React.useMemo(() => {
+    const grouped = new Map<string, {
+      name: string;
+      checkpoint: string;
+      date: string;
+      photoCount: number;
+      videoCount: number;
+      latestCreatedAt: string;
+    }>();
+
+    for (const product of [...photos, ...videos]) {
+      if ((product.status ?? 'published') === 'removed') continue;
+
+      const name = String(product.event || 'Geral').trim() || 'Geral';
+      const key = normalizeEventKey(name);
+      const current = grouped.get(key);
+      const createdAt = product.createdAt || '';
+      const isVideo = product.type === 'VIDEO' || product.type === 'VIEW';
+
+      if (!current) {
+        grouped.set(key, {
+          name,
+          checkpoint: product.checkpoint || 'Ponto principal',
+          date: createdAt ? createdAt.slice(0, 10) : formatDateInput(new Date()),
+          photoCount: product.type === 'IMG' ? 1 : 0,
+          videoCount: isVideo ? 1 : 0,
+          latestCreatedAt: createdAt,
+        });
+        continue;
+      }
+
+      if (product.type === 'IMG') current.photoCount += 1;
+      if (isVideo) current.videoCount += 1;
+      if (!current.checkpoint && product.checkpoint) current.checkpoint = product.checkpoint;
+      if (createdAt && (!current.latestCreatedAt || createdAt > current.latestCreatedAt)) {
+        current.latestCreatedAt = createdAt;
+        current.date = createdAt.slice(0, 10);
+      }
+    }
+
+    return Array.from(grouped.values()).sort((left, right) =>
+      right.latestCreatedAt.localeCompare(left.latestCreatedAt) || left.name.localeCompare(right.name)
+    );
+  }, [photos, videos]);
+  const adminEventRows = React.useMemo(() => {
+    const manualKeys = new Set(events.map((eventItem) => normalizeEventKey(eventItem.name)));
+    return [
+      ...events.map((eventItem) => ({
+        id: eventItem.id,
+        name: eventItem.name,
+        location: eventItem.location || 'Local nao informado',
+        checkpoint: eventItem.checkpoint || 'Ponto padrao',
+        date: eventItem.date,
+        status: eventItem.status,
+        source: 'Cadastro',
+        mediaLabel: '',
+      })),
+      ...mediaEvents
+        .filter((eventItem) => !manualKeys.has(normalizeEventKey(eventItem.name)))
+        .map((eventItem) => ({
+          id: `media-${normalizeEventKey(eventItem.name)}`,
+          name: eventItem.name,
+          location: 'Criado pelas midias publicadas',
+          checkpoint: eventItem.checkpoint,
+          date: eventItem.date,
+          status: 'active' as const,
+          source: 'Midias',
+          mediaLabel: `${eventItem.photoCount} foto(s) / ${eventItem.videoCount} video(s)`,
+        })),
+    ];
+  }, [events, mediaEvents]);
   const reportItemsByPaidOrder = React.useMemo(() => {
     const allProducts = [...photos, ...videos].filter((product) => (product.status ?? 'published') !== 'removed');
 
@@ -1836,7 +1915,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="p-5 border-b border-white/10 flex items-center justify-between">
                   <div>
                     <h3 className="font-sans font-black text-base uppercase text-white">Eventos cadastrados</h3>
-                    <p className="font-mono text-[10px] uppercase text-gray-500">{events.length} evento(s)</p>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">
+                      {adminEventRows.length} evento(s) - {events.length} cadastrado(s), {mediaEvents.length} vindo(s) das midias
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -1849,21 +1930,24 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="divide-y divide-white/10">
                   {isLoadingEvents ? (
                     <div className="p-8 text-center font-mono text-xs uppercase text-gray-500">Carregando eventos...</div>
-                  ) : events.length === 0 ? (
+                  ) : adminEventRows.length === 0 ? (
                     <div className="p-8 text-center font-mono text-xs uppercase text-gray-500">Nenhum evento cadastrado.</div>
-                  ) : events.map((eventItem) => (
+                  ) : adminEventRows.map((eventItem) => (
                     <div key={eventItem.id} className="p-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
                       <div className="min-w-0">
                         <p className="font-sans font-black text-lg uppercase text-white truncate">{eventItem.name}</p>
                         <p className="font-mono text-[10px] uppercase text-gray-500 truncate">
                           {eventItem.location || 'Local nao informado'} - {eventItem.checkpoint || 'Ponto padrao'}
                         </p>
+                        {eventItem.mediaLabel && (
+                          <p className="font-mono text-[10px] uppercase text-gray-600 mt-1">{eventItem.mediaLabel}</p>
+                        )}
                       </div>
                       <span className="font-mono text-xs uppercase text-gray-300">
                         {new Date(`${eventItem.date}T00:00:00`).toLocaleDateString('pt-BR')}
                       </span>
                       <span className="w-fit px-2 py-1 border border-white/10 bg-white/5 font-mono text-[10px] uppercase text-brutal-accent">
-                        {eventItem.status}
+                        {eventItem.source} - {eventItem.status}
                       </span>
                     </div>
                   ))}

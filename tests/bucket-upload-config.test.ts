@@ -5,7 +5,7 @@ import { assertBucketUploadConfig, cleanProviderError, summarizePayload } from '
 describe('bucket upload test config', () => {
   it('accepts the documented bucket value from the provider', () => {
     assert.doesNotThrow(() => assertBucketUploadConfig({
-      apiBaseUrl: 'https://99dev.pro/bucket/bucket/api',
+      apiBaseUrl: 'https://99dev.pro/bucket/api',
       apiToken: 'token',
       bucket: 'slug-do-bucket',
       uploadCount: 5,
@@ -27,7 +27,7 @@ describe('bucket upload test config', () => {
   it('limits upload test count to a small diagnostic batch', () => {
     assert.throws(
       () => assertBucketUploadConfig({
-        apiBaseUrl: 'https://99dev.pro/bucket/bucket/api',
+        apiBaseUrl: 'https://99dev.pro/bucket/api',
         apiToken: 'token',
         bucket: 'slug-do-bucket',
         uploadCount: 21,

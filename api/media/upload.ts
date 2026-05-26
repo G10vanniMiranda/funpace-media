@@ -6,7 +6,7 @@ export const config = {
 
 const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
-const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || 'https://99dev.pro/bucket/bucket/api').replace(/\/+$/, '');
+const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || 'https://99dev.pro/bucket/api').replace(/\/+$/, '');
 const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || '';
 
 function usesExternalBucket() {

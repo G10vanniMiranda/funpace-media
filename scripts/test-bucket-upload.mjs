@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 dotenv.config();
 
 const uploadCount = Number(process.argv[2] || 5);
-const apiBaseUrl = (process.env.BUCKET_API_BASE_URL || "https://99dev.pro/bucket/bucket/api").replace(/\/+$/, "");
+const apiBaseUrl = (process.env.BUCKET_API_BASE_URL || "https://99dev.pro/bucket/api").replace(/\/+$/, "");
 const apiToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || "";
 const bucket = process.env.MEDIA_BUCKET || process.env.BUCKET || "";
 

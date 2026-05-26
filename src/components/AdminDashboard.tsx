@@ -49,6 +49,87 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+type AdminPeriodKey = 'today' | 'week' | 'month' | 'year' | 'custom';
+
+const ADMIN_PERIOD_OPTIONS: Array<{ key: AdminPeriodKey; label: string }> = [
+  { key: 'today', label: 'Hoje' },
+  { key: 'week', label: 'Esta semana' },
+  { key: 'month', label: 'Este mes' },
+  { key: 'year', label: 'Este ano' },
+  { key: 'custom', label: 'Personalizado' },
+];
+
+function startOfDay(date: Date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function endOfDay(date: Date) {
+  const result = new Date(date);
+  result.setHours(23, 59, 59, 999);
+  return result;
+}
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(value: string, fallback: Date) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return fallback;
+
+  const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
+function getAdminPeriodRange(period: AdminPeriodKey, customStart: string, customEnd: string) {
+  const now = new Date();
+  let start = startOfDay(now);
+  let end = endOfDay(now);
+
+  if (period === 'week') {
+    const day = now.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    start = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset));
+    end = endOfDay(new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6));
+  }
+
+  if (period === 'month') {
+    start = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+    end = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  }
+
+  if (period === 'year') {
+    start = startOfDay(new Date(now.getFullYear(), 0, 1));
+    end = endOfDay(new Date(now.getFullYear(), 11, 31));
+  }
+
+  if (period === 'custom') {
+    start = startOfDay(parseDateInput(customStart, now));
+    end = endOfDay(parseDateInput(customEnd, start));
+    if (start.getTime() > end.getTime()) {
+      [start, end] = [startOfDay(end), endOfDay(start)];
+    }
+  }
+
+  return { start, end };
+}
+
+function isWithinPeriod(value: string | undefined, start: Date, end: Date) {
+  if (!value) return false;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
+}
+
+function formatPeriodLabel(start: Date, end: Date) {
+  const formatter = new Intl.DateTimeFormat('pt-BR');
+  return `${formatter.format(start)} - ${formatter.format(end)}`;
+}
+
 async function createThumbnailFromMedia(product: Product): Promise<File> {
   const sourceUrl = product.thumbnailUrl || product.url;
   const response = await fetch(sourceUrl, { mode: 'cors' });
@@ -136,6 +217,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [thumbnailBackfillProgress, setThumbnailBackfillProgress] = useState('');
   const [photographerSearch, setPhotographerSearch] = useState('');
   const [photographerStatusFilter, setPhotographerStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<AdminPeriodKey>('week');
+  const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
+  const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
@@ -164,12 +248,64 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       return matchesStatus && matchesSearch;
     });
   }, [photographers, photographerSearch, photographerStatusFilter]);
-  const recentOrders = orders.slice(0, 5);
-  const pendingOrders = orders.filter((order) => order.status === 'pending');
-  const paidOrders = orders.filter((order) => order.status === 'paid');
+  const periodRange = React.useMemo(
+    () => getAdminPeriodRange(selectedPeriod, customPeriodStart, customPeriodEnd),
+    [selectedPeriod, customPeriodStart, customPeriodEnd],
+  );
+  const periodLabel = React.useMemo(
+    () => formatPeriodLabel(periodRange.start, periodRange.end),
+    [periodRange],
+  );
+  const periodOrders = React.useMemo(
+    () => orders.filter((order) => isWithinPeriod(order.createdAt, periodRange.start, periodRange.end)),
+    [orders, periodRange],
+  );
+  const periodPhotos = React.useMemo(
+    () => photos.filter((product) => isWithinPeriod(product.createdAt, periodRange.start, periodRange.end)),
+    [photos, periodRange],
+  );
+  const periodVideos = React.useMemo(
+    () => videos.filter((product) => isWithinPeriod(product.createdAt, periodRange.start, periodRange.end)),
+    [videos, periodRange],
+  );
+  const periodPhotographers = React.useMemo(
+    () => photographers.filter((photographer) => isWithinPeriod(photographer.createdAt, periodRange.start, periodRange.end)),
+    [photographers, periodRange],
+  );
+  const periodWithdrawals = React.useMemo(
+    () => withdrawals.filter((withdrawal) => isWithinPeriod(withdrawal.createdAt, periodRange.start, periodRange.end)),
+    [withdrawals, periodRange],
+  );
+  const periodProducts = React.useMemo(
+    () => [...periodPhotos, ...periodVideos],
+    [periodPhotos, periodVideos],
+  );
+  const periodMetrics = React.useMemo<AdminMetrics>(() => {
+    const paid = periodOrders.filter((order) => order.status === 'paid');
+    const pending = periodOrders.filter((order) => order.status === 'pending');
+    const grossRevenue = paid.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const publishedProducts = periodProducts.filter((product) => (product.status ?? 'published') === 'published');
+    const removedProducts = periodProducts.filter((product) => product.status === 'removed');
+
+    return {
+      grossRevenue,
+      platformFee: grossRevenue * 0.3,
+      paidOrders: paid.length,
+      pendingOrders: pending.length,
+      totalOrders: periodOrders.length,
+      totalProducts: periodProducts.length,
+      publishedProducts: publishedProducts.length,
+      removedProducts: removedProducts.length,
+      photoCount: periodPhotos.filter((product) => product.type === 'IMG').length,
+      videoCount: periodVideos.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+    };
+  }, [periodOrders, periodPhotos, periodProducts, periodVideos]);
+  const recentOrders = periodOrders.slice(0, 5);
+  const pendingOrders = periodOrders.filter((order) => order.status === 'pending');
+  const paidOrders = periodOrders.filter((order) => order.status === 'paid');
   const productsMissingThumbnails = [...photos, ...videos].filter((product) => !product.thumbnailUrl && (product.status ?? 'published') !== 'removed');
-  const pendingWithdrawals = withdrawals.filter((withdrawal) => withdrawal.status === 'pending');
-  const processedWithdrawals = withdrawals.filter((withdrawal) => withdrawal.status !== 'pending');
+  const pendingWithdrawals = periodWithdrawals.filter((withdrawal) => withdrawal.status === 'pending');
+  const processedWithdrawals = periodWithdrawals.filter((withdrawal) => withdrawal.status !== 'pending');
   const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
   const pendingOrderTotal = pendingOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const paidOrderTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
@@ -199,7 +335,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
     const activities: Activity[] = [];
 
-    for (const p of photographers) {
+    for (const p of periodPhotographers) {
       const at = toTs(p.createdAt);
       if (!at) continue;
       activities.push({
@@ -211,7 +347,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       });
     }
 
-    for (const prod of [...photos, ...videos]) {
+    for (const prod of periodProducts) {
       const at = toTs(prod.createdAt);
       if (!at) continue;
       const label = prod.type === 'IMG' ? 'Nova foto publicada' : 'Novo video publicado';
@@ -225,7 +361,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       });
     }
 
-    for (const o of orders) {
+    for (const o of periodOrders) {
       const at = toTs(o.createdAt);
       if (!at) continue;
       const label = o.status === 'paid'
@@ -245,7 +381,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     return activities
       .sort((a, b) => b.at - a.at)
       .slice(0, 6);
-  }, [photographers, photos, videos, orders]);
+  }, [periodPhotographers, periodProducts, periodOrders]);
   const eventReports = React.useMemo(() => {
     const reports = new Map<string, { event: string; items: number; orders: Set<string>; revenue: number }>();
 
@@ -291,12 +427,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
   }, [paidOrders, photographers]);
-  const storageUsagePercent = metrics.totalProducts === 0
+  const storageUsagePercent = periodMetrics.totalProducts === 0
     ? 0
-    : Math.min(100, Math.round((metrics.publishedProducts / Math.max(metrics.totalProducts, 1)) * 100));
-  const paidConversionPercent = metrics.totalOrders === 0
+    : Math.min(100, Math.round((periodMetrics.publishedProducts / Math.max(periodMetrics.totalProducts, 1)) * 100));
+  const paidConversionPercent = periodMetrics.totalOrders === 0
     ? 0
-    : Math.round((metrics.paidOrders / metrics.totalOrders) * 1000) / 10;
+    : Math.round((periodMetrics.paidOrders / periodMetrics.totalOrders) * 1000) / 10;
 
   React.useEffect(() => {
     async function loadSettings() {
@@ -628,7 +764,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-[280px]">
               <div className="flex items-center gap-3 min-w-0">
                 <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="font-sans text-sm text-gray-200 truncate">20/05/2024 - 26/05/2024</span>
+                <span className="font-sans text-sm text-gray-200 truncate">{periodLabel}</span>
               </div>
               <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
             </div>
@@ -662,11 +798,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             >
               <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-wrap items-center gap-3">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mr-2">Periodo</span>
-                {['Hoje', 'Esta semana', 'Este mes', 'Este ano', 'Personalizado'].map((label) => (
+                {ADMIN_PERIOD_OPTIONS.map(({ key, label }) => (
                   <button
-                    key={label}
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedPeriod(key)}
                     className={`h-10 px-4 border font-mono text-xs uppercase transition-colors ${
-                      label === 'Esta semana'
+                      selectedPeriod === key
                         ? 'bg-brutal-accent/20 border-brutal-accent text-white'
                         : 'bg-[#080d14] border-white/10 text-gray-300 hover:border-white/30'
                     }`}
@@ -674,31 +812,49 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     {label}
                   </button>
                 ))}
+                {selectedPeriod === 'custom' && (
+                  <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                    <input
+                      type="date"
+                      value={customPeriodStart}
+                      onChange={(event) => setCustomPeriodStart(event.target.value)}
+                      className="h-10 px-3 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs outline-none focus:border-brutal-accent"
+                      aria-label="Data inicial"
+                    />
+                    <input
+                      type="date"
+                      value={customPeriodEnd}
+                      onChange={(event) => setCustomPeriodEnd(event.target.value)}
+                      className="h-10 px-3 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs outline-none focus:border-brutal-accent"
+                      aria-label="Data final"
+                    />
+                  </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                 <AdminStatCard 
                   label="GMV (Volume Bruto)" 
-                  value={`R$ ${metrics.grossRevenue.toFixed(2)}`} 
+                  value={`R$ ${periodMetrics.grossRevenue.toFixed(2)}`} 
                   icon={<DollarSign />} 
-                  sub="Acumulado este mês"
+                  sub="Acumulado no periodo"
                   accent
                 />
                 <AdminStatCard 
                   label="Receita Líquida (Fees)" 
-                  value={`R$ ${metrics.platformFee.toFixed(2)}`} 
+                  value={`R$ ${periodMetrics.platformFee.toFixed(2)}`} 
                   icon={<TrendingUp />} 
                   sub="Margem de 30%"
                 />
                 <AdminStatCard 
                   label="Total Fotógrafos" 
-                  value={photographers.length} 
+                  value={periodPhotographers.length} 
                   icon={<Users />} 
-                  sub={`${pendingPhotographers.length} pendentes de aprovação`}
+                  sub={`${pendingPhotographers.length} pendentes no total`}
                 />
                 <AdminStatCard 
                   label="Total Vídeos" 
-                  value={metrics.videoCount} 
+                  value={periodMetrics.videoCount} 
                   icon={<Camera />} 
                   sub="Replays em 4k"
                 />
@@ -790,11 +946,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-4">
                       <div className="p-4 bg-white/5 border border-white/10 text-center text-brutal-accent">
-                         <p className="font-display text-3xl">{metrics.totalProducts}</p>
+                         <p className="font-display text-3xl">{periodMetrics.totalProducts}</p>
                          <p className="font-mono text-[8px] uppercase">Produtos</p>
                       </div>
                       <div className="p-4 bg-white/5 border border-white/10 text-center text-green-500">
-                         <p className="font-display text-3xl">{metrics.totalOrders}</p>
+                         <p className="font-display text-3xl">{periodMetrics.totalOrders}</p>
                          <p className="font-mono text-[8px] uppercase">Pedidos</p>
                       </div>
                     </div>

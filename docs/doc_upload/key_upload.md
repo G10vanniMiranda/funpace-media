@@ -5,7 +5,7 @@ Este documento concentra as informacoes do bucket usado para salvar fotos, video
 ## Provider atual
 
 - Provider: API externa `99dev.pro`
-- Base URL: `https://99dev.pro/bucket/bucket/api`
+- Base URL: `https://99dev.pro/bucket/api`
 - Header de autenticacao: `X-API-Token`
 - Token atual: configurado apenas em `.env`/deploy como `BUCKET_API_TOKEN`
 - Bucket atual no `.env`: `slug-do-bucket`
@@ -16,7 +16,7 @@ Este documento concentra as informacoes do bucket usado para salvar fotos, video
 
 ```env
 MEDIA_STORAGE_PROVIDER=external_bucket
-BUCKET_API_BASE_URL=https://99dev.pro/bucket/bucket/api
+BUCKET_API_BASE_URL=https://99dev.pro/bucket/api
 BUCKET_API_TOKEN=<token-gerado-no-provedor>
 MEDIA_BUCKET=slug-do-bucket
 VITE_MEDIA_BUCKET=slug-do-bucket
@@ -46,7 +46,7 @@ Variaveis importantes:
 
 3. O frontend envia o arquivo para `/api/media/upload` com o token de sessao Supabase do fotografo.
 4. O backend valida o usuario pelo Supabase Auth.
-5. O backend envia o arquivo para `POST https://99dev.pro/bucket/bucket/api/upload`.
+5. O backend envia o arquivo para `POST https://99dev.pro/bucket/api/upload`.
 6. A tabela `products` continua salvando `url`, `thumbnailUrl` e `storagePath`.
 
 ## Endpoints da API externa
@@ -54,14 +54,14 @@ Variaveis importantes:
 Listar arquivos:
 
 ```bash
-curl "https://99dev.pro/bucket/bucket/api/files?bucket=slug-do-bucket" \
+curl "https://99dev.pro/bucket/api/files?bucket=slug-do-bucket" \
   -H "X-API-Token: <token-gerado-no-provedor>"
 ```
 
 Enviar arquivo:
 
 ```bash
-curl -X POST "https://99dev.pro/bucket/bucket/api/upload" \
+curl -X POST "https://99dev.pro/bucket/api/upload" \
   -H "X-API-Token: <token-gerado-no-provedor>" \
   -F "bucket=slug-do-bucket" \
   -F "arquivo=@arquivo.jpg"

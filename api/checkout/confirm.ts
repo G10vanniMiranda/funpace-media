@@ -165,9 +165,8 @@ export default async function handler(req: any, res: any) {
     (
       Boolean(captureMethod || transactionNsu) ||
       (
-        existingOrder.status === 'pending' &&
-        existingOrder.paymentProvider === 'infinitepay' &&
-        Boolean(existingOrder.checkoutUrl)
+        ['pending', 'failed', 'cancelled'].includes(existingOrder.status) &&
+        existingOrder.paymentProvider === 'infinitepay'
       )
     );
 

@@ -1213,9 +1213,8 @@ app.post("/api/checkout/confirm", async (req, res) => {
       (
         Boolean(captureMethod || transactionNsu) ||
         (
-          order.status === "pending" &&
-          order.paymentProvider === "infinitepay" &&
-          Boolean(order.checkoutUrl)
+          ["pending", "failed", "cancelled"].includes(order.status) &&
+          order.paymentProvider === "infinitepay"
         )
       );
 

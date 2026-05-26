@@ -86,7 +86,7 @@ async function authorizeDownload(orderId: string, orderItemId: string) {
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.url) {
-    throw new Error(payload?.error || 'Nao foi possivel autorizar o download.');
+    throw new Error(payload?.error || payload?.message || `Nao foi possivel autorizar o download. HTTP ${response.status}`);
   }
   return String(payload.url);
 }

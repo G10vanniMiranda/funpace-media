@@ -1456,30 +1456,46 @@ app.post("/api/downloads/authorize", async (req, res) => {
   }
 
   try {
-    const { data: item, error: itemError } = await getSupabaseAdmin()
+    const { data: orderItems, error: itemError } = await getSupabaseAdmin()
       .from("order_items")
-      .select(`
-        id,
-        orderId,
-        productId,
-        vendedorId,
-        name,
-        type,
-        url,
-        orders!inner(buyerEmail,userId,status),
-        products(storagePath)
-      `)
+      .select("id,orderId,productId,vendedorId,name,type,url")
       .eq("id", orderItemId)
       .eq("orderId", orderId)
-      .single();
+      .limit(1);
 
-    if (itemError || !item || (item as any).orders?.status !== "paid") {
+    if (itemError) throw itemError;
+
+    const item = orderItems?.[0];
+    if (!item) {
+      return res.status(404).json({ error: "Item do pedido nao encontrado." });
+    }
+
+    const { data: orders, error: orderError } = await getSupabaseAdmin()
+      .from("orders")
+      .select("id,buyerEmail,userId,status")
+      .eq("id", orderId)
+      .limit(1);
+
+    if (orderError) throw orderError;
+
+    const order = orders?.[0];
+    if (!order || order.status !== "paid") {
       return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
     }
 
-    if ((item as any).orders?.userId !== authUser.id) {
+    if (order.userId !== authUser.id) {
       return res.status(403).json({ error: "Este pedido nao pertence ao usuario logado." });
     }
+
+    const { data: products, error: productError } = await getSupabaseAdmin()
+      .from("products")
+      .select("id,storagePath")
+      .eq("id", (item as any).productId)
+      .limit(1);
+
+    if (productError) throw productError;
+
+    const product = products?.[0];
 
     const ipSource = req.ip || req.socket.remoteAddress || "";
     const ipHash = ipSource
@@ -1493,8 +1509,8 @@ app.post("/api/downloads/authorize", async (req, res) => {
         orderItemId: (item as any).id,
         productId: (item as any).productId,
         vendedorId: (item as any).vendedorId,
-        buyerEmail: (item as any).orders?.buyerEmail,
-        userId: (item as any).orders?.userId,
+        buyerEmail: order.buyerEmail,
+        userId: order.userId,
         ipHash,
         userAgent: String(req.header("user-agent") || "").slice(0, 500),
       });
@@ -1503,10 +1519,7 @@ app.post("/api/downloads/authorize", async (req, res) => {
       console.error("Erro ao registrar evento de download:", eventError);
     }
 
-    const storagePath = Array.isArray((item as any).products)
-      ? (item as any).products[0]?.storagePath
-      : (item as any).products?.storagePath;
-    const signedUrl = await createSignedMediaUrl(storagePath || (item as any).url, 300);
+    const signedUrl = await createSignedMediaUrl((product as any)?.storagePath || (item as any).url, 300);
     return res.json({ url: signedUrl });
   } catch (error: any) {
     console.error("Erro ao autorizar download:", error);

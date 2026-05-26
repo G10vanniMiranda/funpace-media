@@ -203,8 +203,11 @@ export default async function handler(req: any, res: any) {
       payload: { ...payload, webhook_error: 'missing_transaction_or_slug' },
     });
 
-    return res.status(400).json({
-      error: 'Dados de pagamento incompletos no webhook.',
+    return res.status(200).json({
+      received: true,
+      orderId,
+      status: 'pending',
+      message: 'Dados de pagamento incompletos no webhook.',
       missing: {
         transaction_nsu: !transactionNsu,
         invoice_slug: !slug,

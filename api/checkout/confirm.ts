@@ -1,5 +1,9 @@
 import { getInfinitePayPaymentCheckEndpoint, getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
 
+function normalizeStatus(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
+}
+
 function getBodyValue(body: any, names: string[]) {
   const rawQuery = body?.raw_query && typeof body.raw_query === 'object' ? body.raw_query : {};
 
@@ -20,6 +24,49 @@ function getBodyValue(body: any, names: string[]) {
   return '';
 }
 
+function hasFailureReturn(body: any) {
+  const values = [
+    getBodyValue(body, ['payment']),
+    getBodyValue(body, ['status', 'payment_status', 'paymentStatus']),
+    getBodyValue(body, ['event', 'type']),
+  ].map(normalizeStatus).filter(Boolean);
+
+  return values.some((value) => [
+    'cancel',
+    'cancelled',
+    'canceled',
+    'failed',
+    'failure',
+    'rejected',
+    'denied',
+    'expired',
+    'refunded',
+    'chargeback',
+  ].includes(value));
+}
+
+async function recordPaymentEvent(input: {
+  orderId: string;
+  status: string;
+  payload: any;
+}) {
+  try {
+    await supabaseRequest('/rest/v1/payment_events?on_conflict=provider,eventId', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+      body: JSON.stringify({
+        provider: 'infinitepay',
+        eventId: `${input.orderId}:checkout-confirm:${Date.now()}`,
+        orderId: input.orderId,
+        status: input.status,
+        payload: input.payload,
+      }),
+    });
+  } catch (error) {
+    console.error('Nao foi possivel registrar confirmacao InfinitePay:', error);
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
   setCors(req, res);
@@ -35,6 +82,7 @@ export default async function handler(req: any, res: any) {
   const slug = getBodyValue(body, ['slug', 'invoice_slug', 'invoiceSlug', 'invoice_id', 'invoiceId']);
   const captureMethod = getBodyValue(body, ['capture_method', 'captureMethod', 'payment_method', 'paymentMethod']);
   const paymentReturn = getBodyValue(body, ['payment']);
+  const failureReturn = hasFailureReturn(body);
 
   if (!handle) {
     return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
@@ -45,7 +93,7 @@ export default async function handler(req: any, res: any) {
   }
 
   const existingOrders = await supabaseRequest<any[]>(
-    `/rest/v1/orders?select=id,status,paymentExternalId&id=eq.${encodeURIComponent(orderId)}&limit=1`,
+    `/rest/v1/orders?select=id,status,paymentProvider,paymentExternalId,checkoutUrl&id=eq.${encodeURIComponent(orderId)}&limit=1`,
   );
   const existingOrder = existingOrders[0];
 
@@ -61,8 +109,29 @@ export default async function handler(req: any, res: any) {
     });
   }
 
+  if (failureReturn) {
+    await recordPaymentEvent({
+      orderId,
+      status: 'cancelled',
+      payload: {
+        source: 'checkout-confirm',
+        reason: 'failure_return',
+        raw_query: body?.raw_query || {},
+        body,
+      },
+    });
+
+    return res.status(409).json({
+      paid: false,
+      message: 'Retorno de pagamento nao aprovado.',
+      source: 'checkout-confirm',
+      reason: 'failure_return',
+    });
+  }
+
   let paid = false;
   let paymentCheckError = '';
+  let paymentCheck: any = {};
   if (transactionNsu && slug) {
     try {
       const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
@@ -77,7 +146,7 @@ export default async function handler(req: any, res: any) {
       });
 
       if (paymentCheckResponse.ok) {
-        const paymentCheck: any = await paymentCheckResponse.json().catch(() => ({}));
+        paymentCheck = await paymentCheckResponse.json().catch(() => ({}));
         paid = Boolean(paymentCheck?.paid);
       } else {
         paymentCheckError = await paymentCheckResponse.text().catch(() => '');
@@ -89,9 +158,29 @@ export default async function handler(req: any, res: any) {
 
   const confirmedByCheckoutReturn = !paid &&
     paymentReturn === 'success' &&
-    Boolean(captureMethod || transactionNsu);
+    (
+      Boolean(captureMethod || transactionNsu) ||
+      (
+        existingOrder.status === 'pending' &&
+        existingOrder.paymentProvider === 'infinitepay' &&
+        Boolean(existingOrder.checkoutUrl)
+      )
+    );
 
   if (!paid && !confirmedByCheckoutReturn) {
+    await recordPaymentEvent({
+      orderId,
+      status: 'pending',
+      payload: {
+        source: 'checkout-confirm',
+        reason: !transactionNsu && !captureMethod && !slug ? 'missing_confirmation_params' : 'payment_check_unpaid',
+        paymentCheckError,
+        payment_check: paymentCheck,
+        raw_query: body?.raw_query || {},
+        body,
+      },
+    });
+
     return res.status(409).json({
       paid: false,
       message: 'Pagamento ainda nao confirmado.',
@@ -101,6 +190,7 @@ export default async function handler(req: any, res: any) {
     });
   }
 
+  const confirmedBy = paid ? 'payment_check' : 'checkout_return';
   await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}&status=in.(pending,failed,cancelled)`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
@@ -110,5 +200,17 @@ export default async function handler(req: any, res: any) {
     }),
   });
 
-  return res.status(200).json({ paid: true, confirmedBy: paid ? 'payment_check' : 'checkout_return' });
+  await recordPaymentEvent({
+    orderId,
+    status: 'paid',
+    payload: {
+      source: 'checkout-confirm',
+      confirmedBy,
+      payment_check: paymentCheck,
+      raw_query: body?.raw_query || {},
+      body,
+    },
+  });
+
+  return res.status(200).json({ paid: true, confirmedBy });
 }

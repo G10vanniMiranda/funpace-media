@@ -5,7 +5,7 @@ import {
   isUuid,
   setCors,
   supabaseRequest,
-} from '../_utils';
+} from '../shared/utils';
 
 function normalizeKey(value: string) {
   return value.replace(/[^a-z0-9]/gi, '').toLowerCase();

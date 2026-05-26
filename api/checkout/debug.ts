@@ -1,4 +1,4 @@
-import { getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
+import { getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../shared/utils';
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;

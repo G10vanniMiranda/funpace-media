@@ -1,4 +1,4 @@
-import { getJsonBody, handleOptions, isUuid, setCors, supabaseRequest, getSupabaseApiConfig } from '../_utils';
+import { getJsonBody, handleOptions, isUuid, setCors, supabaseRequest, getSupabaseApiConfig } from '../shared/utils';
 
 function getBearerToken(req: any) {
   const header = String(req.headers?.authorization || req.headers?.Authorization || '');

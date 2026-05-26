@@ -1,4 +1,4 @@
-import { getInfinitePayPaymentCheckEndpoint, getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../_utils';
+import { getInfinitePayPaymentCheckEndpoint, getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../shared/utils';
 
 function normalizeStatus(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');

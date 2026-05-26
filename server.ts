@@ -1457,21 +1457,20 @@ app.post("/api/downloads/authorize", async (req, res) => {
   try {
     const { data: orderItems, error: itemError } = await getSupabaseAdmin()
       .from("order_items")
-      .select("id,orderId,productId,vendedorId,name,type,url")
+      .select("*")
       .eq("id", orderItemId)
-      .eq("orderId", orderId)
       .limit(1);
 
     if (itemError) throw itemError;
 
     const item = orderItems?.[0];
-    if (!item) {
+    if (!item || (item as any).orderId !== orderId) {
       return res.status(404).json({ error: "Item do pedido nao encontrado." });
     }
 
     const { data: orders, error: orderError } = await getSupabaseAdmin()
       .from("orders")
-      .select("id,buyerEmail,userId,status")
+      .select("*")
       .eq("id", orderId)
       .limit(1);
 
@@ -1488,7 +1487,7 @@ app.post("/api/downloads/authorize", async (req, res) => {
 
     const { data: products, error: productError } = await getSupabaseAdmin()
       .from("products")
-      .select("id,storagePath")
+      .select("*")
       .eq("id", (item as any).productId)
       .limit(1);
 

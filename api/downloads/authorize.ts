@@ -63,16 +63,16 @@ export default async function handler(req: any, res: any) {
     }
 
     const orderItems = await supabaseRequest<any[]>(
-      `/rest/v1/order_items?select=id,orderId,productId,vendedorId,name,type,url&id=eq.${encodeURIComponent(orderItemId)}&orderId=eq.${encodeURIComponent(orderId)}&limit=1`,
+      `/rest/v1/order_items?select=*&id=eq.${encodeURIComponent(orderItemId)}&limit=1`,
     );
     const item = orderItems[0];
 
-    if (!item) {
+    if (!item || item.orderId !== orderId) {
       return res.status(404).json({ error: 'Item do pedido nao encontrado.' });
     }
 
     const orders = await supabaseRequest<any[]>(
-      `/rest/v1/orders?select=id,buyerEmail,userId,status&id=eq.${encodeURIComponent(orderId)}&limit=1`,
+      `/rest/v1/orders?select=*&id=eq.${encodeURIComponent(orderId)}&limit=1`,
     );
     const order = orders[0];
 
@@ -85,7 +85,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const products = await supabaseRequest<any[]>(
-      `/rest/v1/products?select=id,storagePath&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
+      `/rest/v1/products?select=*&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
     );
     const product = products[0];
 

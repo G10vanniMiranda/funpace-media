@@ -45,7 +45,7 @@ export function summarizePayload(payload) {
   };
 }
 
-function cleanProviderError(raw) {
+export function cleanProviderError(raw) {
   const value = String(raw || "");
   const cleaned = value
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -55,7 +55,7 @@ function cleanProviderError(raw) {
     .trim();
 
   if (/sess[aã]o expirada/i.test(cleaned)) {
-    return "Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se persistir, revise o BUCKET_API_TOKEN.";
+    return "Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.";
   }
 
   return cleaned || value;

@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { assertBucketUploadConfig, summarizePayload } from '../scripts/test-bucket-upload.mjs';
+import { assertBucketUploadConfig, cleanProviderError, summarizePayload } from '../scripts/test-bucket-upload.mjs';
 
 describe('bucket upload test config', () => {
   it('accepts the documented bucket value from the provider', () => {
@@ -51,6 +51,13 @@ describe('bucket upload test config', () => {
         url: 'https://cdn.example/file.png',
         message: 'uploaded',
       },
+    );
+  });
+
+  it('maps provider session expiration to the bucket credential action', () => {
+    assert.match(
+      cleanProviderError('Sessao expirada'),
+      /novo BUCKET_API_TOKEN/,
     );
   });
 });

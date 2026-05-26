@@ -121,7 +121,7 @@ function cleanProviderErrorMessage(raw: string, fallback: string) {
     .trim();
 
   if (/sess[aã]o expirada/i.test(decoded)) {
-    return 'Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se persistir, revise o BUCKET_API_TOKEN.';
+    return 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.';
   }
 
   return decoded || fallback;

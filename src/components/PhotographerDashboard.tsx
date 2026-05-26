@@ -528,7 +528,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
           const friendlyMessage = /sess[aã]o expirada/i.test(message)
-            ? 'Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se continuar, revise o token do bucket no .env/deploy.'
+            ? 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.'
             : message;
           throw new Error(`Falha ao publicar "${item.name}": ${friendlyMessage}`);
         }

@@ -87,7 +87,7 @@ Variaveis obrigatorias:
 
 ```env
 BUCKET_API_BASE_URL=https://99dev.pro/bucket/bucket/api
-BUCKET_API_TOKEN=abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4
+BUCKET_API_TOKEN=<token-gerado-no-provedor>
 MEDIA_BUCKET=slug-do-bucket
 VITE_MEDIA_BUCKET=slug-do-bucket
 ```

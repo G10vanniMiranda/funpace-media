@@ -28,7 +28,7 @@ Configure estas variaveis no ambiente do deploy:
 ```env
 MEDIA_STORAGE_PROVIDER=external_bucket
 BUCKET_API_BASE_URL=https://99dev.pro/bucket/bucket/api
-BUCKET_API_TOKEN=abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4
+BUCKET_API_TOKEN=<token-gerado-no-provedor>
 MEDIA_BUCKET=slug-do-bucket
 VITE_MEDIA_BUCKET=slug-do-bucket
 ```
@@ -145,7 +145,15 @@ O backend nao consegue autenticar na API do bucket.
 Corrija:
 
 ```env
-BUCKET_API_TOKEN=abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4
+BUCKET_API_TOKEN=<token-gerado-no-provedor>
+```
+
+### Credencial do bucket expirada ou invalida
+
+O provider recusou o `BUCKET_API_TOKEN` atual. Gere um token novo no painel do provider, atualize o `.env` local e as variaveis do deploy, reinicie o backend e rode:
+
+```bash
+npm run bucket:upload:test
 ```
 
 ### Imagem aparece quebrada

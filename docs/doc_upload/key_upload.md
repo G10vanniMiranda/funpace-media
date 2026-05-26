@@ -7,7 +7,7 @@ Este documento concentra as informacoes do bucket usado para salvar fotos, video
 - Provider: API externa `99dev.pro`
 - Base URL: `https://99dev.pro/bucket/bucket/api`
 - Header de autenticacao: `X-API-Token`
-- Token atual: `abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4`
+- Token atual: configurado apenas em `.env`/deploy como `BUCKET_API_TOKEN`
 - Bucket atual no `.env`: `slug-do-bucket`
 
 > Status atual: estes sao exatamente os dados recebidos da API. O campo `bucket=slug-do-bucket` sera usado como valor de `MEDIA_BUCKET` e `VITE_MEDIA_BUCKET`.
@@ -17,7 +17,7 @@ Este documento concentra as informacoes do bucket usado para salvar fotos, video
 ```env
 MEDIA_STORAGE_PROVIDER=external_bucket
 BUCKET_API_BASE_URL=https://99dev.pro/bucket/bucket/api
-BUCKET_API_TOKEN=abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4
+BUCKET_API_TOKEN=<token-gerado-no-provedor>
 MEDIA_BUCKET=slug-do-bucket
 VITE_MEDIA_BUCKET=slug-do-bucket
 MEDIA_PUBLIC_BASE_URL=
@@ -55,14 +55,14 @@ Listar arquivos:
 
 ```bash
 curl "https://99dev.pro/bucket/bucket/api/files?bucket=slug-do-bucket" \
-  -H "X-API-Token: abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4"
+  -H "X-API-Token: <token-gerado-no-provedor>"
 ```
 
 Enviar arquivo:
 
 ```bash
 curl -X POST "https://99dev.pro/bucket/bucket/api/upload" \
-  -H "X-API-Token: abt_f1785e2267d3.kxcZnf2EdRKLRMqzIyTvPVbacKLYJhZ4" \
+  -H "X-API-Token: <token-gerado-no-provedor>" \
   -F "bucket=slug-do-bucket" \
   -F "arquivo=@arquivo.jpg"
 ```

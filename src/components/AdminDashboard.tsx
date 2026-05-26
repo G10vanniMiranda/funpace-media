@@ -42,11 +42,36 @@ interface AdminDashboardProps {
   onRefresh: () => void;
 }
 
+type StorageStats = {
+  bucket: string;
+  usedBytes: number;
+  quotaBytes: number;
+  usagePercent: number;
+  totalFiles: number;
+  byType: Record<string, { count: number; bytes: number }>;
+  updatedAt: string;
+};
+
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+}
+
+function formatBytes(bytes: number) {
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let value = Number(bytes || 0);
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: value >= 10 || unitIndex === 0 ? 0 : 1,
+  }).format(value)} ${units[unitIndex]}`;
 }
 
 type AdminPeriodKey = 'today' | 'week' | 'month' | 'year' | 'custom';
@@ -119,6 +144,13 @@ function getAdminPeriodRange(period: AdminPeriodKey, customStart: string, custom
   return { start, end };
 }
 
+function getPreviousPeriodRange(start: Date, end: Date) {
+  const durationMs = end.getTime() - start.getTime() + 1;
+  const previousEnd = new Date(start.getTime() - 1);
+  const previousStart = new Date(previousEnd.getTime() - durationMs + 1);
+  return { start: previousStart, end: previousEnd };
+}
+
 function isWithinPeriod(value: string | undefined, start: Date, end: Date) {
   if (!value) return false;
   const time = Date.parse(value);
@@ -130,9 +162,117 @@ function formatPeriodLabel(start: Date, end: Date) {
   return `${formatter.format(start)} - ${formatter.format(end)}`;
 }
 
+function formatExportDate(date: Date) {
+  return formatDateInput(date);
+}
+
+function downloadTextFile(fileName: string, content: string, type = 'text/csv;charset=utf-8') {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function htmlEscape(value: unknown) {
+  return value == null
+    ? ''
+    : String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+function formatReportNumber(value: number) {
+  return new Intl.NumberFormat('pt-BR').format(value);
+}
+
+function formatReportPercent(value: number) {
+  return `${new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 1 }).format(value)}%`;
+}
+
+function formatTrendPercent(current: number, previous: number) {
+  if (previous === 0) {
+    if (current === 0) return '0,0%';
+    return '+100,0%';
+  }
+
+  const value = ((current - previous) / Math.abs(previous)) * 100;
+  const formatted = new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  }).format(value);
+  return `${value > 0 ? '+' : ''}${formatted}%`;
+}
+
+function buildSparklineBuckets<T>(
+  items: T[],
+  start: Date,
+  end: Date,
+  getDate: (item: T) => string | undefined,
+  getValue: (item: T) => number,
+) {
+  const bucketCount = 12;
+  const totals = Array.from({ length: bucketCount }, () => 0);
+  const startTime = start.getTime();
+  const duration = Math.max(1, end.getTime() - startTime + 1);
+
+  for (const item of items) {
+    const rawDate = getDate(item);
+    const time = rawDate ? Date.parse(rawDate) : NaN;
+    if (!Number.isFinite(time) || time < startTime || time > end.getTime()) continue;
+
+    const index = Math.min(bucketCount - 1, Math.floor(((time - startTime) / duration) * bucketCount));
+    totals[index] += getValue(item);
+  }
+
+  const max = Math.max(...totals, 0);
+  return totals.map((value) => (max <= 0 ? 8 : Math.max(8, Math.round((value / max) * 42))));
+}
+
+function buildReportBarChart(title: string, rows: Array<{ label: string; value: number; meta?: string }>) {
+  const width = 760;
+  const rowHeight = 48;
+  const top = 58;
+  const height = Math.max(180, top + Math.max(rows.length, 1) * rowHeight + 24);
+  const maxValue = Math.max(...rows.map((row) => row.value), 1);
+
+  const bars = rows.length === 0
+    ? `<text x="24" y="105" fill="#64748b" font-size="14">Sem dados no periodo selecionado.</text>`
+    : rows.map((row, index) => {
+        const y = top + index * rowHeight;
+        const barWidth = Math.max(4, Math.round((row.value / maxValue) * 420));
+        return `
+          <text x="24" y="${y + 17}" fill="#0f172a" font-size="13" font-weight="700">${htmlEscape(row.label).slice(0, 42)}</text>
+          <rect x="260" y="${y}" width="430" height="20" rx="4" fill="#e2e8f0"></rect>
+          <rect x="260" y="${y}" width="${barWidth}" height="20" rx="4" fill="#ff4e00"></rect>
+          <text x="704" y="${y + 15}" fill="#0f172a" font-size="12" text-anchor="end">${htmlEscape(formatCurrency(row.value))}</text>
+          <text x="260" y="${y + 37}" fill="#64748b" font-size="11">${htmlEscape(row.meta ?? '')}</text>
+        `;
+      }).join('');
+
+  return `
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${width}" height="${height}" rx="16" fill="#f8fafc"></rect>
+      <rect x="1" y="1" width="${width - 2}" height="${height - 2}" rx="16" fill="none" stroke="#e2e8f0"></rect>
+      <text x="24" y="34" fill="#0f172a" font-size="18" font-weight="800">${htmlEscape(title)}</text>
+      ${bars}
+    </svg>
+  `;
+}
+
 async function createThumbnailFromMedia(product: Product): Promise<File> {
   const sourceUrl = product.thumbnailUrl || product.url;
-  const response = await fetch(sourceUrl, { mode: 'cors' });
+  if (!sourceUrl) throw new Error('Midia sem URL para gerar preview.');
+
+  const response = await fetch(sourceUrl, { mode: 'cors' }).catch((error) => {
+    throw new Error(`Nao foi possivel acessar a midia. Verifique CORS/URL publica. ${error?.message || ''}`.trim());
+  });
   if (!response.ok) throw new Error('Nao foi possivel baixar a midia para gerar preview.');
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
@@ -220,12 +360,20 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [selectedPeriod, setSelectedPeriod] = useState<AdminPeriodKey>('week');
   const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showAllRecentActivity, setShowAllRecentActivity] = useState(false);
+  const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
+  const [storageStatsError, setStorageStatsError] = useState('');
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
     autoBlockSuspicious: true,
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const platformFeeRate = Math.max(0, Math.min(100, Number(settingsForm.platformFeePercent) || 0)) / 100;
+  const platformFeePercentLabel = new Intl.NumberFormat('pt-BR', {
+    maximumFractionDigits: 2,
+  }).format(Number(settingsForm.platformFeePercent) || 0);
 
   const pendingPhotographers = photographers.filter(p => !p.verified);
   const activePhotographers = photographers.filter(p => p.verified);
@@ -289,7 +437,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
     return {
       grossRevenue,
-      platformFee: grossRevenue * 0.3,
+      platformFee: grossRevenue * platformFeeRate,
       paidOrders: paid.length,
       pendingOrders: pending.length,
       totalOrders: periodOrders.length,
@@ -299,13 +447,135 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       photoCount: periodPhotos.filter((product) => product.type === 'IMG').length,
       videoCount: periodVideos.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
     };
-  }, [periodOrders, periodPhotos, periodProducts, periodVideos]);
+  }, [periodOrders, periodPhotos, periodProducts, periodVideos, platformFeeRate]);
+  const previousPeriodRange = React.useMemo(
+    () => getPreviousPeriodRange(periodRange.start, periodRange.end),
+    [periodRange],
+  );
+  const previousPeriodOrders = React.useMemo(
+    () => orders.filter((order) => isWithinPeriod(order.createdAt, previousPeriodRange.start, previousPeriodRange.end)),
+    [orders, previousPeriodRange],
+  );
+  const previousPeriodPhotos = React.useMemo(
+    () => photos.filter((product) => isWithinPeriod(product.createdAt, previousPeriodRange.start, previousPeriodRange.end)),
+    [photos, previousPeriodRange],
+  );
+  const previousPeriodVideos = React.useMemo(
+    () => videos.filter((product) => isWithinPeriod(product.createdAt, previousPeriodRange.start, previousPeriodRange.end)),
+    [videos, previousPeriodRange],
+  );
+  const previousPeriodProducts = React.useMemo(
+    () => [...previousPeriodPhotos, ...previousPeriodVideos],
+    [previousPeriodPhotos, previousPeriodVideos],
+  );
+  const previousPeriodPhotographers = React.useMemo(
+    () => photographers.filter((photographer) => isWithinPeriod(photographer.createdAt, previousPeriodRange.start, previousPeriodRange.end)),
+    [photographers, previousPeriodRange],
+  );
+  const previousPeriodMetrics = React.useMemo<AdminMetrics>(() => {
+    const paid = previousPeriodOrders.filter((order) => order.status === 'paid');
+    const pending = previousPeriodOrders.filter((order) => order.status === 'pending');
+    const grossRevenue = paid.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const publishedProducts = previousPeriodProducts.filter((product) => (product.status ?? 'published') === 'published');
+    const removedProducts = previousPeriodProducts.filter((product) => product.status === 'removed');
+
+    return {
+      grossRevenue,
+      platformFee: grossRevenue * platformFeeRate,
+      paidOrders: paid.length,
+      pendingOrders: pending.length,
+      totalOrders: previousPeriodOrders.length,
+      totalProducts: previousPeriodProducts.length,
+      publishedProducts: publishedProducts.length,
+      removedProducts: removedProducts.length,
+      photoCount: previousPeriodPhotos.filter((product) => product.type === 'IMG').length,
+      videoCount: previousPeriodVideos.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+    };
+  }, [previousPeriodOrders, previousPeriodPhotos, previousPeriodProducts, previousPeriodVideos, platformFeeRate]);
+  const adminStatTrends = React.useMemo(() => ({
+    grossRevenue: formatTrendPercent(periodMetrics.grossRevenue, previousPeriodMetrics.grossRevenue),
+    platformFee: formatTrendPercent(periodMetrics.platformFee, previousPeriodMetrics.platformFee),
+    photographers: '0,0%',
+    videos: formatTrendPercent(periodMetrics.videoCount, previousPeriodMetrics.videoCount),
+  }), [activePhotographers.length, periodMetrics, previousPeriodMetrics]);
+  const adminStatSparklines = React.useMemo(() => ({
+    grossRevenue: buildSparklineBuckets(
+      periodOrders.filter((order) => order.status === 'paid'),
+      periodRange.start,
+      periodRange.end,
+      (order) => order.createdAt,
+      (order) => Number(order.total || 0),
+    ),
+    platformFee: buildSparklineBuckets(
+      periodOrders.filter((order) => order.status === 'paid'),
+      periodRange.start,
+      periodRange.end,
+      (order) => order.createdAt,
+      (order) => Number(order.total || 0) * platformFeeRate,
+    ),
+    photographers: Array.from({ length: 12 }, () => activePhotographers.length > 0 ? 42 : 8),
+    videos: buildSparklineBuckets(
+      periodVideos.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW'),
+      periodRange.start,
+      periodRange.end,
+      (product) => product.createdAt,
+      () => 1,
+    ),
+  }), [activePhotographers.length, periodOrders, periodRange, periodVideos, platformFeeRate]);
   const recentOrders = periodOrders.slice(0, 5);
   const pendingOrders = periodOrders.filter((order) => order.status === 'pending');
   const paidOrders = periodOrders.filter((order) => order.status === 'paid');
-  const productsMissingThumbnails = [...photos, ...videos].filter((product) => !product.thumbnailUrl && (product.status ?? 'published') !== 'removed');
+  const productsMissingThumbnails = [...photos, ...videos].filter((product) => (
+    !product.thumbnailUrl &&
+    Boolean(product.url) &&
+    (product.status ?? 'published') !== 'removed'
+  ));
   const pendingWithdrawals = periodWithdrawals.filter((withdrawal) => withdrawal.status === 'pending');
   const processedWithdrawals = periodWithdrawals.filter((withdrawal) => withdrawal.status !== 'pending');
+  const adminNotifications = React.useMemo(() => {
+    const pendingOrderCount = orders.filter((order) => order.status === 'pending').length;
+    const pendingWithdrawalCount = withdrawals.filter((withdrawal) => withdrawal.status === 'pending').length;
+    const missingThumbnailCount = productsMissingThumbnails.length;
+    const notifications: Array<{ id: string; title: string; detail: string; tab: typeof activeTab }> = [];
+
+    if (pendingPhotographers.length > 0) {
+      notifications.push({
+        id: 'pending-photographers',
+        title: `${pendingPhotographers.length} fotografo(s) pendente(s)`,
+        detail: 'Aguardando aprovacao de cadastro',
+        tab: 'photographers',
+      });
+    }
+
+    if (pendingOrderCount > 0) {
+      notifications.push({
+        id: 'pending-orders',
+        title: `${pendingOrderCount} pedido(s) pendente(s)`,
+        detail: 'Pagamentos aguardando confirmacao',
+        tab: 'sales',
+      });
+    }
+
+    if (pendingWithdrawalCount > 0) {
+      notifications.push({
+        id: 'pending-withdrawals',
+        title: `${pendingWithdrawalCount} saque(s) pendente(s)`,
+        detail: 'Solicitacoes Pix para processamento',
+        tab: 'sales',
+      });
+    }
+
+    if (missingThumbnailCount > 0) {
+      notifications.push({
+        id: 'missing-thumbnails',
+        title: `${missingThumbnailCount} preview(s) ausente(s)`,
+        detail: 'Midias precisam de thumbnail dedicado',
+        tab: 'overview',
+      });
+    }
+
+    return notifications;
+  }, [orders, pendingPhotographers.length, productsMissingThumbnails.length, withdrawals]);
   const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
   const pendingOrderTotal = pendingOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const paidOrderTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
@@ -313,6 +583,35 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
     [photographers],
   );
+  const reportItemsByPaidOrder = React.useMemo(() => {
+    const allProducts = [...photos, ...videos].filter((product) => (product.status ?? 'published') !== 'removed');
+
+    return new Map(paidOrders.map((order) => {
+      const explicitItems = (order.items ?? []).filter((item) => item.vendedorId);
+      if (explicitItems.length > 0) return [order.id, explicitItems];
+
+      if (allProducts.length === 1) {
+        const product = allProducts[0];
+        return [order.id, [{
+          id: `fallback-${order.id}-${product.id}`,
+          orderId: order.id,
+          productId: product.id,
+          name: product.name,
+          type: product.type,
+          price: Number(order.total || product.price || 0),
+          url: product.url,
+          vendedorId: product.vendedorId,
+          bib: product.bib,
+          event: product.event || 'Geral',
+          checkpoint: product.checkpoint,
+          thumbnailUrl: product.thumbnailUrl ?? null,
+          createdAt: order.createdAt,
+        }]];
+      }
+
+      return [order.id, []];
+    }));
+  }, [paidOrders, photos, videos]);
   const recentActivity = React.useMemo(() => {
     type Activity = { id: string; kind: 'photographer' | 'product' | 'order'; at: number; title: string; meta: string };
 
@@ -362,31 +661,33 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
 
     for (const o of periodOrders) {
-      const at = toTs(o.createdAt);
+      const at = toTs(o.status === 'paid' ? (o.updatedAt || o.createdAt) : o.createdAt);
       if (!at) continue;
-      const label = o.status === 'paid'
-        ? `Novo pagamento confirmado: Pedido #${o.id.slice(0, 8)}`
-        : o.status === 'pending'
-          ? `Novo checkout iniciado: Pedido #${o.id.slice(0, 8)}`
-          : `Atualizacao de pedido: #${o.id.slice(0, 8)}`;
+      const label = ({
+        paid: 'Pagamento confirmado',
+        pending: 'Checkout iniciado',
+        failed: 'Pagamento falhou',
+        cancelled: 'Pedido cancelado',
+        refunded: 'Pedido reembolsado',
+      } as Record<Order['status'], string>)[o.status] ?? 'Atualizacao de pedido';
       activities.push({
         id: `o:${o.id}`,
         kind: 'order',
         at,
-        title: label,
-        meta: `${timeAgo(at)} • Pagamentos`,
+        title: `${label}: Pedido #${o.id.slice(0, 8)}`,
+        meta: `${timeAgo(at)} - ${formatCurrency(Number(o.total || 0))} - ${o.items?.length ?? 0} item(ns)`,
       });
     }
 
     return activities
-      .sort((a, b) => b.at - a.at)
-      .slice(0, 6);
+      .sort((a, b) => b.at - a.at);
   }, [periodPhotographers, periodProducts, periodOrders]);
+  const visibleRecentActivity = showAllRecentActivity ? recentActivity : recentActivity.slice(0, 6);
   const eventReports = React.useMemo(() => {
     const reports = new Map<string, { event: string; items: number; orders: Set<string>; revenue: number }>();
 
     for (const order of paidOrders) {
-      for (const item of order.items ?? []) {
+      for (const item of reportItemsByPaidOrder.get(order.id) ?? []) {
         const event = item.event || 'Geral';
         const current = reports.get(event) ?? { event, items: 0, orders: new Set<string>(), revenue: 0 };
         current.items += 1;
@@ -400,13 +701,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       .map((report) => ({ ...report, ordersCount: report.orders.size }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
-  }, [paidOrders]);
+  }, [paidOrders, reportItemsByPaidOrder]);
   const photographerReports = React.useMemo(() => {
     const photographersById = new Map(photographers.map((photographer) => [photographer.id, photographer]));
     const reports = new Map<string, { photographerId: string; name: string; items: number; orders: Set<string>; revenue: number }>();
 
     for (const order of paidOrders) {
-      for (const item of order.items ?? []) {
+      for (const item of reportItemsByPaidOrder.get(order.id) ?? []) {
         const photographer = photographersById.get(item.vendedorId);
         const current = reports.get(item.vendedorId) ?? {
           photographerId: item.vendedorId,
@@ -426,10 +727,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       .map((report) => ({ ...report, ordersCount: report.orders.size }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
-  }, [paidOrders, photographers]);
-  const storageUsagePercent = periodMetrics.totalProducts === 0
-    ? 0
-    : Math.min(100, Math.round((periodMetrics.publishedProducts / Math.max(periodMetrics.totalProducts, 1)) * 100));
+  }, [paidOrders, photographers, reportItemsByPaidOrder]);
+  const storageUsagePercent = storageStats?.usagePercent ?? 0;
   const paidConversionPercent = periodMetrics.totalOrders === 0
     ? 0
     : Math.round((periodMetrics.paidOrders / periodMetrics.totalOrders) * 1000) / 10;
@@ -449,6 +748,34 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
 
     loadSettings();
+  }, []);
+
+  React.useEffect(() => {
+    async function loadStorageStats() {
+      try {
+        const token = await getCurrentAccessToken();
+        if (!token) return;
+
+        const response = await fetch('/api/media/storage-stats', {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Nao foi possivel consultar storage.');
+        }
+
+        setStorageStats(payload as StorageStats);
+        setStorageStatsError('');
+      } catch (error) {
+        console.error('Erro ao carregar estatisticas do storage:', error);
+        setStorageStatsError(error instanceof Error ? error.message : 'Storage indisponivel.');
+      }
+    }
+
+    loadStorageStats();
   }, []);
 
   React.useEffect(() => {
@@ -650,7 +977,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
       await onRefresh();
       alert(failed > 0
-        ? `Previews gerados: ${completed}. Falhas: ${failed}.`
+        ? `Previews gerados: ${completed}. Falhas: ${failed}. Se falhar para midias externas, confira se a URL publica permite CORS.`
         : `Previews gerados com sucesso: ${completed}.`);
     } finally {
       setIsBackfillingThumbnails(false);
@@ -683,6 +1010,134 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     } finally {
       setIsSavingSettings(false);
     }
+  };
+
+  const handleExportReport = () => {
+    const topEvent = eventReports[0];
+    const topPhotographer = photographerReports[0];
+    const avgTicket = periodMetrics.paidOrders > 0 ? periodMetrics.grossRevenue / periodMetrics.paidOrders : 0;
+    const conversion = periodMetrics.totalOrders === 0 ? 0 : (periodMetrics.paidOrders / periodMetrics.totalOrders) * 100;
+    const generatedAt = new Date().toLocaleString('pt-BR');
+    const eventChart = buildReportBarChart(
+      'Receita por evento',
+      eventReports.map((report) => ({
+        label: report.event,
+        value: report.revenue,
+        meta: `${report.ordersCount} pedido(s) - ${report.items} item(ns)`,
+      })),
+    );
+    const photographerChart = buildReportBarChart(
+      'Receita por fotografo',
+      photographerReports.map((report) => ({
+        label: report.name,
+        value: report.revenue,
+        meta: `${report.ordersCount} pedido(s) - ${report.items} item(ns)`,
+      })),
+    );
+
+    const orderRows = periodOrders.slice(0, 60).map((order) => `
+      <tr>
+        <td>#${htmlEscape(order.id.slice(0, 8))}</td>
+        <td>${htmlEscape(order.status)}</td>
+        <td>${htmlEscape(order.buyerName)}</td>
+        <td>${htmlEscape(formatCurrency(Number(order.total || 0)))}</td>
+        <td>${htmlEscape(new Date(order.createdAt).toLocaleDateString('pt-BR'))}</td>
+        <td>${htmlEscape(order.items?.length ?? 0)}</td>
+      </tr>
+    `).join('');
+    const productRows = periodProducts.slice(0, 60).map((product) => `
+      <tr>
+        <td>${htmlEscape(product.name)}</td>
+        <td>${htmlEscape(product.type)}</td>
+        <td>${htmlEscape(product.status ?? 'published')}</td>
+        <td>${htmlEscape(formatCurrency(Number(product.price || 0)))}</td>
+        <td>${htmlEscape(product.event || 'Geral')}</td>
+        <td>${htmlEscape(new Date(product.createdAt || '').toLocaleDateString('pt-BR'))}</td>
+      </tr>
+    `).join('');
+
+    const reportHtml = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>Relatorio FunPace Admin</title>
+        <style>
+          @page { margin: 22mm 18mm; }
+          body { margin: 0; color: #0f172a; font-family: Arial, Helvetica, sans-serif; background: #ffffff; }
+          .cover { padding: 42px; background: #080d14; color: #ffffff; border-radius: 18px; }
+          .brand { color: #ff4e00; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; }
+          h1 { margin: 12px 0 10px; font-size: 38px; line-height: 1.05; }
+          h2 { margin: 34px 0 14px; font-size: 22px; }
+          h3 { margin: 0 0 8px; font-size: 14px; color: #64748b; text-transform: uppercase; letter-spacing: 1px; }
+          .muted { color: #64748b; font-size: 12px; line-height: 1.5; }
+          .cover .muted { color: #cbd5e1; }
+          .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; }
+          .card { border: 1px solid #e2e8f0; border-radius: 14px; padding: 16px; background: #f8fafc; }
+          .card strong { display: block; font-size: 22px; margin-top: 8px; }
+          .insights { border-left: 4px solid #ff4e00; padding: 12px 16px; background: #fff7ed; border-radius: 10px; }
+          .chart { margin: 16px 0; }
+          table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 11px; }
+          th { text-align: left; background: #0f172a; color: #ffffff; padding: 9px; }
+          td { border-bottom: 1px solid #e2e8f0; padding: 8px; vertical-align: top; }
+          .section { page-break-inside: avoid; margin-top: 28px; }
+          .footer { margin-top: 34px; padding-top: 12px; border-top: 1px solid #e2e8f0; color: #64748b; font-size: 11px; }
+        </style>
+      </head>
+      <body>
+        <div class="cover">
+          <div class="brand">FunPace Media</div>
+          <h1>Relatorio Administrativo</h1>
+          <p class="muted">Periodo analisado: ${htmlEscape(periodLabel)}<br/>Gerado em ${htmlEscape(generatedAt)}</p>
+        </div>
+
+        <div class="grid">
+          <div class="card"><h3>GMV</h3><strong>${htmlEscape(formatCurrency(periodMetrics.grossRevenue))}</strong><p class="muted">Volume bruto pago</p></div>
+          <div class="card"><h3>Fees</h3><strong>${htmlEscape(formatCurrency(periodMetrics.platformFee))}</strong><p class="muted">Taxa configurada: ${htmlEscape(platformFeePercentLabel)}%</p></div>
+          <div class="card"><h3>Pedidos</h3><strong>${htmlEscape(formatReportNumber(periodMetrics.totalOrders))}</strong><p class="muted">${htmlEscape(formatReportPercent(conversion))} conversao paga</p></div>
+          <div class="card"><h3>Ticket medio</h3><strong>${htmlEscape(formatCurrency(avgTicket))}</strong><p class="muted">Pedidos pagos</p></div>
+        </div>
+
+        <div class="section insights">
+          <h2>Leitura executiva</h2>
+          <p>
+            O periodo registrou <strong>${htmlEscape(formatReportNumber(periodMetrics.paidOrders))}</strong> pedido(s) pago(s),
+            <strong>${htmlEscape(formatReportNumber(periodMetrics.pendingOrders))}</strong> pendente(s) e
+            <strong>${htmlEscape(formatReportNumber(periodMetrics.totalProducts))}</strong> produto(s) publicados/criados no intervalo.
+            ${topEvent ? `O evento com maior receita foi <strong>${htmlEscape(topEvent.event)}</strong>, com ${htmlEscape(formatCurrency(topEvent.revenue))}.` : 'Nao houve receita por evento no periodo.'}
+            ${topPhotographer ? `O fotografo com maior receita foi <strong>${htmlEscape(topPhotographer.name)}</strong>, com ${htmlEscape(formatCurrency(topPhotographer.revenue))}.` : ''}
+          </p>
+        </div>
+
+        <div class="section chart">${eventChart}</div>
+        <div class="section chart">${photographerChart}</div>
+
+        <div class="section">
+          <h2>Pedidos do periodo</h2>
+          <p class="muted">Amostra com ate 60 registros mais recentes do periodo.</p>
+          <table>
+            <thead><tr><th>ID</th><th>Status</th><th>Comprador</th><th>Total</th><th>Data</th><th>Itens</th></tr></thead>
+            <tbody>${orderRows || '<tr><td colspan="6">Sem pedidos no periodo.</td></tr>'}</tbody>
+          </table>
+        </div>
+
+        <div class="section">
+          <h2>Produtos do periodo</h2>
+          <table>
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Status</th><th>Preco</th><th>Evento</th><th>Data</th></tr></thead>
+            <tbody>${productRows || '<tr><td colspan="6">Sem produtos no periodo.</td></tr>'}</tbody>
+          </table>
+        </div>
+
+        <div class="footer">
+          Relatorio gerado automaticamente pelo Painel Administrativo FunPace. Dados sujeitos ao periodo e filtros carregados no painel.
+        </div>
+      </body>
+      </html>
+    `;
+
+    const fileName = `funpace-relatorio-admin-${formatExportDate(periodRange.start)}-${formatExportDate(periodRange.end)}.doc`;
+    downloadTextFile(fileName, `\uFEFF${reportHtml}`, 'application/msword;charset=utf-8');
   };
 
   return (
@@ -770,8 +1225,50 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             </div>
             <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center gap-4">
               <div className="relative">
-                <Bell className="w-5 h-5 text-gray-300" />
-                <span className="absolute -right-2 -top-2 h-5 min-w-5 px-1 rounded-full bg-brutal-accent text-white font-sans text-[10px] font-black flex items-center justify-center">3</span>
+                <button
+                  type="button"
+                  onClick={() => setShowNotifications((current) => !current)}
+                  className="relative h-9 w-9 flex items-center justify-center border border-transparent hover:border-white/15 hover:bg-white/5 transition-colors cursor-pointer"
+                  aria-label="Abrir notificacoes"
+                >
+                  <Bell className="w-5 h-5 text-gray-300" />
+                  {adminNotifications.length > 0 && (
+                    <span className="absolute -right-2 -top-2 h-5 min-w-5 px-1 rounded-full bg-brutal-accent text-white font-sans text-[10px] font-black flex items-center justify-center">
+                      {adminNotifications.length > 9 ? '9+' : adminNotifications.length}
+                    </span>
+                  )}
+                </button>
+                {showNotifications && (
+                  <div className="absolute right-0 top-12 z-50 w-[320px] max-w-[calc(100vw-2rem)] bg-[#0d131c] border border-white/15 shadow-2xl">
+                    <div className="p-4 border-b border-white/10">
+                      <p className="font-sans font-black text-sm uppercase text-white">Notificacoes</p>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">
+                        {adminNotifications.length} item(ns) requerem atencao
+                      </p>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto">
+                      {adminNotifications.length === 0 ? (
+                        <div className="p-5 text-center">
+                          <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-3" />
+                          <p className="font-mono text-[10px] uppercase text-gray-400">Nenhuma pendencia no momento.</p>
+                        </div>
+                      ) : adminNotifications.map((notification) => (
+                        <button
+                          key={notification.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveTab(notification.tab);
+                            setShowNotifications(false);
+                          }}
+                          className="w-full p-4 text-left border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors cursor-pointer"
+                        >
+                          <p className="font-sans font-black text-sm text-white uppercase">{notification.title}</p>
+                          <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">{notification.detail}</p>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
               <div className="h-7 w-px bg-white/10" />
               <div>
@@ -780,9 +1277,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               </div>
               <TrendingUp className="w-5 h-5 text-green-400" />
             </div>
-            <button className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-white hover:text-brutal-accent transition-colors">
+            <button
+              type="button"
+              onClick={handleExportReport}
+              className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer"
+            >
               <Download className="w-4 h-4" />
-              Exportar relatorio
+              Exportar relatorio Word
             </button>
           </div>
         </header>
@@ -833,30 +1334,42 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                <AdminStatCard 
+                <AdminStatCardReal 
                   label="GMV (Volume Bruto)" 
                   value={`R$ ${periodMetrics.grossRevenue.toFixed(2)}`} 
                   icon={<DollarSign />} 
                   sub="Acumulado no periodo"
+                  trend={adminStatTrends.grossRevenue}
+                  previousValue={previousPeriodMetrics.grossRevenue}
+                  bars={adminStatSparklines.grossRevenue}
                   accent
                 />
-                <AdminStatCard 
+                <AdminStatCardReal 
                   label="Receita Líquida (Fees)" 
                   value={`R$ ${periodMetrics.platformFee.toFixed(2)}`} 
                   icon={<TrendingUp />} 
-                  sub="Margem de 30%"
+                  sub={`Margem de ${platformFeePercentLabel}%`}
+                  trend={adminStatTrends.platformFee}
+                  previousValue={previousPeriodMetrics.platformFee}
+                  bars={adminStatSparklines.platformFee}
                 />
-                <AdminStatCard 
+                <AdminStatCardReal 
                   label="Total Fotógrafos" 
-                  value={periodPhotographers.length} 
+                  value={activePhotographers.length} 
                   icon={<Users />} 
                   sub={`${pendingPhotographers.length} pendentes no total`}
+                  trend={adminStatTrends.photographers}
+                  previousValue={activePhotographers.length}
+                  bars={adminStatSparklines.photographers}
                 />
-                <AdminStatCard 
+                <AdminStatCardReal 
                   label="Total Vídeos" 
                   value={periodMetrics.videoCount} 
                   icon={<Camera />} 
                   sub="Replays em 4k"
+                  trend={adminStatTrends.videos}
+                  previousValue={previousPeriodMetrics.videoCount}
+                  bars={adminStatSparklines.videos}
                 />
               </div>
 
@@ -864,15 +1377,23 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="bg-[#0d131c] p-6 border border-white/10">
                   <h3 className="font-sans font-black text-base mb-6 uppercase flex items-center justify-between">
                     Atividade Recente
-                    <span className="font-mono text-[10px] text-gray-500 uppercase font-normal">Ver todas</span>
+                    {recentActivity.length > 6 && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllRecentActivity((current) => !current)}
+                        className="font-mono text-[10px] text-gray-500 uppercase font-normal hover:text-white transition-colors cursor-pointer"
+                      >
+                        {showAllRecentActivity ? 'Ver menos' : 'Ver todas'}
+                      </button>
+                    )}
                   </h3>
                   <div className="space-y-6">
-                    {recentActivity.length === 0 ? (
+                    {visibleRecentActivity.length === 0 ? (
                       <div className="p-6 bg-white/5 border border-white/10 text-center">
                         <p className="font-mono text-[10px] text-gray-400 uppercase">Nenhuma atividade recente encontrada.</p>
                       </div>
                     ) : (
-                      recentActivity.map((activity) => (
+                      visibleRecentActivity.map((activity) => (
                         <div key={activity.id} className="flex items-center gap-4 pb-5 border-b border-white/10 last:border-0 last:pb-0">
                           <div className={`p-3 border rounded-md ${
                             activity.kind === 'product' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
@@ -900,9 +1421,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <h3 className="font-sans font-black text-base uppercase">Manutencao de Midias</h3>
                   <div className="bg-[#080d14] border border-dashed border-white/20 p-5 flex flex-col md:items-center justify-between gap-4 text-center">
                     <div>
-                      <p className="font-sans font-bold text-lg uppercase">Previews antigos</p>
+                      <p className="font-sans font-bold text-lg uppercase">
+                        {productsMissingThumbnails.length > 0 ? 'Previews pendentes' : 'Previews em dia'}
+                      </p>
                       <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">
-                        {productsMissingThumbnails.length} produto(s) sem thumbnail dedicado.
+                        {productsMissingThumbnails.length > 0
+                          ? `${productsMissingThumbnails.length} produto(s) ativo(s) sem thumbnail dedicado.`
+                          : 'Todos os produtos ativos ja possuem thumbnail ou nao precisam de reparo.'}
                       </p>
                       {thumbnailBackfillProgress && (
                         <p className="font-mono text-[10px] uppercase text-brutal-accent mt-2">
@@ -919,7 +1444,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </button>
                   </div>
                   <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
-                    Processa ate 25 itens por vez. Reexecute ate zerar a fila.
+                    Repara produtos antigos sem preview. Baixa a midia, gera thumbnail e salva no bucket. Processa ate 25 itens por vez.
                   </p>
                 </div>
 
@@ -929,11 +1454,16 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <div className="space-y-2">
                       <div className="flex justify-between font-mono text-[10px] uppercase">
                         <span>Ocupação do Storage</span>
-                        <span>{storageUsagePercent}%</span>
+                        <span>{storageStats ? `${storageUsagePercent}%` : '--'}</span>
                       </div>
                       <div className="h-3 bg-white/10 overflow-hidden rounded-full">
                         <div className="h-full bg-brutal-accent" style={{ width: `${storageUsagePercent}%` }} />
                       </div>
+                      <p className="font-mono text-[9px] uppercase text-gray-500">
+                        {storageStats
+                          ? `${formatBytes(storageStats.usedBytes)} usados de ${formatBytes(storageStats.quotaBytes)} - ${storageStats.totalFiles} arquivo(s)`
+                          : storageStatsError || 'Consultando bucket...'}
+                      </p>
                     </div>
                     <div className="space-y-2">
                       <div className="flex justify-between font-mono text-[10px] uppercase">
@@ -946,8 +1476,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-4">
                       <div className="p-4 bg-white/5 border border-white/10 text-center text-brutal-accent">
-                         <p className="font-display text-3xl">{periodMetrics.totalProducts}</p>
-                         <p className="font-mono text-[8px] uppercase">Produtos</p>
+                         <p className="font-display text-3xl">{storageStats?.totalFiles ?? periodMetrics.totalProducts}</p>
+                         <p className="font-mono text-[8px] uppercase">Arquivos</p>
                       </div>
                       <div className="p-4 bg-white/5 border border-white/10 text-center text-green-500">
                          <p className="font-display text-3xl">{periodMetrics.totalOrders}</p>
@@ -1075,7 +1605,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <tr>
                       <th className="p-6">Fotógrafo</th>
                       <th className="p-6">Status</th>
-                      <th className="p-6 text-center">Fotos</th>
+                      <th className="p-6 text-center">Midias</th>
                       <th className="p-6 text-center">Receita Gerada</th>
                       <th className="p-6 text-center">Score</th>
                       <th className="p-6"></th>
@@ -1619,94 +2149,124 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       {/* Edit Photographer Modal */}
       <AnimatePresence>
         {editingPhotographer && (
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 md:p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setEditingPhotographer(null)}
-              className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/85 backdrop-blur-md"
             />
             <motion.div
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.96, y: 18 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg bg-brutal-white brutal-border brutal-shadow-heavy p-8 md:p-12"
+              exit={{ scale: 0.96, y: 18 }}
+              className="relative w-full max-w-3xl max-h-[92vh] overflow-y-auto bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.6)] text-white"
             >
+              <div className="h-1.5 bg-brutal-accent" />
               <button
                 type="button"
                 onClick={() => setEditingPhotographer(null)}
-                className="absolute top-6 right-6 p-2 hover:bg-gray-100 transition-colors cursor-pointer"
+                className="absolute top-5 right-5 p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar modal"
               >
                 <X className="w-6 h-6" />
               </button>
 
-              <div className="mb-8">
-                <h3 className="font-display text-4xl uppercase tracking-tighter mb-2">Editar Fotografo</h3>
-                <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">{editingPhotographer.email}</p>
+              <div className="p-7 md:p-9 border-b border-white/10">
+                <div className="flex flex-col md:flex-row md:items-center gap-5 pr-10">
+                  <div className="w-20 h-20 bg-white/10 border border-white/15 overflow-hidden flex items-center justify-center shrink-0">
+                    {editForm.avatar ? (
+                      <img src={editForm.avatar} alt={editForm.name || editingPhotographer.name} className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="font-sans font-black text-xl text-white">
+                        {(editForm.name || editingPhotographer.name || 'FT').slice(0, 2).toUpperCase()}
+                      </span>
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-2">Perfil operacional</p>
+                    <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal">Editar Fotografo</h3>
+                    <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate mt-2">{editingPhotographer.email}</p>
+                    <p className="font-mono text-[9px] text-gray-600 uppercase truncate mt-1">ID {editingPhotographer.id}</p>
+                  </div>
+                </div>
               </div>
 
-              <form onSubmit={handleSavePhotographer} className="space-y-6">
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome</label>
-                  <input
-                    required
-                    type="text"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm((current) => ({ ...current, name: e.target.value }))}
-                    className="w-full h-14 px-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none"
-                  />
+              <form onSubmit={handleSavePhotographer} className="p-7 md:p-9 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome exibido</label>
+                    <input
+                      required
+                      type="text"
+                      value={editForm.name}
+                      onChange={(e) => setEditForm((current) => ({ ...current, name: e.target.value }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                      placeholder="Nome do fotografo"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">CPF</label>
+                    <input
+                      type="text"
+                      value={editForm.cpf}
+                      onChange={(e) => setEditForm((current) => ({ ...current, cpf: formatCpf(e.target.value) }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                      placeholder="000.000.000-00"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Telefone</label>
+                    <input
+                      type="text"
+                      value={editForm.phone}
+                      onChange={(e) => setEditForm((current) => ({ ...current, phone: e.target.value }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                      placeholder="(00) 00000-0000"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Avatar URL</label>
+                    <input
+                      type="url"
+                      value={editForm.avatar}
+                      onChange={(e) => setEditForm((current) => ({ ...current, avatar: e.target.value }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                      placeholder="https://..."
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Bio</label>
+                    <textarea
+                      value={editForm.bio}
+                      onChange={(e) => setEditForm((current) => ({ ...current, bio: e.target.value }))}
+                      className="w-full h-28 p-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors resize-none"
+                      placeholder="Resumo do fotografo, especialidade ou observacoes internas."
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">CPF</label>
-                  <input
-                    type="text"
-                    value={editForm.cpf}
-                    onChange={(e) => setEditForm((current) => ({ ...current, cpf: formatCpf(e.target.value) }))}
-                    className="w-full h-14 px-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none"
-                    placeholder="000.000.000-00"
-                  />
+                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditingPhotographer(null)}
+                    className="h-13 sm:h-14 flex-1 border border-white/15 text-gray-300 font-mono text-xs uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={isUpdatingPhotographer}
+                    type="submit"
+                    className="h-13 sm:h-14 flex-1 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isUpdatingPhotographer ? 'Salvando...' : 'Salvar alteracoes'}
+                  </button>
                 </div>
-
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Telefone</label>
-                  <input
-                    type="text"
-                    value={editForm.phone}
-                    onChange={(e) => setEditForm((current) => ({ ...current, phone: e.target.value }))}
-                    className="w-full h-14 px-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none"
-                    placeholder="(00) 00000-0000"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Avatar URL</label>
-                  <input
-                    type="url"
-                    value={editForm.avatar}
-                    onChange={(e) => setEditForm((current) => ({ ...current, avatar: e.target.value }))}
-                    className="w-full h-14 px-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none"
-                    placeholder="https://..."
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Bio</label>
-                  <textarea
-                    value={editForm.bio}
-                    onChange={(e) => setEditForm((current) => ({ ...current, bio: e.target.value }))}
-                    className="w-full h-28 p-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none resize-none"
-                  />
-                </div>
-
-                <button
-                  disabled={isUpdatingPhotographer}
-                  type="submit"
-                  className="w-full h-16 bg-brutal-black text-white brutal-border font-display text-xl uppercase tracking-widest hover:bg-brutal-accent transition-all cursor-pointer disabled:bg-gray-400"
-                >
-                  {isUpdatingPhotographer ? 'Salvando...' : 'Salvar'}
-                </button>
               </form>
             </motion.div>
           </div>
@@ -1764,7 +2324,29 @@ function ReportCard({ title, emptyLabel, rows }: { title: string; emptyLabel: st
   );
 }
 
-function AdminStatCard({ label, value, icon, sub, accent = false }: { label: string, value: string | number, icon: React.ReactNode, sub: string, accent?: boolean }) {
+function AdminStatCardReal({
+  label,
+  value,
+  icon,
+  sub,
+  trend,
+  previousValue,
+  bars,
+  accent = false,
+}: {
+  label: string;
+  value: string | number;
+  icon: React.ReactNode;
+  sub: string;
+  trend: string;
+  previousValue: number;
+  bars: number[];
+  accent?: boolean;
+}) {
+  const trendValue = Number(trend.replace('%', '').replace('+', '').replace(',', '.'));
+  const trendColor = trendValue > 0 ? 'text-green-400' : trendValue < 0 ? 'text-red-300' : 'text-gray-400';
+  const trendIcon = trendValue > 0 ? '↗' : trendValue < 0 ? '↘' : '→';
+
   return (
     <div className={`p-5 border border-white/10 bg-gradient-to-br from-[#121923] to-[#0d131c] transition-all hover:-translate-y-1 hover:border-white/20 ${
       accent ? 'text-white' : 'text-white'
@@ -1773,13 +2355,18 @@ function AdminStatCard({ label, value, icon, sub, accent = false }: { label: str
         <div className={`p-3 rounded-md ${accent ? 'bg-brutal-accent' : 'bg-white/10'}`}>
           {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-6 h-6 text-white' })}
         </div>
-        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-green-400">↗ 8,3%</span>
+        <span
+          className={`font-mono text-[10px] font-bold uppercase tracking-widest ${trendColor}`}
+          title={`Periodo anterior: ${previousValue}`}
+        >
+          {trendIcon} {trend}
+        </span>
       </div>
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] mb-2 text-gray-400">{label}</p>
       <p className="font-sans font-black text-3xl tracking-normal text-white">{value}</p>
       <p className="font-mono text-[10px] mt-4 uppercase leading-relaxed text-gray-400">{sub}</p>
       <div className="mt-6 flex items-end gap-1 h-9 opacity-80">
-        {[18, 24, 16, 28, 36, 24, 34, 20, 26, 38, 32, 42].map((height, index) => (
+        {bars.map((height, index) => (
           <span
             key={index}
             className={`flex-1 ${accent ? 'bg-brutal-accent' : 'bg-blue-500'}`}
@@ -1790,7 +2377,3 @@ function AdminStatCard({ label, value, icon, sub, accent = false }: { label: str
     </div>
   );
 }
-
-
-
-

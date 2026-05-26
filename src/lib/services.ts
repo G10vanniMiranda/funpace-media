@@ -544,10 +544,10 @@ export const photographerDashboardService = {
 
     const orderIds = Array.from(new Set(saleItems.map((item) => item.orderId).filter(Boolean)));
     const orderParams = new URLSearchParams({
-      select: 'id,status,createdAt',
+      select: 'id,status,createdAt,updatedAt',
       id: `in.(${orderIds.join(',')})`,
     });
-    const relatedOrders = await supabaseRest.get<SupabaseRow<Pick<Order, 'id' | 'status' | 'createdAt'>>[]>(
+    const relatedOrders = await supabaseRest.get<SupabaseRow<Pick<Order, 'id' | 'status' | 'createdAt' | 'updatedAt'>>[]>(
       `/rest/v1/orders?${orderParams.toString()}`,
       true,
     );
@@ -566,7 +566,7 @@ export const photographerDashboardService = {
         const netAmount = Number(item.price) * (1 - feePercent / 100);
         return {
           ...item,
-          orderCreatedAt: order?.createdAt ?? item.createdAt,
+          orderCreatedAt: order?.updatedAt ?? order?.createdAt ?? item.createdAt,
           orderStatus: order?.status ?? 'paid',
           netAmount,
         } satisfies PhotographerSale;
@@ -649,7 +649,7 @@ export const photographerDashboardService = {
         availableBalance,
         monthlyGoal: 5000,
       },
-      recentSales: paidSales.slice(0, 5),
+        recentSales: paidSales,
       productPerformance,
     };
   },

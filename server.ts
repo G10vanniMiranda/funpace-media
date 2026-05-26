@@ -269,6 +269,54 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   };
 }
 
+function getStorageQuotaBytes() {
+  return Number(process.env.BUCKET_STORAGE_QUOTA_BYTES || 250 * 1024 * 1024 * 1024);
+}
+
+async function getExternalBucketStorageStats() {
+  const { baseUrl, token, bucket } = getExternalBucketConfig();
+  const response = await fetch(`${baseUrl}/files?bucket=${encodeURIComponent(bucket)}`, {
+    headers: {
+      "X-API-Token": token,
+    },
+  });
+  const raw = await response.text();
+  let payload: any = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { raw };
+  }
+
+  if (!response.ok) {
+    const providerMessage = payload?.error || payload?.message || payload?.raw || raw;
+    throw new Error(cleanProviderErrorMessage(String(providerMessage || ""), `Consulta do bucket falhou com status ${response.status}.`));
+  }
+
+  const files = Array.isArray(payload?.files) ? payload.files : [];
+  const activeFiles = files.filter((file: any) => !file?.deleted_at && file?.status !== "deleted" && file?.storage_exists !== false);
+  const usedBytes = activeFiles.reduce((sum: number, file: any) => sum + Number(file?.size_bytes || file?.size || 0), 0);
+  const quotaBytes = getStorageQuotaBytes();
+  const byType = activeFiles.reduce((acc: Record<string, { count: number; bytes: number }>, file: any) => {
+    const key = String(file?.file_type || file?.mime_type || file?.extension || "outros").toLowerCase();
+    const current = acc[key] ?? { count: 0, bytes: 0 };
+    current.count += 1;
+    current.bytes += Number(file?.size_bytes || file?.size || 0);
+    acc[key] = current;
+    return acc;
+  }, {});
+
+  return {
+    bucket,
+    usedBytes,
+    quotaBytes,
+    usagePercent: quotaBytes > 0 ? Math.min(100, Math.round((usedBytes / quotaBytes) * 1000) / 10) : 0,
+    totalFiles: activeFiles.length,
+    byType,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
 function isUuid(value: unknown) {
   return typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
@@ -1246,6 +1294,26 @@ app.post("/api/media/upload", express.raw({
   } catch (error: any) {
     console.error("Erro ao enviar midia:", error);
     return res.status(500).json({ error: error?.message || "Nao foi possivel enviar a midia." });
+  }
+});
+
+app.get("/api/media/storage-stats", async (req, res) => {
+  try {
+    const adminUser = await getAuthenticatedAdminUser(req);
+    if (!adminUser?.id) {
+      return res.status(401).json({ error: "Acesso admin necessario para consultar storage." });
+    }
+
+    const stats = usesExternalBucket()
+      ? await getExternalBucketStorageStats()
+      : (() => {
+          throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para consultar storage.");
+        })();
+
+    return res.json(stats);
+  } catch (error: any) {
+    console.error("Erro ao consultar storage:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel consultar storage." });
   }
 });
 

@@ -55,6 +55,14 @@ type ProductEditForm = {
 
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
+type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'custom';
+
+const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: string }> = [
+  { key: 'today', label: 'Hoje' },
+  { key: 'week', label: 'Esta semana' },
+  { key: 'month', label: 'Este mes' },
+  { key: 'custom', label: 'Personalizado' },
+];
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
@@ -89,6 +97,72 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function startOfDay(date: Date) {
+  const result = new Date(date);
+  result.setHours(0, 0, 0, 0);
+  return result;
+}
+
+function endOfDay(date: Date) {
+  const result = new Date(date);
+  result.setHours(23, 59, 59, 999);
+  return result;
+}
+
+function formatDateInput(date: Date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInput(value: string, fallback: Date) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return fallback;
+
+  const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+  return Number.isNaN(parsed.getTime()) ? fallback : parsed;
+}
+
+function getPhotographerPeriodRange(period: PhotographerPeriodKey, customStart: string, customEnd: string) {
+  const now = new Date();
+  let start = startOfDay(now);
+  let end = endOfDay(now);
+
+  if (period === 'week') {
+    const day = now.getDay();
+    const mondayOffset = day === 0 ? -6 : 1 - day;
+    start = startOfDay(new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset));
+    end = endOfDay(new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6));
+  }
+
+  if (period === 'month') {
+    start = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
+    end = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  }
+
+  if (period === 'custom') {
+    start = startOfDay(parseDateInput(customStart, now));
+    end = endOfDay(parseDateInput(customEnd, start));
+    if (start.getTime() > end.getTime()) {
+      [start, end] = [startOfDay(end), endOfDay(start)];
+    }
+  }
+
+  return { start, end };
+}
+
+function isWithinPeriod(value: string | undefined, start: Date, end: Date) {
+  if (!value) return false;
+  const time = Date.parse(value);
+  return Number.isFinite(time) && time >= start.getTime() && time <= end.getTime();
+}
+
+function formatPeriodLabel(start: Date, end: Date) {
+  const formatter = new Intl.DateTimeFormat('pt-BR');
+  return `${formatter.format(start)} - ${formatter.format(end)}`;
+}
+
 function formatSaleDate(value: string) {
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
@@ -96,6 +170,29 @@ function formatSaleDate(value: string) {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(value));
+}
+
+function SaleThumbnail({ sale }: { sale: PhotographerSale }) {
+  const [failed, setFailed] = React.useState(false);
+  const source = sale.thumbnailUrl || sale.url;
+
+  if (!source || failed) {
+    return (
+      <div className="w-full h-full flex flex-col items-center justify-center bg-[#080d14] text-gray-500">
+        {sale.type === 'VIDEO' ? <VideoIcon className="w-5 h-5 mb-1" /> : <ImageIcon className="w-5 h-5 mb-1" />}
+        <span className="font-mono text-[8px] uppercase">{sale.type}</span>
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={source}
+      alt={sale.name}
+      className="w-full h-full object-cover"
+      onError={() => setFailed(true)}
+    />
+  );
 }
 
 async function generateVideoThumbnail(file: File): Promise<File | null> {
@@ -226,6 +323,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [productSearch, setProductSearch] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<ProductTypeFilter>('all');
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('all');
+  const [selectedPeriod, setSelectedPeriod] = useState<PhotographerPeriodKey>('week');
+  const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
+  const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
+  const [showNotifications, setShowNotifications] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<ProductEditForm>({
     name: '',
@@ -275,13 +376,126 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       drafts: activeProducts.filter((product) => (product.status ?? 'published') === 'draft').length,
     };
   }, [products]);
-  const pendingWithdrawalTotal = withdrawals
+  const periodRange = React.useMemo(
+    () => getPhotographerPeriodRange(selectedPeriod, customPeriodStart, customPeriodEnd),
+    [selectedPeriod, customPeriodStart, customPeriodEnd],
+  );
+  const periodLabel = React.useMemo(
+    () => formatPeriodLabel(periodRange.start, periodRange.end),
+    [periodRange],
+  );
+  const periodProducts = React.useMemo(
+    () => products.filter((product) => isWithinPeriod(product.createdAt, periodRange.start, periodRange.end)),
+    [products, periodRange],
+  );
+  const periodSales = React.useMemo(
+    () => recentSales.filter((sale) => isWithinPeriod(sale.orderCreatedAt, periodRange.start, periodRange.end)),
+    [recentSales, periodRange],
+  );
+  const periodWithdrawals = React.useMemo(
+    () => withdrawals.filter((withdrawal) => isWithinPeriod(withdrawal.createdAt, periodRange.start, periodRange.end)),
+    [withdrawals, periodRange],
+  );
+  const periodMetrics = React.useMemo<PhotographerDashboardMetrics>(() => {
+    const releaseWindowMs = 7 * 24 * 60 * 60 * 1000;
+    const totalEarnings = periodSales.reduce((total, sale) => total + Number(sale.netAmount || 0), 0);
+    const pendingEarnings = periodSales
+      .filter((sale) => Date.now() - new Date(sale.orderCreatedAt).getTime() < releaseWindowMs)
+      .reduce((total, sale) => total + Number(sale.netAmount || 0), 0);
+
+    return {
+      ...dashboardMetrics,
+      totalEarnings,
+      pendingEarnings,
+      salesCount: periodSales.length,
+      todaySalesCount: periodSales.filter((sale) => isWithinPeriod(sale.orderCreatedAt, startOfDay(new Date()), endOfDay(new Date()))).length,
+      publishedMediaCount: periodProducts.filter((product) => (product.status ?? 'published') === 'published').length,
+      photoCount: periodProducts.filter((product) => product.type === 'IMG').length,
+      videoCount: periodProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+      monthlyEarnings: periodSales
+        .filter((sale) => sale.orderCreatedAt.slice(0, 7) === new Date().toISOString().slice(0, 7))
+        .reduce((total, sale) => total + Number(sale.netAmount || 0), 0),
+    };
+  }, [dashboardMetrics, periodProducts, periodSales]);
+  const periodProductPerformance = React.useMemo<PhotographerProductPerformance[]>(() => {
+    const downloadsByProduct = new Map(productPerformance.map((item) => [item.productId, item.downloads]));
+    const performanceByProduct = new Map<string, PhotographerProductPerformance>();
+
+    for (const sale of periodSales) {
+      const current = performanceByProduct.get(sale.productId) ?? {
+        productId: sale.productId,
+        name: sale.name,
+        type: sale.type,
+        event: sale.event,
+        bib: sale.bib,
+        thumbnailUrl: sale.thumbnailUrl,
+        salesCount: 0,
+        downloads: downloadsByProduct.get(sale.productId) ?? 0,
+        grossRevenue: 0,
+        netRevenue: 0,
+      };
+      current.salesCount += 1;
+      current.grossRevenue += Number(sale.price || 0);
+      current.netRevenue += Number(sale.netAmount || 0);
+      performanceByProduct.set(sale.productId, current);
+    }
+
+    return Array.from(performanceByProduct.values())
+      .sort((a, b) => b.netRevenue - a.netRevenue || b.downloads - a.downloads)
+      .slice(0, 8);
+  }, [periodSales, productPerformance]);
+  const photographerNotifications = React.useMemo(() => {
+    const draftCount = products.filter((product) => (product.status ?? 'published') === 'draft').length;
+    const openWithdrawalCount = withdrawals.filter((withdrawal) => (
+      withdrawal.status === 'pending' || withdrawal.status === 'approved'
+    )).length;
+    const notifications: Array<{ id: string; title: string; detail: string; tab: typeof activeTab }> = [];
+
+    if (periodSales.length > 0) {
+      notifications.push({
+        id: 'period-sales',
+        title: `${periodSales.length} venda(s) no periodo`,
+        detail: `${formatCurrency(periodMetrics.totalEarnings)} liquidos confirmados`,
+        tab: 'earnings',
+      });
+    }
+
+    if (openWithdrawalCount > 0) {
+      notifications.push({
+        id: 'open-withdrawals',
+        title: `${openWithdrawalCount} saque(s) em processamento`,
+        detail: 'Acompanhe o status dos repasses',
+        tab: 'earnings',
+      });
+    }
+
+    if (draftCount > 0) {
+      notifications.push({
+        id: 'draft-products',
+        title: `${draftCount} rascunho(s) no catalogo`,
+        detail: 'Revise e publique quando estiver pronto',
+        tab: 'products',
+      });
+    }
+
+    if (dashboardMetrics.availableBalance > 0) {
+      notifications.push({
+        id: 'available-balance',
+        title: 'Saldo disponivel para saque',
+        detail: formatCurrency(dashboardMetrics.availableBalance),
+        tab: 'earnings',
+      });
+    }
+
+    return notifications;
+  }, [dashboardMetrics.availableBalance, periodMetrics.totalEarnings, periodSales.length, products, withdrawals]);
+  const pendingWithdrawalTotal = periodWithdrawals
     .filter((withdrawal) => withdrawal.status === 'pending' || withdrawal.status === 'approved')
     .reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
-  const paidWithdrawalTotal = withdrawals
+  const paidWithdrawalTotal = periodWithdrawals
     .filter((withdrawal) => withdrawal.status === 'paid')
     .reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
-  const monthlyGoalPercent = Math.min(100, Math.round((dashboardMetrics.monthlyEarnings / dashboardMetrics.monthlyGoal) * 100));
+  const monthlyGoalPercent = Math.min(100, Math.round((periodMetrics.monthlyEarnings / periodMetrics.monthlyGoal) * 100));
 
   React.useEffect(() => {
     async function loadPhotographerContent() {
@@ -643,13 +857,55 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-[280px]">
               <div className="flex items-center gap-3 min-w-0">
                 <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="font-sans text-sm text-gray-200 truncate">20/05/2024 - 26/05/2024</span>
+                <span className="font-sans text-sm text-gray-200 truncate">{periodLabel}</span>
               </div>
               <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
             </div>
-            <div className="h-12 w-12 bg-[#0d131c] border border-white/15 flex items-center justify-center relative">
-              <Bell className="w-5 h-5 text-gray-300" />
-              <span className="absolute -right-2 -top-2 h-5 min-w-5 px-1 rounded-full bg-brutal-accent text-white font-sans text-[10px] font-black flex items-center justify-center">3</span>
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setShowNotifications((current) => !current)}
+                className="h-12 w-12 bg-[#0d131c] border border-white/15 flex items-center justify-center relative hover:border-white/30 transition-colors cursor-pointer"
+                aria-label="Abrir notificacoes"
+              >
+                <Bell className="w-5 h-5 text-gray-300" />
+                {photographerNotifications.length > 0 && (
+                  <span className="absolute -right-2 -top-2 h-5 min-w-5 px-1 rounded-full bg-brutal-accent text-white font-sans text-[10px] font-black flex items-center justify-center">
+                    {photographerNotifications.length > 9 ? '9+' : photographerNotifications.length}
+                  </span>
+                )}
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 top-14 z-50 w-[320px] max-w-[calc(100vw-2rem)] bg-[#0d131c] border border-white/15 shadow-2xl">
+                  <div className="p-4 border-b border-white/10">
+                    <p className="font-sans font-black text-sm uppercase text-white">Notificacoes</p>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">
+                      {photographerNotifications.length} item(ns) do painel
+                    </p>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto">
+                    {photographerNotifications.length === 0 ? (
+                      <div className="p-5 text-center">
+                        <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-3" />
+                        <p className="font-mono text-[10px] uppercase text-gray-400">Nenhuma notificacao no momento.</p>
+                      </div>
+                    ) : photographerNotifications.map((notification) => (
+                      <button
+                        key={notification.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveTab(notification.tab);
+                          setShowNotifications(false);
+                        }}
+                        className="w-full p-4 text-left border-b border-white/10 last:border-b-0 hover:bg-white/5 transition-colors cursor-pointer"
+                      >
+                        <p className="font-sans font-black text-sm text-white uppercase">{notification.title}</p>
+                        <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">{notification.detail}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
             <button
               onClick={() => setShowUploadModal(true)}
@@ -672,11 +928,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             >
               <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-wrap items-center gap-3">
                 <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mr-2">Periodo</span>
-                {['Hoje', 'Esta semana', 'Este mes', 'Personalizado'].map((label) => (
+                {PHOTOGRAPHER_PERIOD_OPTIONS.map(({ key, label }) => (
                   <button
-                    key={label}
+                    key={key}
+                    type="button"
+                    onClick={() => setSelectedPeriod(key)}
                     className={`h-10 px-4 border font-sans text-xs font-bold transition-colors ${
-                      label === 'Esta semana'
+                      selectedPeriod === key
                         ? 'bg-brutal-accent/20 border-brutal-accent text-white'
                         : 'bg-white/5 border-white/10 text-gray-300 hover:border-white/30'
                     }`}
@@ -684,32 +942,50 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     {label}
                   </button>
                 ))}
+                {selectedPeriod === 'custom' && (
+                  <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                    <input
+                      type="date"
+                      value={customPeriodStart}
+                      onChange={(event) => setCustomPeriodStart(event.target.value)}
+                      className="h-10 px-3 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs outline-none focus:border-brutal-accent"
+                      aria-label="Data inicial"
+                    />
+                    <input
+                      type="date"
+                      value={customPeriodEnd}
+                      onChange={(event) => setCustomPeriodEnd(event.target.value)}
+                      className="h-10 px-3 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs outline-none focus:border-brutal-accent"
+                      aria-label="Data final"
+                    />
+                  </div>
+                )}
               </div>
 
               {/* Quick Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                 <StatCard 
                   label="Ganhos Totais" 
-                  value={formatCurrency(dashboardMetrics.totalEarnings)} 
+                  value={formatCurrency(periodMetrics.totalEarnings)} 
                   icon={<DollarSign />} 
-                  trend={`${dashboardMetrics.platformFeePercent}% taxa plataforma`}
+                  trend={`${periodMetrics.platformFeePercent}% taxa plataforma`}
                   accent 
                 />
                 <StatCard 
                   label="Vendas Realizadas" 
-                  value={dashboardMetrics.salesCount} 
+                  value={periodMetrics.salesCount} 
                   icon={<TrendingUp />} 
-                  trend={`+${dashboardMetrics.todaySalesCount} hoje`}
+                  trend={`+${periodMetrics.todaySalesCount} hoje`}
                 />
                 <StatCard 
                   label="Fotos No Ar" 
-                  value={dashboardMetrics.publishedMediaCount} 
+                  value={periodMetrics.publishedMediaCount} 
                   icon={<ImageIcon />} 
-                  trend={`${dashboardMetrics.photoCount} fotos / ${dashboardMetrics.videoCount} videos`}
+                  trend={`${periodMetrics.photoCount} fotos / ${periodMetrics.videoCount} videos`}
                 />
                 <StatCard 
                   label="Aguardando Resgate" 
-                  value={formatCurrency(dashboardMetrics.pendingEarnings)} 
+                  value={formatCurrency(periodMetrics.pendingEarnings)} 
                   icon={<AlertCircle />} 
                   trend="Liberação em 7 dias"
                   warning
@@ -729,17 +1005,17 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     </button>
                   </div>
                   <div className="divide-y divide-white/10">
-                    {recentSales.length === 0 ? (
+                    {periodSales.length === 0 ? (
                       <div className="p-8 text-center">
                         <p className="font-sans font-black text-xl uppercase">Nenhuma venda paga ainda</p>
                         <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
                           As vendas aparecem aqui quando o pagamento for confirmado.
                         </p>
                       </div>
-                    ) : recentSales.slice(0, 5).map((sale) => (
+                    ) : periodSales.slice(0, 5).map((sale) => (
                       <div key={sale.id} className="p-5 flex items-center gap-4 group hover:bg-white/[0.03] transition-colors">
                         <div className="w-14 h-14 bg-white/5 border border-white/10 overflow-hidden shrink-0">
-                          <img src={sale.thumbnailUrl || sale.url} alt={sale.name} className="w-full h-full object-cover" />
+                          <SaleThumbnail sale={sale} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="font-sans text-sm font-black truncate">{sale.name}</p>
@@ -1009,12 +1285,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Ganhos totais</p>
-                  <p className="font-sans font-black text-3xl text-white">{formatCurrency(dashboardMetrics.totalEarnings)}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{dashboardMetrics.salesCount} venda(s)</p>
+                  <p className="font-sans font-black text-3xl text-white">{formatCurrency(periodMetrics.totalEarnings)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{periodMetrics.salesCount} venda(s)</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">A liberar</p>
-                  <p className="font-sans font-black text-3xl text-yellow-400">{formatCurrency(dashboardMetrics.pendingEarnings)}</p>
+                  <p className="font-sans font-black text-3xl text-yellow-400">{formatCurrency(periodMetrics.pendingEarnings)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Janela de 7 dias</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
@@ -1039,10 +1315,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <DollarSign className="w-5 h-5 text-gray-500" />
                   </div>
                   <div className="p-5 space-y-6">
-                  {withdrawals.length > 0 && (
+                  {periodWithdrawals.length > 0 && (
                     <div className="space-y-3">
                       <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Solicitacoes de saque</p>
-                      {withdrawals.slice(0, 4).map((withdrawal) => (
+                      {periodWithdrawals.slice(0, 4).map((withdrawal) => (
                         <div key={withdrawal.id} className="flex justify-between items-center gap-4 p-3 bg-[#080d14] border border-white/10">
                           <div className="min-w-0">
                             <p className="font-sans font-black text-sm uppercase text-white truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
@@ -1059,14 +1335,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       ))}
                     </div>
                   )}
-                  {recentSales.length === 0 ? (
+                  {periodSales.length === 0 ? (
                     <div className="py-8 text-center">
                       <p className="font-sans font-black text-xl uppercase text-white">Nenhuma venda paga ainda</p>
                       <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
                         As movimentacoes aparecem quando pagamentos forem confirmados.
                       </p>
                     </div>
-                  ) : recentSales.map((sale) => (
+                  ) : periodSales.map((sale) => (
                     <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-white/10 last:border-0">
                       <div className="min-w-0">
                         <p className="font-sans font-black text-sm uppercase text-white truncate">Venda Confirmada</p>
@@ -1095,10 +1371,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                      />
                    </div>
                    <p className="font-mono text-sm text-gray-400">
-                     Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(dashboardMetrics.monthlyGoal)}</span>
+                     Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(periodMetrics.monthlyGoal)}</span>
                    </p>
                    <p className="font-mono text-[10px] uppercase text-gray-500 tracking-widest mt-3">
-                     Receita do mes: {formatCurrency(dashboardMetrics.monthlyEarnings)}
+                     Receita do periodo no mes atual: {formatCurrency(periodMetrics.monthlyEarnings)}
                    </p>
                 </div>
               </div>
@@ -1111,10 +1387,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       Ranking por receita liquida, vendas pagas e downloads reais.
                     </p>
                   </div>
-                  <span className="font-mono text-[10px] uppercase text-gray-500">{productPerformance.length} itens</span>
+                  <span className="font-mono text-[10px] uppercase text-gray-500">{periodProductPerformance.length} itens</span>
                 </div>
 
-                {productPerformance.length === 0 ? (
+                {periodProductPerformance.length === 0 ? (
                   <div className="m-5 py-10 text-center bg-[#080d14] border border-white/10">
                     <p className="font-sans font-black text-xl uppercase text-white">Sem performance registrada</p>
                     <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
@@ -1123,7 +1399,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                 ) : (
                   <div className="p-5 space-y-3">
-                    {productPerformance.map((item, index) => (
+                    {periodProductPerformance.map((item, index) => (
                       <div key={item.productId} className="grid grid-cols-[auto_56px_1fr_auto] items-center gap-4 p-3 bg-[#080d14] border border-white/10">
                         <span className="font-sans font-black text-xl text-brutal-accent w-8">#{index + 1}</span>
                         <div className="w-14 h-14 bg-white/5 border border-white/10 overflow-hidden">

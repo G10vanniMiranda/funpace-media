@@ -27,7 +27,7 @@ import { Privacidade } from './routes/Privacidade';
 import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { productService, photographerService, orderService, withdrawalService, paymentService } from './lib/services';
+import { productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
 import { logout } from './lib/supabase';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, Video, X, XCircle } from 'lucide-react';
@@ -997,16 +997,20 @@ function AdminRoute() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [allPhotographers, allProducts, allOrders, allWithdrawals] = await Promise.all([
+      const [allPhotographers, allProducts, allOrders, allWithdrawals, platformSettings] = await Promise.all([
         photographerService.getAllPhotographers(),
         productService.getAdminProducts(1000),
         orderService.getAdminOrders(200),
-        withdrawalService.getAdminWithdrawals(200)
+        withdrawalService.getAdminWithdrawals(200),
+        platformSettingsService.getPublicSettings(),
       ]);
 
       // Compute photographer stats from real data to avoid relying on stored `photographers.stats` (which may be stale).
+      const activeProducts = allProducts.filter((product) => (product.status ?? 'published') !== 'removed');
+      const publishedProducts = allProducts.filter((product) => (product.status ?? 'published') === 'published');
+      const activeProductIds = new Set(activeProducts.map((product) => product.id));
       const itemsByPhotographer = new Map<string, { photos: number; videos: number; orders: Set<string>; revenue: number }>();
-      for (const product of allProducts) {
+      for (const product of activeProducts) {
         const entry = itemsByPhotographer.get(product.vendedorId) ?? { photos: 0, videos: 0, orders: new Set<string>(), revenue: 0 };
         if (product.type === 'IMG') entry.photos += 1;
         if (product.type === 'VIDEO' || product.type === 'VIEW') entry.videos += 1;
@@ -1015,6 +1019,7 @@ function AdminRoute() {
       for (const order of allOrders) {
         if (order.status !== 'paid') continue;
         for (const item of order.items ?? []) {
+          if (!activeProductIds.has(item.productId)) continue;
           const entry = itemsByPhotographer.get(item.vendedorId) ?? { photos: 0, videos: 0, orders: new Set<string>(), revenue: 0 };
           entry.orders.add(order.id);
           entry.revenue += Number(item.price || 0);
@@ -1040,25 +1045,25 @@ function AdminRoute() {
       const paidOrders = allOrders.filter((order) => order.status === 'paid');
       const pendingOrders = allOrders.filter((order) => order.status === 'pending');
       const grossRevenue = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-      const publishedProducts = allProducts.filter((product) => (product.status ?? 'published') === 'published');
+      const platformFeeRate = Math.max(0, Math.min(100, Number(platformSettings.platformFeePercent) || 0)) / 100;
       const removedProducts = allProducts.filter((product) => product.status === 'removed');
 
       setPhotographers(photographersWithStats);
-      setPhotos(allProducts.filter(p => p.type === 'IMG'));
-      setVideos(allProducts.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
+      setPhotos(activeProducts.filter(p => p.type === 'IMG'));
+      setVideos(activeProducts.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
       setOrders(allOrders);
       setWithdrawals(allWithdrawals);
       setMetrics({
         grossRevenue,
-        platformFee: grossRevenue * 0.3,
+        platformFee: grossRevenue * platformFeeRate,
         paidOrders: paidOrders.length,
         pendingOrders: pendingOrders.length,
         totalOrders: allOrders.length,
-        totalProducts: allProducts.length,
+        totalProducts: activeProducts.length,
         publishedProducts: publishedProducts.length,
         removedProducts: removedProducts.length,
-        photoCount: allProducts.filter((product) => product.type === 'IMG').length,
-        videoCount: allProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+        photoCount: activeProducts.filter((product) => product.type === 'IMG').length,
+        videoCount: activeProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
       });
     } catch (error) {
       console.error("Error loading admin data:", error);

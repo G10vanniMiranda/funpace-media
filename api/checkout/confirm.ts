@@ -1,4 +1,87 @@
-import { getInfinitePayPaymentCheckEndpoint, getJsonBody, handleOptions, isUuid, setCors, supabaseRequest } from '../shared/utils';
+function setCors(req: any, res: any) {
+  const allowedOrigins = new Set([
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+
+  res.setHeader('Vary', 'Origin');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+function handleOptions(req: any, res: any) {
+  setCors(req, res);
+  if (req.method === 'OPTIONS') {
+    res.status(204).end();
+    return true;
+  }
+  return false;
+}
+
+function getJsonBody(req: any) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
+  return {};
+}
+
+function isUuid(value: unknown) {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function getSupabaseApiConfig() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
+
+  if (!supabaseUrl || !supabaseKey) {
+    throw new Error('Supabase Service Role nao configurado nas variaveis de ambiente da Vercel.');
+  }
+
+  return {
+    supabaseUrl: supabaseUrl.replace(/\/+$/, ''),
+    supabaseKey,
+  };
+}
+
+async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const { supabaseUrl, supabaseKey } = getSupabaseApiConfig();
+  const response = await fetch(`${supabaseUrl}${path}`, {
+    ...init,
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+  });
+
+  const raw = await response.text();
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = raw;
+  }
+
+  if (!response.ok) {
+    const message = typeof data === 'string' ? data : data?.message || data?.hint || raw;
+    throw new Error(message || `Erro Supabase HTTP ${response.status}`);
+  }
+
+  return data as T;
+}
+
+function getInfinitePayPaymentCheckEndpoint() {
+  return process.env.INFINITEPAY_PAYMENT_CHECK_ENDPOINT ||
+    `${(process.env.INFINITEPAY_BASE_URL || 'https://api.checkout.infinitepay.io').replace(/\/+$/, '')}/payment_check`;
+}
 
 function normalizeStatus(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');

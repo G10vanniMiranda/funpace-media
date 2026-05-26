@@ -296,6 +296,67 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
   });
 }
 
+async function prepareImageForUpload(file: File): Promise<File> {
+  if (!file.type.startsWith('image')) return file;
+
+  const maxUploadBytes = 4 * 1024 * 1024;
+  const maxSide = 2400;
+
+  if (file.size <= maxUploadBytes) return file;
+
+  return new Promise((resolve) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+
+      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const width = Math.max(1, Math.round(image.width * scale));
+      const height = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        resolve(file);
+        return;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          resolve(file);
+          return;
+        }
+
+        const compressedName = `${(file.name.replace(/\.[^.]+$/, '') || 'foto')}.jpg`;
+        resolve(new File([blob], compressedName, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.82);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(file);
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+function formatUploadErrorMessage(message: string) {
+  if (/FUNCTION_PAYLOAD_TOO_LARGE|Request Entity Too Large|payload too large|entity too large/i.test(message)) {
+    return 'Arquivo muito grande para envio. A foto foi comprimida automaticamente, mas ainda excedeu o limite do servidor. Tente uma imagem menor ou reduza a resolucao antes de publicar.';
+  }
+
+  if (/sess[aÃ£]o expirada/i.test(message)) {
+    return 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.';
+  }
+
+  return message;
+}
+
 async function generateMediaThumbnail(file: File): Promise<File | null> {
   return file.type.startsWith('image')
     ? generateImageThumbnail(file)
@@ -720,8 +781,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       for (const item of selectedFiles) {
         try {
-          const uploadedFile = await productService.uploadProductFile(photographer.id, item.file);
-          const thumbnailFile = await generateMediaThumbnail(item.file);
+          const uploadFile = await prepareImageForUpload(item.file);
+          const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile);
+          const thumbnailFile = await generateMediaThumbnail(uploadFile);
           const uploadedThumbnail = thumbnailFile
             ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile)
             : null;
@@ -744,7 +806,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           const friendlyMessage = /sess[aã]o expirada/i.test(message)
             ? 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.'
             : message;
-          throw new Error(`Falha ao publicar "${item.name}": ${friendlyMessage}`);
+          throw new Error(`Falha ao publicar "${item.name}": ${formatUploadErrorMessage(friendlyMessage)}`);
         }
       }
       

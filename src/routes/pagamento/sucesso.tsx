@@ -1,6 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, CheckCircle2, Loader2, ReceiptText, XCircle } from 'lucide-react';
+import { buildCustomerOrdersPath } from '../../lib/customer-flow';
 
 type PaymentStatus = 'checking' | 'paid' | 'pending' | 'error';
 
@@ -110,6 +111,7 @@ export function PagamentoSucesso() {
 
         setStatus('paid');
         setMessage('Pagamento confirmado. Seus arquivos digitais ja estao liberados para download em Minhas Compras.');
+        navigate(buildCustomerOrdersPath(order, 'paid'), { replace: true });
       } catch (error) {
         console.error('Erro ao confirmar pagamento:', error);
         setStatus('pending');
@@ -166,18 +168,18 @@ export function PagamentoSucesso() {
 
             <div className="flex w-full flex-col gap-3 mt-8 sm:flex-row">
               <button
-                onClick={() => navigate('/')}
+                onClick={() => navigate(buildCustomerOrdersPath(orderId, isPaid ? 'paid' : displayStatus === 'pending' ? 'pending' : null))}
                 className="min-h-12 w-full px-4 py-3 bg-brutal-black text-white brutal-border font-display text-xs sm:text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
                 <ReceiptText className="w-4 h-4 shrink-0" />
-                Ir para loja
+                Minhas compras
               </button>
               <button
-                onClick={() => navigate('/checkout')}
+                onClick={() => navigate('/')}
                 className="min-h-12 w-full px-4 py-3 bg-white text-brutal-black brutal-border font-display text-xs sm:text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
                 <ArrowLeft className="w-4 h-4 shrink-0" />
-                Voltar ao checkout
+                Voltar para loja
               </button>
             </div>
           </div>

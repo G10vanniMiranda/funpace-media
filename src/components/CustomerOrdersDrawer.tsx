@@ -1,14 +1,18 @@
 import React from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Loader2, ReceiptText, X, ExternalLink, Image as ImageIcon, Video, Download, Trash2 } from 'lucide-react';
-import { Order } from '../types';
+import { Loader2, ReceiptText, X, ExternalLink, Image as ImageIcon, Video, Download, Trash2, Share2, Copy, Heart, Plus } from 'lucide-react';
+import { Order, Product } from '../types';
 import { orderService } from '../lib/services';
 import { getCurrentAccessToken } from '../lib/supabase';
+import { copyText, createProductShareUrl } from '../lib/customer-engagement';
 
 interface CustomerOrdersDrawerProps {
   isOpen: boolean;
   onClose: () => void;
   highlightedOrderId?: string | null;
+  favoriteProducts?: Product[];
+  onAddToCart?: (product: Product) => void;
+  onToggleFavorite?: (product: Product) => void;
 }
 
 const statusLabels: Record<Order['status'], string> = {
@@ -105,11 +109,47 @@ function saveHiddenPurchaseIds(ids: Set<string>) {
   localStorage.setItem(hiddenPurchasesStorageKey, JSON.stringify(Array.from(ids)));
 }
 
-export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: CustomerOrdersDrawerProps) {
+function productFromOrderItem(item: NonNullable<Order['items']>[number]): Product {
+  return {
+    id: item.productId,
+    name: item.name,
+    price: Number(item.price || 0),
+    url: item.url,
+    type: item.type,
+    vendedorId: item.vendedorId,
+    bib: item.bib,
+    event: item.event,
+    checkpoint: item.checkpoint,
+    thumbnailUrl: item.thumbnailUrl ?? undefined,
+    createdAt: item.createdAt,
+  };
+}
+
+function buildReceiptText(order: Order) {
+  return [
+    'Recibo Funpace Media',
+    `Pedido: ${order.id}`,
+    `Status: ${statusLabels[order.status]}`,
+    `Comprador: ${order.buyerName} <${order.buyerEmail}>`,
+    `Total: R$ ${Number(order.total).toFixed(2)}`,
+    `Data: ${new Date(order.createdAt).toLocaleString('pt-BR')}`,
+    `Itens: ${(order.items ?? []).map((item) => item.name).join(', ') || 'Sem itens'}`,
+  ].join('\n');
+}
+
+export function CustomerOrdersDrawer({
+  isOpen,
+  onClose,
+  highlightedOrderId,
+  favoriteProducts = [],
+  onAddToCart,
+  onToggleFavorite,
+}: CustomerOrdersDrawerProps) {
   const [orders, setOrders] = React.useState<Order[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [hiddenItemIds, setHiddenItemIds] = React.useState<Set<string>>(() => loadHiddenPurchaseIds());
+  const [copiedMessage, setCopiedMessage] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -156,6 +196,31 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
     await downloadFile(signedUrl, filenameFromItem(item as any));
   };
 
+  const showCopied = (message: string) => {
+    setCopiedMessage(message);
+    window.setTimeout(() => setCopiedMessage((current) => current === message ? null : current), 1800);
+  };
+
+  const copyReceipt = async (order: Order) => {
+    await copyText(buildReceiptText(order));
+    showCopied('Recibo copiado');
+  };
+
+  const shareItem = async (item: NonNullable<Order['items']>[number]) => {
+    const url = createProductShareUrl(item.productId);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: item.name, text: `${item.event} - peito ${item.bib}`, url });
+        return;
+      } catch {
+        // Fallback to clipboard.
+      }
+    }
+
+    await copyText(url);
+    showCopied('Link copiado');
+  };
+
   const visibleOrders = orders
     .map((order) => ({
       ...order,
@@ -195,6 +260,56 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
             </header>
 
             <div className="flex-1 overflow-y-auto p-6">
+              {copiedMessage && (
+                <div className="mb-4 p-3 bg-green-50 brutal-border-thin text-green-700 font-mono text-[10px] uppercase">
+                  {copiedMessage}
+                </div>
+              )}
+
+              {!isLoading && !error && favoriteProducts.length > 0 && (
+                <section className="mb-6 bg-white brutal-border p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-brutal-accent fill-current" />
+                    <h3 className="font-display text-xl uppercase">Favoritos</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {favoriteProducts.slice(0, 6).map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
+                        <div className="w-11 h-11 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
+                          {item.thumbnailUrl || item.url ? (
+                            <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <ImageIcon className="w-4 h-4" />
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display text-sm uppercase truncate">{item.name}</p>
+                          <p className="font-mono text-[9px] text-gray-400 uppercase truncate">Peito {item.bib || 'N/I'} - R$ {Number(item.price).toFixed(2)}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onAddToCart?.(item)}
+                          className="h-8 w-8 bg-brutal-black text-white brutal-border-thin inline-flex items-center justify-center hover:bg-brutal-accent transition-colors cursor-pointer"
+                          title="Adicionar ao carrinho"
+                          aria-label="Adicionar favorito ao carrinho"
+                        >
+                          <Plus className="w-3 h-3" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => onToggleFavorite?.(item)}
+                          className="h-8 w-8 bg-white text-brutal-black brutal-border-thin inline-flex items-center justify-center hover:text-red-600 transition-colors cursor-pointer"
+                          title="Remover dos favoritos"
+                          aria-label="Remover favorito"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {isLoading && (
                 <div className="h-full flex flex-col items-center justify-center text-center">
                   <Loader2 className="w-10 h-10 animate-spin text-brutal-accent mb-4" />
@@ -255,14 +370,24 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
                             </a>
                           )}
                           {order.status === 'paid' && (order.items?.length ?? 0) > 0 && (
-                            <button
-                              type="button"
-                              onClick={() => downloadPaidOrder(order)}
-                              className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
-                            >
-                              Baixar tudo
-                              <Download className="w-3 h-3" />
-                            </button>
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => copyReceipt(order)}
+                                className="inline-flex items-center gap-2 bg-white text-brutal-black px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-gray-50 transition-colors cursor-pointer"
+                              >
+                                Recibo
+                                <Copy className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => downloadPaidOrder(order)}
+                                className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
+                              >
+                                Baixar tudo
+                                <Download className="w-3 h-3" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -302,6 +427,24 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
                               )}
                               <button
                                 type="button"
+                                onClick={() => shareItem(item)}
+                                className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer"
+                                title="Copiar link compartilhavel"
+                              >
+                                Link
+                                <Share2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => onToggleFavorite?.(productFromOrderItem(item))}
+                                className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer"
+                                title="Favoritar imagem"
+                              >
+                                Favoritar
+                                <Heart className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => hideItem(item.id)}
                                 className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
                                 title="Remover da lista (nao apaga do sistema)"
@@ -322,5 +465,306 @@ export function CustomerOrdersDrawer({ isOpen, onClose, highlightedOrderId }: Cu
         </>
       )}
     </AnimatePresence>
+  );
+}
+
+interface CustomerOrdersPageProps {
+  highlightedOrderId?: string | null;
+  paymentStatus?: 'paid' | 'pending' | 'cancelled' | null;
+  favoriteProducts?: Product[];
+  isAuthenticated: boolean;
+  onLoginRequested: () => void;
+  onAddToCart?: (product: Product) => void;
+  onToggleFavorite?: (product: Product) => void;
+}
+
+export function CustomerOrdersPage({
+  highlightedOrderId,
+  paymentStatus,
+  favoriteProducts = [],
+  isAuthenticated,
+  onLoginRequested,
+  onAddToCart,
+  onToggleFavorite,
+}: CustomerOrdersPageProps) {
+  const [orders, setOrders] = React.useState<Order[]>([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+  const [copiedMessage, setCopiedMessage] = React.useState<string | null>(null);
+
+  const loadOrders = React.useCallback(async () => {
+    if (!isAuthenticated) return;
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const customerOrders = await orderService.getCustomerOrders();
+      setOrders(customerOrders);
+    } catch (err) {
+      console.error('Erro ao carregar compras:', err);
+      setError('Nao foi possivel carregar suas compras.');
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isAuthenticated]);
+
+  React.useEffect(() => {
+    loadOrders();
+  }, [loadOrders]);
+
+  const showCopied = (message: string) => {
+    setCopiedMessage(message);
+    window.setTimeout(() => setCopiedMessage((current) => current === message ? null : current), 1800);
+  };
+
+  const copyReceipt = async (order: Order) => {
+    await copyText(buildReceiptText(order));
+    showCopied('Recibo copiado');
+  };
+
+  const shareItem = async (item: NonNullable<Order['items']>[number]) => {
+    const url = createProductShareUrl(item.productId);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: item.name, text: `${item.event} - peito ${item.bib}`, url });
+        return;
+      } catch {
+        // Fallback to clipboard.
+      }
+    }
+
+    await copyText(url);
+    showCopied('Link copiado');
+  };
+
+  const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    const signedUrl = await authorizeDownload(order.id, item.id);
+    await downloadFile(signedUrl, filenameFromItem(item as any));
+  };
+
+  const downloadPaidOrder = async (order: Order) => {
+    for (const item of order.items ?? []) {
+      if (!item.url) continue;
+      await downloadPaidItem(order, item);
+    }
+  };
+
+  const highlightedOrder = highlightedOrderId
+    ? orders.find((order) => order.id === highlightedOrderId)
+    : null;
+  const sortedOrders = highlightedOrder
+    ? [highlightedOrder, ...orders.filter((order) => order.id !== highlightedOrder.id)]
+    : orders;
+
+  return (
+    <main className="min-h-screen bg-brutal-white text-brutal-black">
+      <section className="border-b-4 border-brutal-black bg-white">
+        <div className="max-w-6xl mx-auto px-4 md:px-6 py-8">
+          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">Painel do cliente</p>
+          <h1 className="font-display text-[clamp(2.5rem,9vw,5rem)] uppercase leading-[0.9] tracking-normal">Minhas Compras</h1>
+          <p className="mt-4 max-w-2xl font-mono text-xs uppercase leading-relaxed text-gray-500">
+            Acesse seus pedidos, recibos, links de compartilhamento e downloads digitais.
+          </p>
+        </div>
+      </section>
+
+      <section className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-6">
+        {paymentStatus && (
+          <div className={`brutal-border p-5 ${
+            paymentStatus === 'paid' ? 'bg-green-50 text-green-800' :
+            paymentStatus === 'pending' ? 'bg-yellow-50 text-yellow-800' :
+            'bg-red-50 text-red-700'
+          }`}>
+            <p className="font-display text-2xl uppercase">
+              {paymentStatus === 'paid' ? 'Pagamento confirmado' : paymentStatus === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
+            </p>
+            <p className="mt-2 font-mono text-xs uppercase leading-relaxed">
+              {paymentStatus === 'paid'
+                ? 'Seu pedido esta liberado. Baixe os arquivos ou copie o recibo abaixo.'
+                : paymentStatus === 'pending'
+                  ? 'Estamos aguardando a confirmacao da operadora. Voce pode atualizar o status em alguns instantes.'
+                  : 'O pedido continua disponivel para uma nova tentativa de pagamento.'}
+            </p>
+            {highlightedOrderId && (
+              <p className="mt-3 font-mono text-[10px] uppercase text-gray-500">Pedido #{highlightedOrderId.slice(0, 8)}</p>
+            )}
+          </div>
+        )}
+
+        {copiedMessage && (
+          <div className="p-3 bg-green-50 brutal-border-thin text-green-700 font-mono text-[10px] uppercase">
+            {copiedMessage}
+          </div>
+        )}
+
+        {!isAuthenticated && (
+          <div className="bg-white brutal-border brutal-shadow p-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="font-display text-2xl uppercase">Entre para ver suas compras</h2>
+              <p className="mt-1 font-mono text-xs uppercase text-gray-500">Use a mesma conta usada no checkout para liberar seus pedidos.</p>
+            </div>
+            <button
+              type="button"
+              onClick={onLoginRequested}
+              className="min-h-12 px-6 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer"
+            >
+              Entrar
+            </button>
+          </div>
+        )}
+
+        {isAuthenticated && (
+          <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
+            <div className="space-y-4">
+              {isLoading && (
+                <div className="bg-white brutal-border p-10 text-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-brutal-accent mx-auto mb-4" />
+                  <p className="font-mono text-xs uppercase text-gray-500">Carregando compras...</p>
+                </div>
+              )}
+
+              {!isLoading && error && (
+                <div className="p-4 bg-red-50 brutal-border-thin text-red-700 font-mono text-xs uppercase">
+                  {error}
+                </div>
+              )}
+
+              {!isLoading && !error && sortedOrders.length === 0 && (
+                <div className="bg-white brutal-border p-10 text-center">
+                  <ReceiptText className="w-14 h-14 text-gray-300 mx-auto mb-4" />
+                  <h2 className="font-display text-2xl uppercase">Nenhuma compra</h2>
+                  <p className="mt-2 font-mono text-xs uppercase text-gray-500">Seus pedidos aparecerao aqui depois do checkout.</p>
+                </div>
+              )}
+
+              {!isLoading && !error && sortedOrders.map((order) => (
+                <article
+                  key={order.id}
+                  className={`bg-white brutal-border brutal-shadow p-4 md:p-5 space-y-4 ${
+                    highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
+                  }`}
+                >
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="font-display text-2xl uppercase">Pedido #{order.id.slice(0, 8)}</p>
+                      <p className="font-mono text-[10px] text-gray-400 uppercase">
+                        {new Date(order.createdAt).toLocaleString('pt-BR')}
+                      </p>
+                    </div>
+                    <span className={`w-fit px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase ${statusClasses[order.status]}`}>
+                      {statusLabels[order.status]}
+                    </span>
+                  </div>
+
+                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                    <div>
+                      <p className="font-mono text-[10px] text-gray-400 uppercase">Total</p>
+                      <p className="font-display text-4xl">R$ {Number(order.total).toFixed(2)}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2 sm:justify-end">
+                      {order.status === 'pending' && order.checkoutUrl && (
+                        <a href={order.checkoutUrl} className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors">
+                          Pagar novamente
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                      {order.status === 'paid' && (
+                        <>
+                          <button type="button" onClick={() => copyReceipt(order)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                            Recibo
+                            <Copy className="w-3 h-3" />
+                          </button>
+                          <button type="button" onClick={() => downloadPaidOrder(order)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
+                            Baixar tudo
+                            <Download className="w-3 h-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t-2 border-gray-100 pt-4 space-y-3">
+                    {(order.items ?? []).map((item) => (
+                      <div key={item.id} className="grid grid-cols-[56px_1fr] gap-3 bg-gray-50 brutal-border-thin p-3 md:grid-cols-[64px_1fr_auto] md:items-center">
+                        <div className="w-14 h-14 md:w-16 md:h-16 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
+                          {item.thumbnailUrl || item.type === 'IMG' ? (
+                            <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <Video className="w-5 h-5" />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-display text-base uppercase truncate">{item.name}</p>
+                          <p className="font-mono text-[9px] text-gray-400 uppercase truncate">
+                            {item.type} - Peito {item.bib || 'N/I'} - {item.event}
+                          </p>
+                          <p className="font-display text-lg mt-1">R$ {Number(item.price).toFixed(2)}</p>
+                        </div>
+                        <div className="col-span-2 flex flex-wrap gap-2 md:col-span-1 md:justify-end">
+                          {order.status === 'paid' && item.url && (
+                            <button type="button" onClick={() => downloadPaidItem(order, item)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
+                              Baixar
+                              <Download className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button type="button" onClick={() => shareItem(item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                            Compartilhar vitrine
+                            <Share2 className="w-3 h-3" />
+                          </button>
+                          <button type="button" onClick={() => onToggleFavorite?.(productFromOrderItem(item))} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                            Favoritar
+                            <Heart className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+
+            <aside className="space-y-4">
+              <div className="bg-white brutal-border p-4">
+                <h2 className="font-display text-xl uppercase">Atalhos</h2>
+                <button
+                  type="button"
+                  onClick={loadOrders}
+                  className="mt-3 w-full min-h-11 bg-brutal-black text-white brutal-border font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
+                >
+                  Atualizar status
+                </button>
+              </div>
+
+              {favoriteProducts.length > 0 && (
+                <div className="bg-white brutal-border p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Heart className="w-4 h-4 text-brutal-accent fill-current" />
+                    <h2 className="font-display text-xl uppercase">Favoritos</h2>
+                  </div>
+                  {favoriteProducts.slice(0, 6).map((item) => (
+                    <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
+                      <div className="w-10 h-10 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
+                        {item.thumbnailUrl || item.url ? (
+                          <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
+                        ) : (
+                          <ImageIcon className="w-4 h-4" />
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-display text-xs uppercase truncate">{item.name}</p>
+                        <p className="font-mono text-[8px] text-gray-400 uppercase truncate">R$ {Number(item.price).toFixed(2)}</p>
+                      </div>
+                      <button type="button" onClick={() => onAddToCart?.(item)} className="h-8 w-8 bg-brutal-black text-white brutal-border-thin inline-flex items-center justify-center hover:bg-brutal-accent transition-colors cursor-pointer" aria-label="Adicionar favorito ao carrinho">
+                        <Plus className="w-3 h-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </aside>
+          </div>
+        )}
+      </section>
+    </main>
   );
 }

@@ -7,7 +7,7 @@ import { VideoGrid } from './components/VideoGrid';
 import { EventGrid } from './components/EventGrid';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutPage } from './components/CheckoutPage';
-import { CustomerOrdersDrawer } from './components/CustomerOrdersDrawer';
+import { CustomerOrdersDrawer, CustomerOrdersPage } from './components/CustomerOrdersDrawer';
 import { Footer } from './components/Footer';
 import { AuthView } from './components/AuthView';
 import { PhotographerSection } from './components/PhotographerSection';
@@ -29,6 +29,7 @@ import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
 import { productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
 import { logout } from './lib/supabase';
+import { loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, Video, X, XCircle } from 'lucide-react';
 
@@ -101,6 +102,8 @@ function Storefront() {
   const navigate = useNavigate();
   const location = useLocation();
   const [cart, setCart] = useState<Product[]>(() => loadStoredCart());
+  const [favoriteProducts, setFavoriteProducts] = useState<Product[]>(() => loadFavoriteProducts());
+  const [likedProductIds, setLikedProductIds] = useState<Set<string>>(() => loadLikedProductIds());
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -151,6 +154,18 @@ function Storefront() {
     }
     loadData();
   }, []);
+
+  React.useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const mediaId = params.get('media');
+    if (!mediaId || isLoading) return;
+
+    const product = [...photos, ...videos].find((item) => item.id === mediaId);
+    if (!product) return;
+
+    setSelectedEventName(product.event || null);
+    setActiveView(product.type === 'IMG' ? 'photos' : 'videos');
+  }, [isLoading, location.search, photos, videos]);
 
   React.useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -266,6 +281,7 @@ function Storefront() {
     ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(selectedEventDate))
     : 'Data a confirmar';
   const isEventsRoute = location.pathname === '/eventos';
+  const isCustomerOrdersRoute = location.pathname === '/minhas-compras';
   const eventSlugFromPath = getEventSlugFromPath(location.pathname);
   const isEventDetailRoute = Boolean(eventSlugFromPath);
 
@@ -296,6 +312,28 @@ function Storefront() {
       setCart([...cart, item]);
       setIsCartOpen(true);
     }
+  };
+
+  const handleToggleFavorite = (item: Product) => {
+    setFavoriteProducts((current) => {
+      const exists = current.some((favorite) => favorite.id === item.id);
+      const next = exists ? current.filter((favorite) => favorite.id !== item.id) : [item, ...current];
+      saveFavoriteProducts(next);
+      return next;
+    });
+  };
+
+  const handleToggleLike = (item: Product) => {
+    setLikedProductIds((current) => {
+      const next = new Set(current);
+      if (next.has(item.id)) {
+        next.delete(item.id);
+      } else {
+        next.add(item.id);
+      }
+      saveLikedProductIds(next);
+      return next;
+    });
   };
 
   const handleRemoveFromCart = (id: string) => {
@@ -434,6 +472,66 @@ function Storefront() {
           )}
         </AnimatePresence>
       </>
+    );
+  }
+
+  if (isCustomerOrdersRoute) {
+    const params = new URLSearchParams(location.search);
+    const orderId = params.get('order');
+    const status = params.get('status');
+    const paymentStatus = status === 'paid' || status === 'pending' || status === 'cancelled' ? status : null;
+
+    return (
+      <div className="min-h-screen bg-brutal-white font-sans text-brutal-black selection:bg-brutal-accent selection:text-white">
+        <Navbar
+          cartItemCount={cart.length}
+          onOpenCart={() => setIsCartOpen(true)}
+          onNavigateHome={() => {
+            clearSearch();
+            navigate('/');
+          }}
+          onOpenAuth={() => setIsAuthOpen(true)}
+          onSearch={handleSearch}
+          onSelfieSearch={handleSelfieSearch}
+          onOpenDashboard={() => {
+            localStorage.setItem('funpace:photographer-panel-active', 'true');
+            navigate('/fotografo');
+          }}
+          onOpenOrders={() => navigate('/minhas-compras')}
+        />
+
+        <CustomerOrdersPage
+          highlightedOrderId={orderId}
+          paymentStatus={paymentStatus}
+          favoriteProducts={favoriteProducts}
+          isAuthenticated={Boolean(user)}
+          onLoginRequested={() => setIsAuthOpen(true)}
+          onAddToCart={handleAddToCart}
+          onToggleFavorite={handleToggleFavorite}
+        />
+
+        <CartDrawer
+          isOpen={isCartOpen}
+          onClose={() => setIsCartOpen(false)}
+          cartItems={cart}
+          onRemoveItem={handleRemoveFromCart}
+          isAuthenticated={Boolean(user)}
+          onLoginRequested={() => setIsAuthOpen(true)}
+          onOpenCheckout={() => {
+            setIsCartOpen(false);
+            navigate('/checkout');
+          }}
+        />
+
+        <AnimatePresence>
+          {isAuthOpen && (
+            <AuthView
+              onClose={() => setIsAuthOpen(false)}
+              onSuccess={() => setIsAuthOpen(false)}
+            />
+          )}
+        </AnimatePresence>
+      </div>
     );
   }
 
@@ -643,6 +741,10 @@ function Storefront() {
               cartItems={cart}
               activeView={activeView}
               onViewChange={setActiveView}
+              favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+              likedIds={likedProductIds}
+              onToggleFavorite={handleToggleFavorite}
+              onToggleLike={handleToggleLike}
             />
           ) : (
             <VideoGrid
@@ -709,6 +811,9 @@ function Storefront() {
         isOpen={isOrdersOpen}
         onClose={() => setIsOrdersOpen(false)}
         highlightedOrderId={highlightedOrderId}
+        favoriteProducts={favoriteProducts}
+        onAddToCart={handleAddToCart}
+        onToggleFavorite={handleToggleFavorite}
       />
 
       <PaymentNoticeModal
@@ -882,6 +987,102 @@ function PaymentNoticeModal({
         </div>
       )}
     </AnimatePresence>
+  );
+}
+
+function CustomerOrdersRoute() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [cart, setCart] = useState<Product[]>(() => loadStoredCart());
+  const [favoriteProducts, setFavoriteProducts] = useState<Product[]>(() => loadFavoriteProducts());
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  React.useEffect(() => {
+    const validCart = cart.filter((item) => isValidCartProductId(item.id));
+    if (validCart.length !== cart.length) {
+      setCart(validCart);
+      return;
+    }
+
+    localStorage.setItem(cartStorageKey, JSON.stringify(validCart));
+  }, [cart]);
+
+  const handleToggleFavorite = (item: Product) => {
+    setFavoriteProducts((current) => {
+      const exists = current.some((favorite) => favorite.id === item.id);
+      const next = exists ? current.filter((favorite) => favorite.id !== item.id) : [item, ...current];
+      saveFavoriteProducts(next);
+      return next;
+    });
+  };
+
+  const handleAddToCart = (item: Product) => {
+    if (!isValidCartProductId(item.id)) {
+      alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
+      return;
+    }
+
+    if (!cart.some((cartItem) => cartItem.id === item.id)) {
+      setCart((current) => [...current, item]);
+      setIsCartOpen(true);
+    }
+  };
+
+  const params = new URLSearchParams(location.search);
+  const orderId = params.get('order');
+  const status = params.get('status');
+  const paymentStatus = status === 'paid' || status === 'pending' || status === 'cancelled' ? status : null;
+
+  return (
+    <div className="min-h-screen bg-brutal-white font-sans text-brutal-black selection:bg-brutal-accent selection:text-white">
+      <Navbar
+        cartItemCount={cart.length}
+        onOpenCart={() => setIsCartOpen(true)}
+        onNavigateHome={() => navigate('/')}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onSearch={(bib) => navigate(`/?bib=${encodeURIComponent(bib)}`)}
+        onSelfieSearch={() => navigate('/')}
+        onOpenDashboard={() => {
+          localStorage.setItem('funpace:photographer-panel-active', 'true');
+          navigate('/fotografo');
+        }}
+        onOpenOrders={() => navigate('/minhas-compras')}
+      />
+
+      <CustomerOrdersPage
+        highlightedOrderId={orderId}
+        paymentStatus={paymentStatus}
+        favoriteProducts={favoriteProducts}
+        isAuthenticated={Boolean(user)}
+        onLoginRequested={() => setIsAuthOpen(true)}
+        onAddToCart={handleAddToCart}
+        onToggleFavorite={handleToggleFavorite}
+      />
+
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cartItems={cart}
+        onRemoveItem={(id) => setCart((current) => current.filter((item) => item.id !== id))}
+        isAuthenticated={Boolean(user)}
+        onLoginRequested={() => setIsAuthOpen(true)}
+        onOpenCheckout={() => {
+          setIsCartOpen(false);
+          navigate('/checkout');
+        }}
+      />
+
+      <AnimatePresence>
+        {isAuthOpen && (
+          <AuthView
+            onClose={() => setIsAuthOpen(false)}
+            onSuccess={() => setIsAuthOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+    </div>
   );
 }
 
@@ -1126,6 +1327,7 @@ export default function App() {
         <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
+        <Route path="/minhas-compras" element={<CustomerOrdersRoute />} />
         <Route path="/eventos" element={<Storefront />} />
         <Route path="/eventos/:slug" element={<Storefront />} />
         <Route path="/para-fotografos" element={<ParaFotografos />} />

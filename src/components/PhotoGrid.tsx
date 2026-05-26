@@ -1,6 +1,7 @@
-import { ShoppingCart, Plus, Check } from 'lucide-react';
+import { Check, Heart, Plus, Share2, ThumbsUp } from 'lucide-react';
 import { useState } from 'react';
 import { Product } from '../types';
+import { copyText, createProductShareUrl } from '../lib/customer-engagement';
 
 interface PhotoGridProps {
   title: string;
@@ -10,6 +11,10 @@ interface PhotoGridProps {
   cartItems: Product[];
   activeView?: 'photos' | 'videos';
   onViewChange?: (view: 'photos' | 'videos') => void;
+  favoriteIds?: Set<string>;
+  likedIds?: Set<string>;
+  onToggleFavorite?: (photo: Product) => void;
+  onToggleLike?: (photo: Product) => void;
 }
 
 export function PhotoGrid({ 
@@ -19,9 +24,30 @@ export function PhotoGrid({
   onAddToCart, 
   cartItems, 
   activeView, 
-  onViewChange 
+  onViewChange,
+  favoriteIds = new Set(),
+  likedIds = new Set(),
+  onToggleFavorite,
+  onToggleLike,
 }: PhotoGridProps) {
   const isInCart = (id: string) => cartItems.some(item => item.id === id);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  const sharePhoto = async (photo: Product) => {
+    const url = createProductShareUrl(photo.id);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: photo.name, text: `${photo.event} - peito ${photo.bib}`, url });
+        return;
+      } catch {
+        // Fallback to clipboard when native sharing is cancelled or unavailable.
+      }
+    }
+
+    await copyText(url);
+    setCopiedId(photo.id);
+    window.setTimeout(() => setCopiedId((current) => current === photo.id ? null : current), 1800);
+  };
 
   return (
     <section className="py-12 md:py-20 px-4 md:px-6 max-w-[1400px] mx-auto">
@@ -87,6 +113,31 @@ export function PhotoGrid({
               </div>
 
               {/* Hover Actions */}
+              <div className="absolute top-4 right-4 z-10 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleFavorite?.(photo)}
+                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${
+                    favoriteIds.has(photo.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
+                  }`}
+                  title={favoriteIds.has(photo.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
+                  aria-label={favoriteIds.has(photo.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
+                >
+                  <Heart className={`w-4 h-4 ${favoriteIds.has(photo.id) ? 'fill-current' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleLike?.(photo)}
+                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${
+                    likedIds.has(photo.id) ? 'bg-brutal-black text-white' : 'bg-white text-brutal-black hover:bg-brutal-black hover:text-white'
+                  }`}
+                  title={likedIds.has(photo.id) ? 'Remover like' : 'Curtir imagem'}
+                  aria-label={likedIds.has(photo.id) ? 'Remover like' : 'Curtir imagem'}
+                >
+                  <ThumbsUp className={`w-4 h-4 ${likedIds.has(photo.id) ? 'fill-current' : ''}`} />
+                </button>
+              </div>
+
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
                 <button 
                   onClick={() => onAddToCart(photo)}
@@ -116,6 +167,14 @@ export function PhotoGrid({
                 <p className="font-bold">{photo.event}</p>
                 <p className="text-gray-500">Ponto: {photo.checkpoint}</p>
               </div>
+              <button
+                type="button"
+                onClick={() => sharePhoto(photo)}
+                className="inline-flex items-center gap-1 text-gray-500 hover:text-brutal-accent transition-colors cursor-pointer"
+              >
+                <Share2 className="w-4 h-4" />
+                <span className="text-[10px]">{copiedId === photo.id ? 'Link copiado' : 'Compartilhar'}</span>
+              </button>
             </div>
           </div>
         ))}

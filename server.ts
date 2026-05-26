@@ -14,6 +14,15 @@ const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const { Pool } = pg;
 
+app.disable("x-powered-by");
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
 function getAllowedOrigins() {
   return new Set([
     "https://funpace.media",
@@ -50,15 +59,16 @@ app.use(express.json({
 function getDbConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const supabaseRef = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/)?.[1];
+  const dbPassword = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD || process.env.POSTGRES;
 
   return process.env.DATABASE_URL
     ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
     : {
-        host: process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
+        host: process.env.DB_HOST || process.env.PGHOST || process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
         port: Number(process.env.DB_PORT || 5432),
-        database: process.env.DATABASE || "postgres",
-        user: process.env.DB_USER || process.env.USER || "postgres",
-        password: process.env.POSTGRES || process.env.RAILS_MASTER_KEY,
+        database: process.env.DATABASE || process.env.PGDATABASE || "postgres",
+        user: process.env.DB_USER || process.env.PGUSER || process.env.POSTGRES_USER || "postgres",
+        password: dbPassword,
         ssl: { rejectUnauthorized: false },
         connectionTimeoutMillis: 15000,
       };
@@ -71,6 +81,10 @@ const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X
 
 function usesExternalBucket() {
   return mediaStorageProvider === "external_bucket" || Boolean(process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN);
+}
+
+function legacyInfinitePayEnabled() {
+  return process.env.ENABLE_LEGACY_INFINITEPAY_ENDPOINTS === "true";
 }
 
 function getSupabaseApiConfig() {
@@ -540,6 +554,13 @@ app.get("/health", (_req, res) => {
 });
 
 app.post("/payments/infinitepay/create", async (req, res) => {
+  if (!legacyInfinitePayEnabled()) {
+    return res.status(410).json({
+      success: false,
+      error: "Endpoint legado desativado. Use /api/checkout/create-session.",
+    });
+  }
+
   try {
     const orderId = String(req.body?.orderId || "").trim();
     const items = req.body?.items;
@@ -638,6 +659,13 @@ app.post("/payments/infinitepay/create", async (req, res) => {
 });
 
 app.post("/payments/infinitepay/webhook", async (req, res) => {
+  if (!legacyInfinitePayEnabled()) {
+    return res.status(410).json({
+      received: false,
+      error: "Webhook legado desativado. Use /api/webhooks/infinitepay.",
+    });
+  }
+
   const payload = req.body ?? {};
   const orderId = String(payload?.order_nsu || "").trim();
 
@@ -1368,9 +1396,14 @@ app.post("/api/media/sign", async (req, res) => {
 app.post("/api/downloads/record", async (req, res) => {
   const orderId = String(req.body?.orderId || "");
   const orderItemId = String(req.body?.orderItemId || "");
+  const authUser = await getAuthenticatedRequestUser(req);
 
   if (!isUuid(orderId) || !isUuid(orderItemId)) {
     return res.status(400).json({ error: "Download invalido." });
+  }
+
+  if (!authUser?.id) {
+    return res.status(401).json({ error: "Entre novamente para registrar o download." });
   }
 
   const pool = new Pool(getDbConfig());
@@ -1398,6 +1431,10 @@ app.post("/api/downloads/record", async (req, res) => {
     const item = itemResult.rows[0];
     if (!item || item.status !== "paid") {
       return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
+    }
+
+    if (item.userId !== authUser.id) {
+      return res.status(403).json({ error: "Este pedido nao pertence ao usuario logado." });
     }
 
     const ipSource = req.ip || req.socket.remoteAddress || "";
@@ -1725,9 +1762,8 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
       "",
   );
   const slug = String(payload?.invoice_slug || payload?.invoiceSlug || payload?.slug || "");
-  const signatureHeader = getWebhookSignature(req);
 
-  if (getWebhookSecret() && signatureHeader && !isValidWebhookSignature(req)) {
+  if (getWebhookSecret() && !isValidWebhookSignature(req)) {
     return res.status(401).json({ error: "Assinatura do webhook invalida." });
   }
 

@@ -7,15 +7,16 @@ dns.setDefaultResultOrder("ipv4first");
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const supabaseRef = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/)?.[1];
+const dbPassword = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD || process.env.POSTGRES;
 
 const dbConfig = process.env.DATABASE_URL
   ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
   : {
-      host: process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
+      host: process.env.DB_HOST || process.env.PGHOST || process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
       port: Number(process.env.DB_PORT || 5432),
-      database: process.env.DATABASE || "postgres",
-      user: process.env.DB_USER || process.env.USER || "postgres",
-      password: process.env.POSTGRES || process.env.RAILS_MASTER_KEY,
+      database: process.env.DATABASE || process.env.PGDATABASE || "postgres",
+      user: process.env.DB_USER || process.env.PGUSER || process.env.POSTGRES_USER || "postgres",
+      password: dbPassword,
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 15000,
     };
@@ -33,6 +34,7 @@ if (!process.env.DATABASE_URL && dbConfig.host && /[a-z]/i.test(dbConfig.host)) 
 const requiredColumns = {
   photographers: ["id", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "stats", "createdAt", "updatedAt"],
   customers: ["id", "email", "name", "phone", "cpf", "createdAt", "updatedAt"],
+  events: ["id", "name", "date", "location", "checkpoint", "status", "createdAt", "updatedAt"],
   products: ["id", "name", "price", "url", "type", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "duration", "storagePath", "status", "createdAt", "updatedAt"],
   orders: ["id", "userId", "buyerName", "buyerEmail", "buyerPhone", "buyerCpf", "total", "status", "paymentProvider", "paymentExternalId", "checkoutUrl", "createdAt", "updatedAt"],
   order_items: ["id", "orderId", "productId", "name", "type", "price", "url", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "createdAt"],
@@ -51,6 +53,10 @@ const requiredPolicies = [
   "products_insert_own_verified_photographer",
   "products_update_owner_or_admin",
   "products_delete_owner_or_admin",
+  "events_select_authenticated",
+  "events_insert_admin_only",
+  "events_update_admin_only",
+  "events_delete_admin_only",
   "orders_select_owner_email_or_admin",
   "orders_update_admin_only",
   "order_items_select_order_owner_or_admin",

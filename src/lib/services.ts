@@ -1,5 +1,6 @@
 import {
   Product,
+  Event,
   Photographer,
   Order,
   OrderItem,
@@ -384,6 +385,58 @@ export const orderService = {
 
     if (!updated) throw new Error('Pedido nao encontrado.');
     return updated;
+  },
+};
+
+export const eventService = {
+  async getEvents(count = 200): Promise<Event[]> {
+    if (isMockMode) {
+      return [];
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'date.asc,createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+  },
+
+  async getTodayEvents(): Promise<Event[]> {
+    if (isMockMode) {
+      return [];
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const params = new URLSearchParams({
+      select: '*',
+      date: `eq.${today}`,
+      status: 'in.(scheduled,active)',
+      order: 'createdAt.desc',
+      limit: '100',
+    });
+    return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+  },
+
+  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'>): Promise<Event> {
+    if (isMockMode) {
+      return {
+        id: `mock-event-${crypto.randomUUID()}`,
+        ...input,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const [created] = await supabaseRest.post<SupabaseRow<Event>[]>(
+      `/rest/v1/events?${selectAll}`,
+      {
+        ...input,
+        createdAt: new Date().toISOString(),
+      },
+      true,
+    );
+
+    return created;
   },
 };
 

@@ -97,6 +97,7 @@ export function PagamentoSucesso() {
             invoice_slug: params.get('invoice_slug'),
             capture_method: captureMethod,
             payment: params.get('payment'),
+            return_source: 'pagamento_sucesso',
             raw_query: Object.fromEntries(params.entries()),
           }),
         });

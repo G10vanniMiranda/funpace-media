@@ -184,6 +184,7 @@ function Storefront() {
               invoice_slug: params.get('invoice_slug'),
               capture_method: params.get('capture_method'),
               payment: params.get('payment'),
+              return_source: 'pagamento_sucesso',
               raw_query: Object.fromEntries(params.entries()),
             }),
           });

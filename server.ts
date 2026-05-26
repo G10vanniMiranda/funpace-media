@@ -59,7 +59,14 @@ app.use(express.json({
 function getDbConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const supabaseRef = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/)?.[1];
-  const dbPassword = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD || process.env.POSTGRES;
+  const dbPassword = process.env.DB_PASSWORD ||
+    process.env.POSTGRES_PASSWORD ||
+    process.env.PGPASSWORD ||
+    process.env.POSTGRES;
+
+  if (!process.env.DATABASE_URL && typeof dbPassword !== "string") {
+    throw new Error("Senha do Postgres nao configurada. Defina DB_PASSWORD, POSTGRES_PASSWORD, PGPASSWORD ou DATABASE_URL no .env.");
+  }
 
   return process.env.DATABASE_URL
     ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
@@ -1214,6 +1221,7 @@ app.post("/api/checkout/confirm", async (req, res) => {
   const slug = getConfirmationValue(["slug", "invoice_slug", "invoiceSlug", "invoice_id", "invoiceId"]);
   const captureMethod = getConfirmationValue(["capture_method", "captureMethod", "payment_method", "paymentMethod"]);
   const paymentReturn = getConfirmationValue(["payment"]);
+  const returnSource = getConfirmationValue(["return_source", "returnSource"]);
 
   if (!handle) {
     return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
@@ -1227,7 +1235,7 @@ app.post("/api/checkout/confirm", async (req, res) => {
 
   try {
     const existingOrder = await pool.query(
-      `select id, status, "paymentExternalId" from public.orders where id = $1 limit 1`,
+      `select id, status, "paymentProvider", "paymentExternalId", "checkoutUrl" from public.orders where id = $1 limit 1`,
       [orderId],
     );
     const order = existingOrder.rows[0];
@@ -1256,9 +1264,19 @@ app.post("/api/checkout/confirm", async (req, res) => {
       }
     }
 
+    const successfulCheckoutReturn = paymentReturn.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") === "success" ||
+      returnSource.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") === "pagamentosucesso";
+
     const confirmedByCheckoutReturn = !paid &&
-      paymentReturn === "success" &&
-      Boolean(captureMethod || transactionNsu);
+      successfulCheckoutReturn &&
+      (
+        Boolean(captureMethod || transactionNsu) ||
+        (
+          order.status === "pending" &&
+          order.paymentProvider === "infinitepay" &&
+          Boolean(order.checkoutUrl)
+        )
+      );
 
     if (!paid && !confirmedByCheckoutReturn) {
       return res.status(409).json({
@@ -1353,24 +1371,32 @@ app.post("/api/media/sign", async (req, res) => {
     return res.json({ urls: {} });
   }
 
-  const pool = new Pool(getDbConfig());
-
   try {
-    const productsResult = await pool.query(
-      `
-        select url, "thumbnailUrl"
-        from public.products
-        where url = any($1::text[])
-          or "thumbnailUrl" = any($1::text[])
-      `,
-      [uniquePaths],
-    );
+    const { data: productsByUrl, error: urlError } = await getSupabaseAdmin()
+      .from("products")
+      .select("url, thumbnailUrl")
+      .in("url", uniquePaths);
+
+    if (urlError) {
+      throw urlError;
+    }
+
+    const { data: productsByThumbnail, error: thumbnailError } = await getSupabaseAdmin()
+      .from("products")
+      .select("url, thumbnailUrl")
+      .in("thumbnailUrl", uniquePaths);
+
+    if (thumbnailError) {
+      throw thumbnailError;
+    }
+
     const allowedPaths = new Set<string>();
 
-    for (const product of productsResult.rows) {
+    for (const product of [...(productsByUrl || []), ...(productsByThumbnail || [])]) {
       if (product.thumbnailUrl) {
         allowedPaths.add(String(product.thumbnailUrl));
-      } else if (product.url) {
+      }
+      if (product.url) {
         allowedPaths.add(String(product.url));
       }
     }
@@ -1388,8 +1414,6 @@ app.post("/api/media/sign", async (req, res) => {
   } catch (error: any) {
     console.error("Erro ao assinar midias:", error);
     return res.status(500).json({ error: error?.message || "Nao foi possivel assinar midias." });
-  } finally {
-    await pool.end();
   }
 });
 

@@ -82,6 +82,7 @@ export default async function handler(req: any, res: any) {
   const slug = getBodyValue(body, ['slug', 'invoice_slug', 'invoiceSlug', 'invoice_id', 'invoiceId']);
   const captureMethod = getBodyValue(body, ['capture_method', 'captureMethod', 'payment_method', 'paymentMethod']);
   const paymentReturn = getBodyValue(body, ['payment']);
+  const returnSource = getBodyValue(body, ['return_source', 'returnSource']);
   const failureReturn = hasFailureReturn(body);
 
   if (!handle) {
@@ -156,8 +157,11 @@ export default async function handler(req: any, res: any) {
     }
   }
 
+  const successfulCheckoutReturn = normalizeStatus(paymentReturn) === 'success' ||
+    normalizeStatus(returnSource) === 'pagamentosucesso';
+
   const confirmedByCheckoutReturn = !paid &&
-    paymentReturn === 'success' &&
+    successfulCheckoutReturn &&
     (
       Boolean(captureMethod || transactionNsu) ||
       (

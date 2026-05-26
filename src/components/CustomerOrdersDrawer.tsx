@@ -196,6 +196,16 @@ export function CustomerOrdersDrawer({
     await downloadFile(signedUrl, filenameFromItem(item as any));
   };
 
+  const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    const target = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    const signedUrl = await authorizeDownload(order.id, item.id);
+    if (target) {
+      target.location.href = signedUrl;
+      return;
+    }
+    window.open(signedUrl, '_blank', 'noopener,noreferrer');
+  };
+
   const showCopied = (message: string) => {
     setCopiedMessage(message);
     window.setTimeout(() => setCopiedMessage((current) => current === message ? null : current), 1800);
@@ -415,15 +425,26 @@ export function CustomerOrdersDrawer({
                               <p className="font-display text-sm">R$ {Number(item.price).toFixed(2)}</p>
                               {item.type === 'IMG' ? <ImageIcon className="w-3 h-3 ml-auto text-gray-400" /> : <Video className="w-3 h-3 ml-auto text-gray-400" />}
                               {order.status === 'paid' && item.url && (
-                                <button
-                                  type="button"
-                                  onClick={() => downloadPaidItem(order, item)}
-                                  className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
-                                  title="Baixar arquivo"
-                                >
-                                  Baixar
-                                  <Download className="w-3 h-3" />
-                                </button>
+                                <>
+                                  <button
+                                    type="button"
+                                    onClick={() => openPaidItem(order, item)}
+                                    className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer"
+                                    title="Abrir arquivo"
+                                  >
+                                    Abrir
+                                    <ExternalLink className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => downloadPaidItem(order, item)}
+                                    className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer"
+                                    title="Baixar arquivo"
+                                  >
+                                    Baixar
+                                    <Download className="w-3 h-3" />
+                                  </button>
+                                </>
                               )}
                               <button
                                 type="button"
@@ -540,6 +561,16 @@ export function CustomerOrdersPage({
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     const signedUrl = await authorizeDownload(order.id, item.id);
     await downloadFile(signedUrl, filenameFromItem(item as any));
+  };
+
+  const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    const target = window.open('about:blank', '_blank', 'noopener,noreferrer');
+    const signedUrl = await authorizeDownload(order.id, item.id);
+    if (target) {
+      target.location.href = signedUrl;
+      return;
+    }
+    window.open(signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const downloadPaidOrder = async (order: Order) => {
@@ -702,10 +733,16 @@ export function CustomerOrdersPage({
                         </div>
                         <div className="col-span-2 flex flex-wrap gap-2 md:col-span-1 md:justify-end">
                           {order.status === 'paid' && item.url && (
-                            <button type="button" onClick={() => downloadPaidItem(order, item)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
-                              Baixar
-                              <Download className="w-3 h-3" />
-                            </button>
+                            <>
+                              <button type="button" onClick={() => openPaidItem(order, item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                                Abrir
+                                <ExternalLink className="w-3 h-3" />
+                              </button>
+                              <button type="button" onClick={() => downloadPaidItem(order, item)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
+                                Baixar
+                                <Download className="w-3 h-3" />
+                              </button>
+                            </>
                           )}
                           <button type="button" onClick={() => shareItem(item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
                             Compartilhar vitrine

@@ -54,6 +54,17 @@ export interface Customer {
   updatedAt?: string;
 }
 
+export interface Event {
+  id: string;
+  name: string;
+  date: string;
+  location?: string | null;
+  checkpoint?: string | null;
+  status: 'scheduled' | 'active' | 'closed';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Order {
   id: string;
   userId?: string | null;

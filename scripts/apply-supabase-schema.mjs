@@ -8,15 +8,16 @@ dns.setDefaultResultOrder("ipv4first");
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
 const supabaseRef = supabaseUrl.match(/^https:\/\/([^.]+)\.supabase\.co$/)?.[1];
+const dbPassword = process.env.DB_PASSWORD || process.env.POSTGRES_PASSWORD || process.env.PGPASSWORD || process.env.POSTGRES;
 
 const dbConfig = process.env.DATABASE_URL
   ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
   : {
-      host: process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
+      host: process.env.DB_HOST || process.env.PGHOST || process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
       port: Number(process.env.DB_PORT || 5432),
-      database: process.env.DATABASE || "postgres",
-      user: process.env.DB_USER || process.env.USER || "postgres",
-      password: process.env.POSTGRES || process.env.RAILS_MASTER_KEY,
+      database: process.env.DATABASE || process.env.PGDATABASE || "postgres",
+      user: process.env.DB_USER || process.env.PGUSER || process.env.POSTGRES_USER || "postgres",
+      password: dbPassword,
       ssl: { rejectUnauthorized: false },
       connectionTimeoutMillis: 15000,
     };

@@ -25,8 +25,8 @@ import {
   Trash2,
   X
 } from 'lucide-react';
-import { Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
-import { photographerDashboardService, productService, withdrawalService } from '../lib/services';
+import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
+import { eventService, photographerDashboardService, productService, withdrawalService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
 
@@ -377,6 +377,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawalError, setWithdrawalError] = useState('');
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
+  const [todayEvents, setTodayEvents] = useState<Event[]>([]);
+  const [selectedEventId, setSelectedEventId] = useState('');
   const [batchPriceInput, setBatchPriceInput] = useState('19.90');
   const [previewIndex, setPreviewIndex] = useState(0);
   const [eventInput, setEventInput] = useState('Geral');
@@ -567,10 +569,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         setProducts(visibleProducts);
         const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
         const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
+        const events = await eventService.getTodayEvents();
         setDashboardMetrics(dashboard.metrics);
         setRecentSales(dashboard.recentSales);
         setProductPerformance(dashboard.productPerformance);
         setWithdrawals(pWithdrawals);
+        setTodayEvents(events);
       } catch (error) {
         console.error("Error loading photographer content:", error);
       } finally {
@@ -659,6 +663,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
 
     setSelectedFiles((current) => current.map((item) => ({ ...item, price: normalizedPrice })));
+  };
+
+  const handleTodayEventSelect = (eventId: string) => {
+    setSelectedEventId(eventId);
+    const selectedEvent = todayEvents.find((eventItem) => eventItem.id === eventId);
+    if (!selectedEvent) return;
+
+    setEventInput(selectedEvent.name);
+    setCheckpointInput(selectedEvent.checkpoint || selectedEvent.location || 'Ponto Principal');
   };
 
   const openEditModal = (product: Product) => {
@@ -1900,6 +1913,27 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   )}
                 </div>
                 <div className="space-y-6 pb-6">
+                  <div>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Eventos de hoje</label>
+                    <select
+                      value={selectedEventId}
+                      onChange={(event) => handleTodayEventSelect(event.target.value)}
+                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                    >
+                      <option value="">Selecionar evento cadastrado pelo admin</option>
+                      {todayEvents.map((eventItem) => (
+                        <option key={eventItem.id} value={eventItem.id}>
+                          {eventItem.name} {eventItem.location ? `- ${eventItem.location}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {todayEvents.length === 0 && (
+                      <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
+                        Nenhum evento ativo cadastrado para hoje. Preencha manualmente ou solicite ao admin.
+                      </p>
+                    )}
+                  </div>
+
                   <div>
                     <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Colecao</label>
                     <input 

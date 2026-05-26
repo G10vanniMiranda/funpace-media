@@ -57,6 +57,17 @@ create table if not exists public.products (
   "updatedAt" timestamptz not null default now()
 );
 
+create table if not exists public.events (
+  id uuid primary key default gen_random_uuid(),
+  name text not null check (char_length(name) between 1 and 180),
+  date date not null,
+  location text,
+  checkpoint text,
+  status text not null default 'scheduled' check (status in ('scheduled', 'active', 'closed')),
+  "createdAt" timestamptz not null default now(),
+  "updatedAt" timestamptz not null default now()
+);
+
 create table if not exists public.orders (
   id uuid primary key default gen_random_uuid(),
   "userId" text,
@@ -138,6 +149,8 @@ create index if not exists products_bib_idx on public.products (bib);
 create index if not exists products_vendedor_id_idx on public.products ("vendedorId");
 create index if not exists products_created_at_idx on public.products ("createdAt" desc);
 create index if not exists products_status_idx on public.products (status);
+create index if not exists events_date_idx on public.events (date);
+create index if not exists events_status_idx on public.events (status);
 create index if not exists photographers_email_idx on public.photographers (email);
 create index if not exists photographers_verified_idx on public.photographers (verified);
 create index if not exists customers_email_idx on public.customers (email);
@@ -184,6 +197,11 @@ create trigger products_set_updated_at
 before update on public.products
 for each row execute function public.set_updated_at();
 
+drop trigger if exists events_set_updated_at on public.events;
+create trigger events_set_updated_at
+before update on public.events
+for each row execute function public.set_updated_at();
+
 drop trigger if exists orders_set_updated_at on public.orders;
 create trigger orders_set_updated_at
 before update on public.orders
@@ -202,6 +220,7 @@ for each row execute function public.set_updated_at();
 alter table public.photographers enable row level security;
 alter table public.customers enable row level security;
 alter table public.products enable row level security;
+alter table public.events enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.payment_events enable row level security;
@@ -305,6 +324,31 @@ create policy "products_delete_owner_or_admin"
 on public.products
 for delete
 using ("vendedorId" = auth.uid()::text or public.is_admin());
+
+drop policy if exists "events_select_authenticated" on public.events;
+create policy "events_select_authenticated"
+on public.events
+for select
+using (auth.uid() is not null);
+
+drop policy if exists "events_insert_admin_only" on public.events;
+create policy "events_insert_admin_only"
+on public.events
+for insert
+with check (public.is_admin());
+
+drop policy if exists "events_update_admin_only" on public.events;
+create policy "events_update_admin_only"
+on public.events
+for update
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "events_delete_admin_only" on public.events;
+create policy "events_delete_admin_only"
+on public.events
+for delete
+using (public.is_admin());
 
 drop policy if exists "orders_select_owner_email_or_admin" on public.orders;
 create policy "orders_select_owner_email_or_admin"

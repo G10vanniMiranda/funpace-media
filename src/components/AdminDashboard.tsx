@@ -26,8 +26,8 @@ import {
   User as UserIcon,
   ShoppingCart
 } from 'lucide-react';
-import { AdminMetrics, Order, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
-import { orderService, photographerService, platformSettingsService, productService, withdrawalService } from '../lib/services';
+import { AdminMetrics, Event, Order, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
+import { eventService, photographerService, platformSettingsService, productService, withdrawalService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { getCurrentAccessToken } from '../lib/supabase';
 
@@ -343,7 +343,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
 }
 
 export function AdminDashboard({ photographers, photos, videos, orders, withdrawals, metrics, onLogout, onRefresh }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'photographers' | 'sales' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'photographers' | 'events' | 'sales' | 'settings'>('overview');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPhotographer, setNewPhotographer] = useState({ name: '', email: '', bio: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -351,7 +351,6 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [editingPhotographer, setEditingPhotographer] = useState<Photographer | null>(null);
   const [editForm, setEditForm] = useState({ name: '', bio: '', cpf: '', phone: '', avatar: '' });
   const [isUpdatingPhotographer, setIsUpdatingPhotographer] = useState(false);
-  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [updatingWithdrawalId, setUpdatingWithdrawalId] = useState<string | null>(null);
   const [isBackfillingThumbnails, setIsBackfillingThumbnails] = useState(false);
   const [thumbnailBackfillProgress, setThumbnailBackfillProgress] = useState('');
@@ -364,6 +363,16 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [showAllRecentActivity, setShowAllRecentActivity] = useState(false);
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [storageStatsError, setStorageStatsError] = useState('');
+  const [events, setEvents] = useState<Event[]>([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  const [isCreatingEvent, setIsCreatingEvent] = useState(false);
+  const [eventForm, setEventForm] = useState({
+    name: '',
+    date: formatDateInput(new Date()),
+    location: '',
+    checkpoint: 'Ponto Principal',
+    status: 'active' as Event['status'],
+  });
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
@@ -577,7 +586,6 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     return notifications;
   }, [orders, pendingPhotographers.length, productsMissingThumbnails.length, withdrawals]);
   const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
-  const pendingOrderTotal = pendingOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const paidOrderTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const photographerById = React.useMemo(
     () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
@@ -778,6 +786,22 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     loadStorageStats();
   }, []);
 
+  const loadEvents = React.useCallback(async () => {
+    setIsLoadingEvents(true);
+    try {
+      const rows = await eventService.getEvents();
+      setEvents(rows);
+    } catch (error) {
+      console.error('Erro ao carregar eventos:', error);
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    loadEvents();
+  }, [loadEvents]);
+
   React.useEffect(() => {
     if (!openMenuPhotographerId) return;
 
@@ -843,6 +867,40 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
   };
 
+  const handleCreateEvent = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = eventForm.name.trim();
+    if (!name) {
+      alert('Informe o nome do evento.');
+      return;
+    }
+
+    setIsCreatingEvent(true);
+    try {
+      const created = await eventService.createEvent({
+        name,
+        date: eventForm.date,
+        location: eventForm.location.trim() || null,
+        checkpoint: eventForm.checkpoint.trim() || null,
+        status: eventForm.status,
+      });
+      setEvents((current) => [created, ...current]);
+      setEventForm({
+        name: '',
+        date: formatDateInput(new Date()),
+        location: '',
+        checkpoint: 'Ponto Principal',
+        status: 'active',
+      });
+      alert('Evento criado com sucesso.');
+    } catch (error) {
+      console.error('Erro ao criar evento:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel criar o evento.');
+    } finally {
+      setIsCreatingEvent(false);
+    }
+  };
+
   const openEditPhotographer = (photographer: Photographer) => {
     setEditingPhotographer(photographer);
     setEditForm({
@@ -902,24 +960,6 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       alert('Erro ao desativar fotografo.');
     } finally {
       setIsUpdatingPhotographer(false);
-    }
-  };
-
-  const handleManualOrderStatus = async (order: Order, status: Order['status']) => {
-    const actionLabel = status === 'paid' ? 'confirmar pagamento' : 'cancelar pedido';
-    const confirmed = window.confirm(`Deseja ${actionLabel} do pedido #${order.id.slice(0, 8)}?`);
-    if (!confirmed) return;
-
-    setUpdatingOrderId(order.id);
-    try {
-      await orderService.updateOrderStatus(order.id, status);
-      await onRefresh();
-      alert(status === 'paid' ? 'Pagamento confirmado manualmente.' : 'Pedido atualizado.');
-    } catch (error) {
-      console.error(error);
-      alert('Erro ao atualizar pedido.');
-    } finally {
-      setUpdatingOrderId(null);
     }
   };
 
@@ -1168,6 +1208,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             onClick={() => setActiveTab('photographers')} 
           />
           <AdminSidebarLink 
+            icon={<CalendarDays />} 
+            label="Eventos" 
+            active={activeTab === 'events'} 
+            onClick={() => setActiveTab('events')} 
+          />
+          <AdminSidebarLink 
             icon={<DollarSign />} 
             label="Financeiro" 
             active={activeTab === 'sales'} 
@@ -1206,6 +1252,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Painel Administrativo'}
               {activeTab === 'photographers' && 'Gestao de Fotografos'}
+              {activeTab === 'events' && 'Eventos'}
               {activeTab === 'sales' && 'Fluxo de Caixa'}
               {activeTab === 'settings' && 'Preferências'}
             </h2>
@@ -1718,6 +1765,111 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             </motion.div>
           )}
 
+          {activeTab === 'events' && (
+            <motion.div
+              key="events"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-5"
+            >
+              <form onSubmit={handleCreateEvent} className="bg-[#0d131c] border border-white/10 p-5 grid gap-4 lg:grid-cols-[1.2fr_160px_1fr_1fr_150px_auto] lg:items-end">
+                <div>
+                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Nome do evento</label>
+                  <input
+                    value={eventForm.name}
+                    onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
+                    placeholder="Corrida Funpace"
+                    className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Data</label>
+                  <input
+                    type="date"
+                    value={eventForm.date}
+                    onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
+                    className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Local</label>
+                  <input
+                    value={eventForm.location}
+                    onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                    placeholder="Parque / Cidade"
+                    className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Ponto padrao</label>
+                  <input
+                    value={eventForm.checkpoint}
+                    onChange={(event) => setEventForm((current) => ({ ...current, checkpoint: event.target.value }))}
+                    placeholder="Chegada"
+                    className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                  />
+                </div>
+                <div>
+                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Status</label>
+                  <select
+                    value={eventForm.status}
+                    onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value as Event['status'] }))}
+                    className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                  >
+                    <option value="active">Ativo</option>
+                    <option value="scheduled">Agendado</option>
+                    <option value="closed">Encerrado</option>
+                  </select>
+                </div>
+                <button
+                  type="submit"
+                  disabled={isCreatingEvent}
+                  className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:opacity-60"
+                >
+                  {isCreatingEvent ? 'Salvando...' : 'Criar Evento'}
+                </button>
+              </form>
+
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex items-center justify-between">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Eventos cadastrados</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">{events.length} evento(s)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadEvents}
+                    className="h-10 px-4 border border-white/15 font-mono text-[10px] uppercase text-gray-300 hover:text-white hover:border-white/30"
+                  >
+                    Atualizar
+                  </button>
+                </div>
+                <div className="divide-y divide-white/10">
+                  {isLoadingEvents ? (
+                    <div className="p-8 text-center font-mono text-xs uppercase text-gray-500">Carregando eventos...</div>
+                  ) : events.length === 0 ? (
+                    <div className="p-8 text-center font-mono text-xs uppercase text-gray-500">Nenhum evento cadastrado.</div>
+                  ) : events.map((eventItem) => (
+                    <div key={eventItem.id} className="p-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
+                      <div className="min-w-0">
+                        <p className="font-sans font-black text-lg uppercase text-white truncate">{eventItem.name}</p>
+                        <p className="font-mono text-[10px] uppercase text-gray-500 truncate">
+                          {eventItem.location || 'Local nao informado'} - {eventItem.checkpoint || 'Ponto padrao'}
+                        </p>
+                      </div>
+                      <span className="font-mono text-xs uppercase text-gray-300">
+                        {new Date(`${eventItem.date}T00:00:00`).toLocaleDateString('pt-BR')}
+                      </span>
+                      <span className="w-fit px-2 py-1 border border-white/10 bg-white/5 font-mono text-[10px] uppercase text-brutal-accent">
+                        {eventItem.status}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'sales' && (
             <motion.div
               key="sales"
@@ -1725,16 +1877,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               animate={{ opacity: 1, y: 0 }}
               className="space-y-5"
             >
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saques pendentes</p>
                   <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(pendingWithdrawalTotal)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{pendingWithdrawals.length} solicitacao(oes)</p>
-                </div>
-                <div className="bg-[#0d131c] border border-white/10 p-5">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Pedidos pendentes</p>
-                  <p className="font-sans font-black text-3xl text-yellow-400">{formatCurrency(pendingOrderTotal)}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{pendingOrders.length} aguardando confirmacao</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Receita paga</p>
@@ -1809,61 +1956,6 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Novas solicitacoes Pix aparecem aqui.</p>
                   </div>
                 )}
-              </div>
-
-              <div className="bg-[#0d131c] border border-white/10">
-                <div className="px-5 py-4 border-b border-white/10">
-                  <h3 className="font-sans font-black text-base uppercase text-white">Pagamentos Pendentes</h3>
-                  <p className="font-mono text-[10px] uppercase text-gray-500">Pedidos aguardando confirmacao manual</p>
-                </div>
-                <div className="divide-y divide-white/10">
-                  {pendingOrders.length > 0 ? pendingOrders.map((order) => (
-                    <div key={order.id} className="p-5 space-y-4">
-                      <div className="flex items-start justify-between gap-4">
-                        <div className="min-w-0">
-                          <p className="font-sans font-black text-sm uppercase text-white truncate">Pedido #{order.id.slice(0, 8)}</p>
-                          <p className="font-mono text-[10px] text-gray-500 uppercase truncate">{order.buyerName}</p>
-                          <p className="font-mono text-[10px] text-gray-600 truncate">{order.buyerEmail}</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <p className="font-sans font-black text-lg text-yellow-400">{formatCurrency(Number(order.total))}</p>
-                          <p className="font-mono text-[9px] text-yellow-300 uppercase">Pendente</p>
-                        </div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          disabled={updatingOrderId === order.id}
-                          onClick={() => handleManualOrderStatus(order, 'paid')}
-                          className="h-10 bg-green-500 text-white border border-green-500 font-mono text-[10px] uppercase font-bold hover:bg-green-400 disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 transition-colors cursor-pointer"
-                        >
-                          {updatingOrderId === order.id ? 'Salvando...' : 'Confirmar Pago'}
-                        </button>
-                        <button
-                          disabled={updatingOrderId === order.id}
-                          onClick={() => handleManualOrderStatus(order, 'cancelled')}
-                          className="h-10 bg-transparent text-red-300 border border-red-500/30 font-mono text-[10px] uppercase font-bold hover:bg-red-500/10 disabled:text-gray-500 disabled:border-gray-700 transition-colors cursor-pointer"
-                        >
-                          Cancelar
-                        </button>
-                      </div>
-                      <div className="bg-[#080d14] border border-white/10 p-3 space-y-2">
-                        <p className="font-mono text-[9px] text-gray-500 uppercase">{order.items?.length ?? 0} itens no pedido</p>
-                        {(order.items ?? []).slice(0, 3).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-3 font-mono text-[10px] text-gray-300">
-                            <span className="truncate">{item.name}</span>
-                            <span className="shrink-0 text-white font-bold">{formatCurrency(Number(item.price))}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )) : (
-                    <div className="px-5 py-12 text-center">
-                      <CheckCircle2 className="w-10 h-10 text-gray-600 mx-auto mb-4" />
-                      <p className="font-sans font-black text-sm uppercase text-white">Nenhum pagamento pendente</p>
-                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Pedidos pagos e cancelados seguem para o log.</p>
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">

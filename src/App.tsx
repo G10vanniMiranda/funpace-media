@@ -14,6 +14,7 @@ import { PhotographerSection } from './components/PhotographerSection';
 import { PhotographerProfile } from './components/PhotographerProfile';
 import { PhotographerDashboard } from './components/PhotographerDashboard';
 import { PhotographerLogin } from './components/PhotographerLogin';
+import { PhotographerPasswordSetup } from './components/PhotographerPasswordSetup';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLogin } from './components/AdminLogin';
 import { PagamentoSucesso } from './routes/pagamento/sucesso';
@@ -1117,6 +1118,7 @@ export default function App() {
     <Router>
       <Routes>
         <Route path="/admin" element={<AdminRoute />} />
+        <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
         <Route path="/eventos" element={<Storefront />} />

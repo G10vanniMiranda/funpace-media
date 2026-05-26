@@ -219,6 +219,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawalError, setWithdrawalError] = useState('');
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
+  const [batchPriceInput, setBatchPriceInput] = useState('19.90');
   const [previewIndex, setPreviewIndex] = useState(0);
   const [eventInput, setEventInput] = useState('Geral');
   const [checkpointInput, setCheckpointInput] = useState('Ponto Principal');
@@ -265,6 +266,22 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       time: ['16:00', '14:00', '18:00'][index] ?? '08:00',
     }));
   }, [products]);
+  const visibleProductStats = React.useMemo(() => {
+    const activeProducts = products.filter((product) => (product.status ?? 'published') !== 'removed');
+    return {
+      total: activeProducts.length,
+      photos: activeProducts.filter((product) => product.type === 'IMG').length,
+      videos: activeProducts.filter((product) => product.type === 'VIDEO').length,
+      drafts: activeProducts.filter((product) => (product.status ?? 'published') === 'draft').length,
+    };
+  }, [products]);
+  const pendingWithdrawalTotal = withdrawals
+    .filter((withdrawal) => withdrawal.status === 'pending' || withdrawal.status === 'approved')
+    .reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
+  const paidWithdrawalTotal = withdrawals
+    .filter((withdrawal) => withdrawal.status === 'paid')
+    .reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
+  const monthlyGoalPercent = Math.min(100, Math.round((dashboardMetrics.monthlyEarnings / dashboardMetrics.monthlyGoal) * 100));
 
   React.useEffect(() => {
     async function loadPhotographerContent() {
@@ -326,9 +343,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
+      const defaultBatchPrice = Number(batchPriceInput);
+      const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
       const newFiles = Array.from(e.target.files).map((file: File) => ({
         file,
-        price: 19.90,
+        price: resolvedPrice,
         name: file.name,
         description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
         bib: '',
@@ -347,6 +366,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const clearSelectedFiles = () => {
     selectedFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setSelectedFiles([]);
+    setBatchPriceInput('19.90');
     setPreviewIndex(0);
   };
 
@@ -354,6 +374,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setSelectedFiles((current) => current.map((item, itemIndex) => (
       itemIndex === index ? { ...item, ...changes } : item
     )));
+  };
+
+  const applyBatchPriceToSelectedFiles = () => {
+    const normalizedPrice = Number(batchPriceInput);
+    if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
+      alert('Informe um valor valido para aplicar em todas as fotos.');
+      return;
+    }
+
+    setSelectedFiles((current) => current.map((item) => ({ ...item, price: normalizedPrice })));
   };
 
   const openEditModal = (product: Product) => {
@@ -497,7 +527,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
-          throw new Error(`Falha ao publicar "${item.name}": ${message}`);
+          const friendlyMessage = /sess[aã]o expirada/i.test(message)
+            ? 'Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se continuar, revise o token do bucket no .env/deploy.'
+            : message;
+          throw new Error(`Falha ao publicar "${item.name}": ${friendlyMessage}`);
         }
       }
       
@@ -601,7 +634,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Dashboard'}
               {activeTab === 'products' && 'Produtos'}
-              {activeTab === 'earnings' && 'Estatísticas'}
+              {activeTab === 'earnings' && 'Meus Ganhos'}
             </h2>
             <p className="font-sans text-sm text-gray-400">Bem-vindo de volta, {photographer.name.split(' ')[0]}!</p>
           </div>
@@ -789,25 +822,49 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
+              className="space-y-5"
             >
-              <div className="flex flex-col md:flex-row gap-6 mb-8">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Publicados</p>
+                  <p className="font-sans font-black text-3xl text-white">{visibleProductStats.total}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Produtos ativos</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Fotos</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{visibleProductStats.photos}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Imagens no catalogo</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Videos</p>
+                  <p className="font-sans font-black text-3xl text-yellow-400">{visibleProductStats.videos}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Clipes e highlights</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Rascunhos</p>
+                  <p className="font-sans font-black text-3xl text-gray-300">{visibleProductStats.drafts}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Aguardando publicacao</p>
+                </div>
+              </div>
+
+              <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-col xl:flex-row gap-4">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                   <input 
                     type="text" 
                     value={productSearch}
                     onChange={(event) => setProductSearch(event.target.value)}
-                    placeholder="BUSCAR POR NOME, EVENTO, CHECKPOINT OU PEITO..." 
-                    className="w-full h-14 pl-12 pr-4 bg-white brutal-border font-mono text-sm focus:outline-none focus:ring-2 focus:ring-brutal-accent transition-all"
+                    placeholder="Buscar por nome, evento, checkpoint, peito ou ID" 
+                    className="w-full h-12 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs outline-none focus:border-brutal-accent transition-colors"
                   />
                 </div>
                 <div className="grid grid-cols-2 md:flex gap-3">
                   <div className="relative">
-                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                    <Filter className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 w-4 h-4" />
                     <select
                       value={productTypeFilter}
                       onChange={(event) => setProductTypeFilter(event.target.value as ProductTypeFilter)}
-                      className="w-full md:w-40 h-14 pl-10 pr-4 bg-white brutal-border font-mono text-xs uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                      className="w-full md:w-44 h-12 pl-10 pr-4 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
                     >
                       <option value="all">Todos tipos</option>
                       <option value="IMG">Fotos</option>
@@ -818,7 +875,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <select
                     value={productStatusFilter}
                     onChange={(event) => setProductStatusFilter(event.target.value as ProductStatusFilter)}
-                    className="w-full md:w-40 h-14 px-4 bg-white brutal-border font-mono text-xs uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                    className="w-full md:w-44 h-12 px-4 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
                   >
                     <option value="all">Ativos</option>
                     <option value="published">Publicado</option>
@@ -827,10 +884,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
               </div>
 
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 mb-6">
-                <p className="font-mono text-[10px] uppercase text-gray-500">
-                  {filteredProducts.length} de {products.length} produtos encontrados
-                </p>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-sans font-black text-base uppercase text-white">Catalogo publicado</h3>
+                  <p className="font-mono text-[10px] uppercase text-gray-500">
+                    {filteredProducts.length} de {products.length} produtos encontrados
+                  </p>
+                </div>
                 {(productSearch || productTypeFilter !== 'all' || productStatusFilter !== 'all') && (
                   <button
                     onClick={() => {
@@ -838,50 +898,52 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       setProductTypeFilter('all');
                       setProductStatusFilter('all');
                     }}
-                    className="self-start md:self-auto font-mono text-[10px] uppercase font-bold text-brutal-accent hover:underline cursor-pointer"
+                    className="self-start md:self-auto font-mono text-[10px] uppercase font-bold text-brutal-accent hover:text-white transition-colors cursor-pointer"
                   >
                     Limpar filtros
                   </button>
                 )}
               </div>
 
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
                 {filteredProducts.map((product) => (
-                  <div key={product.id} className="group bg-white brutal-border brutal-shadow-hover overflow-hidden transition-all">
-                    <div className="aspect-[3/4] relative">
+                  <div key={product.id} className="group bg-[#0d131c] border border-white/10 overflow-hidden transition-colors hover:border-brutal-accent/70">
+                    <div className="aspect-[4/5] relative bg-[#080d14]">
                       {product.type === 'IMG' ? (
-                        <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                        <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
                       ) : product.thumbnailUrl ? (
-                        <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" />
+                        <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
                       ) : (
-                        <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover grayscale group-hover:grayscale-0 transition-all duration-500" muted preload="metadata" />
+                        <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
                       )}
-                      <div className="absolute top-2 left-2 flex gap-1">
-                        <span className="bg-brutal-black text-white px-2 py-0.5 font-mono text-[8px] uppercase tracking-tighter">
+                      <div className="absolute inset-x-0 top-0 p-3 flex items-start justify-between gap-2">
+                        <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
                           {product.type}
                         </span>
-                        <span className="bg-brutal-accent text-white px-2 py-0.5 font-mono text-[8px] uppercase tracking-tighter">
-                          R$ {product.price.toFixed(2)}
-                        </span>
-                        {(product.status ?? 'published') !== 'published' && (
-                          <span className="bg-white text-brutal-black px-2 py-0.5 font-mono text-[8px] uppercase tracking-tighter">
-                            {product.status}
+                        <div className="flex flex-col items-end gap-1">
+                          <span className="bg-brutal-accent text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
+                            {formatCurrency(product.price)}
                           </span>
-                        )}
+                          {(product.status ?? 'published') !== 'published' && (
+                            <span className="bg-yellow-500/90 text-black px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
+                              {product.status}
+                            </span>
+                          )}
+                        </div>
                       </div>
-                      <div className="absolute inset-0 bg-brutal-black/60 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
-                        <p className="text-white font-mono text-[10px] uppercase mb-4 text-center px-4">{product.name}</p>
+                      <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
+                        <p className="text-white font-sans font-black text-sm uppercase mb-4 text-center px-4">{product.name}</p>
                         <div className="flex gap-2">
                           <button
                             onClick={() => openEditModal(product)}
-                            className="bg-white p-2 brutal-border-thin hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer"
+                            className="bg-white text-brutal-black p-2 border border-white hover:bg-brutal-accent hover:text-white hover:border-brutal-accent transition-colors cursor-pointer"
                             title="Editar produto"
                           >
                             <Settings className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleRemoveProduct(product)}
-                            className="bg-white p-2 brutal-border-thin hover:bg-red-600 hover:text-white transition-colors cursor-pointer"
+                            className="bg-white text-brutal-black p-2 border border-white hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
                             title="Remover produto"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -889,13 +951,25 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </div>
                       </div>
                     </div>
+                    <div className="p-4 space-y-3">
+                      <div>
+                        <p className="font-sans font-black text-sm uppercase text-white truncate">{product.name}</p>
+                        <p className="font-mono text-[10px] uppercase text-gray-500 truncate">{product.event || 'Geral'} - {product.checkpoint || 'Ponto principal'}</p>
+                      </div>
+                      <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase">
+                        <span className="text-gray-500">Peito {product.bib || 'N/I'}</span>
+                        <span className={(product.status ?? 'published') === 'draft' ? 'text-yellow-400' : 'text-green-400'}>
+                          {(product.status ?? 'published') === 'draft' ? 'Rascunho' : 'Publicado'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
               {filteredProducts.length === 0 && (
-                <div className="bg-white brutal-border p-10 text-center mt-8">
-                  <Search className="w-10 h-10 text-gray-300 mx-auto mb-4" />
-                  <h3 className="font-display text-2xl uppercase mb-2">Nenhum produto encontrado</h3>
+                <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
+                  <Search className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                  <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhum produto encontrado</h3>
                   <p className="font-mono text-xs uppercase text-gray-500">Ajuste os filtros ou limpe a busca para ver todo o catalogo.</p>
                 </div>
               )}
@@ -908,23 +982,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-12"
+              className="space-y-5"
             >
-              <div className="bg-brutal-black text-white p-8 brutal-border brutal-shadow flex flex-col md:flex-row justify-between items-center gap-8">
+              <div className="bg-[#0d131c] text-white border border-white/10 p-5 md:p-7 flex flex-col xl:flex-row justify-between gap-6">
                 <div>
-                  <h3 className="font-display text-2xl uppercase text-gray-400 mb-2">Seu Saldo Disponivel</h3>
-                  <p className="font-display text-7xl md:text-9xl text-brutal-accent leading-none tracking-tighter">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saldo disponivel para repasse</p>
+                  <p className="font-sans font-black text-5xl md:text-6xl text-brutal-accent leading-none">
                     {formatCurrency(dashboardMetrics.availableBalance)}
                   </p>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-4">
                     Vendas pagas liberadas, descontando saques pendentes e pagos.
                   </p>
                 </div>
-                <div className="w-full md:w-auto">
+                <div className="w-full xl:w-[320px] bg-[#080d14] border border-white/10 p-4">
                   <button
                     disabled={dashboardMetrics.availableBalance <= 0}
                     onClick={() => setShowWithdrawalModal(true)}
-                    className="w-full px-12 py-6 bg-white text-brutal-black font-display text-xl uppercase tracking-widest hover:bg-brutal-accent hover:text-white hover:-translate-x-1 hover:-translate-y-1 transition-all brutal-border cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:text-brutal-black disabled:hover:translate-x-0 disabled:hover:translate-y-0"
+                    className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
                     Solicitar Saque
                   </button>
@@ -932,22 +1006,52 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                <div className="bg-white p-8 brutal-border space-y-6">
-                  <h3 className="font-display text-2xl uppercase">Historico Financeiro</h3>
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Ganhos totais</p>
+                  <p className="font-sans font-black text-3xl text-white">{formatCurrency(dashboardMetrics.totalEarnings)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{dashboardMetrics.salesCount} venda(s)</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">A liberar</p>
+                  <p className="font-sans font-black text-3xl text-yellow-400">{formatCurrency(dashboardMetrics.pendingEarnings)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Janela de 7 dias</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saques em aberto</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(pendingWithdrawalTotal)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Pendentes/aprovados</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Ja pago</p>
+                  <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidWithdrawalTotal)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Historico recebido</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-[1.2fr_0.8fr] gap-5">
+                <div className="bg-[#0d131c] border border-white/10">
+                  <div className="p-5 border-b border-white/10 flex items-center justify-between">
+                    <div>
+                      <h3 className="font-sans font-black text-base uppercase text-white">Historico Financeiro</h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">Vendas confirmadas e solicitacoes de saque</p>
+                    </div>
+                    <DollarSign className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div className="p-5 space-y-6">
                   {withdrawals.length > 0 && (
                     <div className="space-y-3">
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">Solicitacoes de saque</p>
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Solicitacoes de saque</p>
                       {withdrawals.slice(0, 4).map((withdrawal) => (
-                        <div key={withdrawal.id} className="flex justify-between items-center gap-4 py-3 border-b border-gray-100">
+                        <div key={withdrawal.id} className="flex justify-between items-center gap-4 p-3 bg-[#080d14] border border-white/10">
                           <div className="min-w-0">
-                            <p className="font-display text-lg truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
-                            <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest truncate">
+                            <p className="font-sans font-black text-sm uppercase text-white truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
+                            <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
                               Pix: {withdrawal.pixKey} - {formatSaleDate(withdrawal.createdAt)}
                             </p>
                           </div>
-                          <p className={`font-display text-xl shrink-0 ${
-                            withdrawal.status === 'rejected' || withdrawal.status === 'cancelled' ? 'text-red-600' : 'text-brutal-accent'
+                          <p className={`font-sans font-black text-lg shrink-0 ${
+                            withdrawal.status === 'rejected' || withdrawal.status === 'cancelled' ? 'text-red-300' : 'text-brutal-accent'
                           }`}>
                             - {formatCurrency(Number(withdrawal.amount))}
                           </p>
@@ -957,89 +1061,90 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   )}
                   {recentSales.length === 0 ? (
                     <div className="py-8 text-center">
-                      <p className="font-display text-xl uppercase">Nenhuma venda paga ainda</p>
-                      <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
+                      <p className="font-sans font-black text-xl uppercase text-white">Nenhuma venda paga ainda</p>
+                      <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
                         As movimentacoes aparecem quando pagamentos forem confirmados.
                       </p>
                     </div>
                   ) : recentSales.map((sale) => (
-                    <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-gray-100">
+                    <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-white/10 last:border-0">
                       <div className="min-w-0">
-                        <p className="font-display text-lg truncate">Venda Confirmada</p>
-                        <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">
+                        <p className="font-sans font-black text-sm uppercase text-white truncate">Venda Confirmada</p>
+                        <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
                           Pedido #{sale.orderId.substring(0, 8)} - {sale.event}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="font-display text-xl text-green-600">+ {formatCurrency(sale.netAmount)}</p>
-                        <p className="font-mono text-[10px] text-gray-400 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
+                        <p className="font-sans font-black text-lg text-green-400">+ {formatCurrency(sale.netAmount)}</p>
+                        <p className="font-mono text-[10px] text-gray-500 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
                       </div>
                     </div>
                   ))}
+                  </div>
                 </div>
 
-                <div className="bg-white p-8 brutal-border flex flex-col items-center justify-center text-center">
-                   <TrendingUp className="w-16 h-16 text-brutal-accent mb-6" />
-                   <h3 className="font-display text-3xl uppercase mb-4">Meta Mensal</h3>
-                   <div className="w-full h-4 bg-gray-100 brutal-border-thin mb-4 overflow-hidden">
+                <div className="bg-[#0d131c] border border-white/10 p-6 flex flex-col justify-center text-center">
+                   <div className="mx-auto w-14 h-14 bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center mb-5">
+                     <TrendingUp className="w-7 h-7 text-brutal-accent" />
+                   </div>
+                   <h3 className="font-sans font-black text-xl uppercase text-white mb-4">Meta Mensal</h3>
+                   <div className="w-full h-3 bg-[#080d14] border border-white/10 mb-4 overflow-hidden">
                      <div
                        className="h-full bg-brutal-accent"
-                       style={{ width: `${Math.min(100, Math.round((dashboardMetrics.monthlyEarnings / dashboardMetrics.monthlyGoal) * 100))}%` }}
+                       style={{ width: `${monthlyGoalPercent}%` }}
                      />
                    </div>
-                   <p className="font-mono text-sm text-gray-500">
-                     Voce atingiu <span className="font-bold text-brutal-black">
-                       {Math.min(100, Math.round((dashboardMetrics.monthlyEarnings / dashboardMetrics.monthlyGoal) * 100))}%
-                     </span> da sua meta de <span className="font-bold text-brutal-black">{formatCurrency(dashboardMetrics.monthlyGoal)}</span>
+                   <p className="font-mono text-sm text-gray-400">
+                     Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(dashboardMetrics.monthlyGoal)}</span>
                    </p>
-                   <p className="font-mono text-[10px] uppercase text-gray-400 tracking-widest mt-3">
+                   <p className="font-mono text-[10px] uppercase text-gray-500 tracking-widest mt-3">
                      Receita do mes: {formatCurrency(dashboardMetrics.monthlyEarnings)}
                    </p>
                 </div>
               </div>
 
-              <div className="bg-white p-8 brutal-border space-y-6">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col md:flex-row md:items-end justify-between gap-4">
                   <div>
-                    <h3 className="font-display text-2xl uppercase">Performance por Produto</h3>
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mt-1">
+                    <h3 className="font-sans font-black text-base uppercase text-white">Performance por Produto</h3>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
                       Ranking por receita liquida, vendas pagas e downloads reais.
                     </p>
                   </div>
-                  <span className="font-mono text-[10px] uppercase text-gray-400">{productPerformance.length} itens</span>
+                  <span className="font-mono text-[10px] uppercase text-gray-500">{productPerformance.length} itens</span>
                 </div>
 
                 {productPerformance.length === 0 ? (
-                  <div className="py-8 text-center bg-gray-50 brutal-border-thin">
-                    <p className="font-display text-xl uppercase">Sem performance registrada</p>
-                    <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
+                  <div className="m-5 py-10 text-center bg-[#080d14] border border-white/10">
+                    <p className="font-sans font-black text-xl uppercase text-white">Sem performance registrada</p>
+                    <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
                       Produtos aparecem aqui depois das primeiras vendas pagas.
                     </p>
                   </div>
                 ) : (
-                  <div className="space-y-3">
+                  <div className="p-5 space-y-3">
                     {productPerformance.map((item, index) => (
-                      <div key={item.productId} className="grid grid-cols-[auto_56px_1fr_auto] items-center gap-4 p-3 bg-gray-50 brutal-border-thin">
-                        <span className="font-display text-2xl text-brutal-accent w-8">#{index + 1}</span>
-                        <div className="w-14 h-14 bg-gray-100 brutal-border-thin overflow-hidden">
+                      <div key={item.productId} className="grid grid-cols-[auto_56px_1fr_auto] items-center gap-4 p-3 bg-[#080d14] border border-white/10">
+                        <span className="font-sans font-black text-xl text-brutal-accent w-8">#{index + 1}</span>
+                        <div className="w-14 h-14 bg-white/5 border border-white/10 overflow-hidden">
                           {item.thumbnailUrl ? (
                             <img src={item.thumbnailUrl} alt={item.name} className="w-full h-full object-cover" />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center font-mono text-[9px] text-gray-400">{item.type}</div>
+                            <div className="w-full h-full flex items-center justify-center font-mono text-[9px] text-gray-500">{item.type}</div>
                           )}
                         </div>
                         <div className="min-w-0">
-                          <p className="font-display text-lg truncate">{item.name}</p>
-                          <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest truncate">
+                          <p className="font-sans font-black text-sm text-white truncate">{item.name}</p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
                             Peito {item.bib || 'N/I'} - {item.event}
                           </p>
-                          <p className="font-mono text-[10px] text-gray-500 uppercase mt-1">
+                          <p className="font-mono text-[10px] text-gray-600 uppercase mt-1">
                             {item.salesCount} venda(s) - {item.downloads} download(s)
                           </p>
                         </div>
                         <div className="text-right shrink-0">
-                          <p className="font-display text-xl text-green-600">{formatCurrency(item.netRevenue)}</p>
-                          <p className="font-mono text-[9px] uppercase text-gray-400">liquido</p>
+                          <p className="font-sans font-black text-lg text-green-400">{formatCurrency(item.netRevenue)}</p>
+                          <p className="font-mono text-[9px] uppercase text-gray-500">liquido</p>
                         </div>
                       </div>
                     ))}
@@ -1130,13 +1235,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       {/* Edit Product Modal */}
       <AnimatePresence>
         {editingProduct && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 md:p-12">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeEditModal}
-              className="absolute inset-0 bg-brutal-black/90 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/85 backdrop-blur-md" 
             />
 
             <motion.div
@@ -1200,7 +1305,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <select
                         value={editForm.status}
                         onChange={(event) => setEditForm((current) => ({ ...current, status: event.target.value as ProductEditForm['status'] }))}
-                        className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
                       >
                         <option value="published">Publicado</option>
                         <option value="draft">Rascunho</option>
@@ -1214,7 +1319,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       type="text"
                       value={editForm.event}
                       onChange={(event) => setEditForm((current) => ({ ...current, event: event.target.value }))}
-                      className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
                     />
                   </div>
 
@@ -1225,7 +1330,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         type="text"
                         value={editForm.checkpoint}
                         onChange={(event) => setEditForm((current) => ({ ...current, checkpoint: event.target.value }))}
-                        className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
                       />
                     </div>
 
@@ -1238,7 +1343,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                           ...current,
                           bib: event.target.value.replace(/[^\w-]/g, '').slice(0, 32),
                         }))}
-                        className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
                       />
                     </div>
                   </div>
@@ -1281,11 +1386,27 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-5xl bg-brutal-white brutal-border brutal-shadow-heavy flex flex-col md:flex-row overflow-hidden max-h-[90vh]"
+              className="relative w-full max-w-6xl bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.6)] text-white flex flex-col lg:flex-row overflow-hidden max-h-[92vh]"
             >
-              <div className="md:w-1/2 p-8 md:p-12 border-b-2 md:border-b-0 md:border-r-2 border-brutal-black overflow-y-auto min-h-0">
-                <h3 className="font-display text-4xl mb-4 tracking-tighter uppercase">Enviar Capturas</h3>
-                <p className="font-mono text-[10px] text-gray-400 uppercase mb-8">Selecione múltiplas fotos ou vídeos para o seu catálogo.</p>
+              <button
+                onClick={() => {
+                  clearSelectedFiles();
+                  setShowUploadModal(false);
+                }}
+                className="absolute right-4 top-4 z-10 p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+              <div className="lg:w-[47%] p-6 md:p-8 border-b lg:border-b-0 lg:border-r border-white/10 overflow-y-auto min-h-0">
+                <div className="mb-6">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-brutal-accent/10 border border-brutal-accent/30 text-brutal-accent font-mono text-[10px] uppercase tracking-widest mb-4">
+                    <Upload className="w-3.5 h-3.5" />
+                    Novo lote
+                  </div>
+                  <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Enviar Capturas</h3>
+                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Selecione fotos ou videos para publicar no catalogo.</p>
+                </div>
                 
                 <input 
                   type="file" 
@@ -1298,58 +1419,92 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
                 <div 
                   onClick={() => fileInputRef.current?.click()}
-                  className="aspect-video brutal-border border-dashed border-2 border-gray-300 flex flex-col items-center justify-center group hover:bg-gray-50 transition-colors cursor-pointer mb-8"
+                  className="aspect-video border border-dashed border-white/20 bg-[#080d14] flex flex-col items-center justify-center group hover:border-brutal-accent hover:bg-brutal-accent/5 transition-colors cursor-pointer mb-6"
                 >
-                  <div className="bg-brutal-accent text-white p-4 brutal-border group-hover:scale-110 transition-transform mb-4">
+                  <div className="bg-brutal-accent text-white p-4 border border-brutal-accent group-hover:scale-110 transition-transform mb-4">
                     <Upload className="w-6 h-6" />
                   </div>
-                  <p className="font-display text-lg uppercase mb-1">Escolher Arquivos</p>
-                  <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">Suporta múltiplos uploads</p>
+                  <p className="font-sans font-black text-lg uppercase mb-1">Escolher Arquivos</p>
+                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Suporta multiplos uploads</p>
                 </div>
 
                 {selectedFiles.length > 0 && (
                   <div className="space-y-3">
+                    <div className="bg-[#080d14] border border-white/10 p-3 space-y-3">
+                      <div className="flex flex-col sm:flex-row sm:items-end gap-3">
+                        <div className="flex-1">
+                          <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Valor para todas as fotos</label>
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono text-[10px] uppercase text-gray-500">R$</span>
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={batchPriceInput}
+                              onChange={(event) => setBatchPriceInput(event.target.value)}
+                              className="w-full h-10 px-3 bg-[#05080d] border border-white/10 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={applyBatchPriceToSelectedFiles}
+                          className="h-10 px-4 bg-brutal-accent text-white border border-brutal-accent font-mono text-[10px] uppercase font-bold hover:bg-white hover:text-brutal-accent transition-colors"
+                        >
+                          Aplicar em todas
+                        </button>
+                      </div>
+                      <p className="font-mono text-[10px] uppercase text-gray-600">
+                        Voce ainda pode ajustar o valor individual de cada captura abaixo.
+                      </p>
+                    </div>
+
                     <h4 className="font-mono text-[10px] uppercase font-bold text-gray-500">Arquivos Selecionados ({selectedFiles.length})</h4>
                     <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
                        {selectedFiles.map((item, idx) => (
                          <div
                            key={idx}
                            onClick={() => setPreviewIndex(idx)}
-                           className={`w-full bg-white p-3 brutal-border-thin text-left transition-colors cursor-pointer ${
-                             previewIndex === idx ? 'ring-2 ring-brutal-accent' : 'hover:bg-gray-50'
+                           className={`w-full bg-[#080d14] p-3 border text-left transition-colors cursor-pointer ${
+                             previewIndex === idx ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-white/25'
                            }`}
                          >
-                           <div className="flex items-start gap-3">
-                             <div className="w-14 h-14 bg-gray-100 brutal-border-thin overflow-hidden shrink-0">
+                           <div className="grid grid-cols-[64px_1fr] gap-3">
+                             <div className="w-16 h-16 bg-white/5 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
                                 {item.file.type.startsWith('image') ? (
                                   <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-brutal-black text-white">
+                                  <div className="w-full h-full flex items-center justify-center bg-black text-white">
                                     <VideoIcon className="w-4 h-4" />
                                   </div>
                                 )}
                              </div>
                              <div className="flex-1 min-w-0 space-y-2">
-                               <p className="font-mono text-[9px] uppercase truncate text-gray-400">{item.name}</p>
+                               <div className="flex items-center justify-between gap-3">
+                                 <p className="font-mono text-[9px] uppercase truncate text-gray-500">{item.name}</p>
+                                 <span className="shrink-0 font-mono text-[8px] uppercase text-gray-300 bg-white/5 border border-white/10 px-2 py-1">
+                                   {item.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
+                                 </span>
+                               </div>
                                <input
                                 type="text"
                                 value={item.description}
                                 onClick={(event) => event.stopPropagation()}
                                 onChange={(event) => updateSelectedFile(idx, { description: event.target.value })}
                                 placeholder="Descricao desta foto"
-                                className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] uppercase"
+                                className="w-full h-9 px-2 bg-[#05080d] border border-white/10 text-white placeholder:text-gray-600 font-mono text-[10px] uppercase outline-none focus:border-brutal-accent"
                                />
-                               <div className="grid grid-cols-[1fr_96px] gap-2">
+                               <div className="grid grid-cols-[1fr_112px] gap-2">
                                  <input
                                   type="text"
                                   value={item.bib}
                                   onClick={(event) => event.stopPropagation()}
                                   onChange={(event) => updateSelectedFile(idx, { bib: event.target.value.replace(/[^\w-]/g, '').slice(0, 32) })}
                                   placeholder="N PEITO OPC."
-                                  className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] uppercase"
+                                  className="w-full h-9 px-2 bg-[#05080d] border border-white/10 text-white placeholder:text-gray-600 font-mono text-[10px] uppercase outline-none focus:border-brutal-accent"
                                  />
-                                 <div className="flex items-center gap-1">
-                                   <span className="font-mono text-[9px] uppercase text-gray-400">R$</span>
+                                 <div className="grid grid-cols-[30px_1fr] items-center bg-[#05080d] border border-white/10 focus-within:border-brutal-accent">
+                                   <span className="font-mono text-[9px] uppercase text-gray-500 text-center border-r border-white/10">R$</span>
                                    <input
                                     type="number"
                                     min="0"
@@ -1357,7 +1512,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                     value={item.price}
                                     onClick={(event) => event.stopPropagation()}
                                     onChange={(event) => updateSelectedFile(idx, { price: parseFloat(event.target.value) })}
-                                    className="w-full h-9 px-2 brutal-border-thin font-mono text-[10px] text-center"
+                                    className="w-full h-9 px-2 bg-transparent text-white font-mono text-[10px] text-center outline-none"
                                    />
                                  </div>
                                </div>
@@ -1370,11 +1525,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 )}
               </div>
 
-              <div className="md:w-1/2 p-8 md:p-12 bg-gray-50 flex flex-col min-h-0">
+              <div className="lg:w-[53%] p-6 md:p-8 bg-[#080d14] flex flex-col min-h-0">
                 <div className="flex-1 overflow-y-auto pr-2 min-h-0">
                 <div className="mb-6">
                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Preview antes de publicar</label>
-                  <div className="aspect-video bg-brutal-black brutal-border overflow-hidden flex items-center justify-center">
+                  <div className="aspect-video bg-black border border-white/10 overflow-hidden flex items-center justify-center">
                     {currentPreview ? (
                       currentPreview.file.type.startsWith('image') ? (
                         <img
@@ -1400,7 +1555,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   {currentPreview && (
                     <div className="mt-3 flex items-center justify-between gap-4">
                       <p className="font-mono text-[10px] uppercase truncate text-gray-500">{currentPreview.name}</p>
-                      <span className="shrink-0 font-mono text-[10px] uppercase bg-white brutal-border-thin px-2 py-1">
+                      <span className="shrink-0 font-mono text-[10px] uppercase bg-[#0d131c] border border-white/10 text-gray-300 px-2 py-1">
                         {currentPreview.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
                       </span>
                     </div>
@@ -1408,33 +1563,33 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
                 <div className="space-y-6 pb-6">
                   <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Coleção</label>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Colecao</label>
                     <input 
                       type="text" 
                       value={eventInput}
                       onChange={e => setEventInput(e.target.value)}
-                      placeholder="EX: TREINO DE SÁBADO, MARATONA SP" 
-                      className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                      placeholder="EX: TREINO DE SABADO, MARATONA SP" 
+                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
                     />
                   </div>
 
                   <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint / Localização</label>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint / Localizacao</label>
                     <input 
                       type="text" 
                       value={checkpointInput}
                       onChange={e => setCheckpointInput(e.target.value)}
                       placeholder="EX: KM 15, CHEGADA" 
-                      className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm uppercase focus:outline-none focus:ring-2 focus:ring-brutal-accent"
+                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
                     />
                   </div>
 
-                  <div className="bg-brutal-black text-white p-6 brutal-border">
+                  <div className="bg-[#0d131c] text-white p-5 border border-white/10">
                     <p className="font-mono text-[10px] uppercase text-gray-400 mb-1">Resumo do Lote</p>
                     <div className="flex justify-between items-end">
-                      <span className="font-display text-lg uppercase">Total Estimado</span>
-                      <span className="font-display text-3xl text-brutal-accent">
-                        R$ {selectedFiles.reduce((acc, curr) => acc + curr.price, 0).toFixed(2)}
+                      <span className="font-sans font-black text-sm uppercase">Total Estimado</span>
+                      <span className="font-sans font-black text-2xl text-brutal-accent">
+                        {formatCurrency(selectedFiles.reduce((acc, curr) => acc + curr.price, 0))}
                       </span>
                     </div>
                   </div>
@@ -1442,20 +1597,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
                 </div>
 
-                <div className="pt-6">
+                <div className="pt-5 border-t border-white/10">
                   <button 
                     disabled={selectedFiles.length === 0 || isLoading}
                     onClick={handleUpload}
-                    className="w-full py-6 bg-brutal-accent text-white font-display text-xl uppercase tracking-widest hover:-translate-x-1 hover:-translate-y-1 transition-all brutal-border brutal-shadow-hover cursor-pointer disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? <Loader2 className="w-8 h-8 animate-spin mx-auto" /> : 'Publicar Produtos'}
+                    {isLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `Publicar ${selectedFiles.length || ''} Produto${selectedFiles.length === 1 ? '' : 's'}`}
                   </button>
                   <button 
                     onClick={() => {
                       clearSelectedFiles();
                       setShowUploadModal(false);
                     }}
-                    className="w-full py-4 mt-4 font-mono text-[10px] uppercase font-bold text-gray-400 hover:text-red-500 transition-colors"
+                    className="w-full py-4 mt-2 font-mono text-[10px] uppercase font-bold text-gray-500 hover:text-red-300 transition-colors"
                   >
                     Cancelar
                   </button>
@@ -1510,3 +1665,7 @@ function StatCard({ label, value, icon, trend, accent = false, warning = false }
     </div>
   );
 }
+
+
+
+

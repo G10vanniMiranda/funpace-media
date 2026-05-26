@@ -108,7 +108,13 @@ async function uploadMediaFile(path: string, file: File) {
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error || payload?.message || raw || `Falha no upload. HTTP ${response.status}`);
+    const message = String(payload?.error || payload?.message || raw || `Falha no upload. HTTP ${response.status}`)
+      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    throw new Error(message || `Falha no upload. HTTP ${response.status}`);
   }
 
   return {

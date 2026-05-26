@@ -29,6 +29,7 @@ import {
 import { AdminMetrics, Order, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
 import { orderService, photographerService, platformSettingsService, productService, withdrawalService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
+import { getCurrentAccessToken } from '../lib/supabase';
 
 interface AdminDashboardProps {
   photographers: Photographer[];
@@ -133,6 +134,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [updatingWithdrawalId, setUpdatingWithdrawalId] = useState<string | null>(null);
   const [isBackfillingThumbnails, setIsBackfillingThumbnails] = useState(false);
   const [thumbnailBackfillProgress, setThumbnailBackfillProgress] = useState('');
+  const [photographerSearch, setPhotographerSearch] = useState('');
+  const [photographerStatusFilter, setPhotographerStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
@@ -142,12 +145,34 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
   const pendingPhotographers = photographers.filter(p => !p.verified);
   const activePhotographers = photographers.filter(p => p.verified);
+  const filteredPhotographers = React.useMemo(() => {
+    const normalizedSearch = photographerSearch.trim().toLowerCase();
+
+    return photographers.filter((photographer) => {
+      const matchesStatus = photographerStatusFilter === 'all'
+        || (photographerStatusFilter === 'active' && photographer.verified)
+        || (photographerStatusFilter === 'pending' && !photographer.verified);
+
+      const matchesSearch = !normalizedSearch || [
+        photographer.name,
+        photographer.email,
+        photographer.id,
+        photographer.phone,
+        photographer.cpf,
+      ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
+
+      return matchesStatus && matchesSearch;
+    });
+  }, [photographers, photographerSearch, photographerStatusFilter]);
   const recentOrders = orders.slice(0, 5);
   const pendingOrders = orders.filter((order) => order.status === 'pending');
   const paidOrders = orders.filter((order) => order.status === 'paid');
   const productsMissingThumbnails = [...photos, ...videos].filter((product) => !product.thumbnailUrl && (product.status ?? 'published') !== 'removed');
   const pendingWithdrawals = withdrawals.filter((withdrawal) => withdrawal.status === 'pending');
   const processedWithdrawals = withdrawals.filter((withdrawal) => withdrawal.status !== 'pending');
+  const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
+  const pendingOrderTotal = pendingOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const paidOrderTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const photographerById = React.useMemo(
     () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
     [photographers],
@@ -181,7 +206,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         id: `p:${p.id}`,
         kind: 'photographer',
         at,
-        title: `Novo fotografo cadastrado: ${p.name}`,
+        title: `Novo Fotografo cadastrado: ${p.name}`,
         meta: `${timeAgo(at)} • Sistema`,
       });
     }
@@ -318,28 +343,38 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     e.preventDefault();
     setIsSubmitting(true);
     try {
-      await photographerService.addPhotographer({
-        name: newPhotographer.name,
-        email: newPhotographer.email,
-        bio: newPhotographer.bio,
-        avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(newPhotographer.name)}&background=random`,
-        stats: {
-          photos: 0,
-          events: 0,
-          rating: 5.0,
-          totalEarnings: 0,
-          pendingEarnings: 0,
-          salesCount: 0
-        }
+      const token = await getCurrentAccessToken();
+      if (!token) {
+        throw new Error('Sessao admin expirada. Entre novamente para convidar fotografos.');
+      }
+
+      const response = await fetch('/api/admin/photographers/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          name: newPhotographer.name,
+          email: newPhotographer.email,
+          bio: newPhotographer.bio,
+        }),
       });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({}));
+        throw new Error(errorPayload?.error || errorPayload?.message || 'Erro ao convidar fotografo.');
+      }
+
+      const payload = await response.json().catch(() => ({}));
       
       onRefresh();
       setShowAddModal(false);
       setNewPhotographer({ name: '', email: '', bio: '' });
-      alert("Fotógrafo cadastrado e aguardando aprovação!");
+      alert(payload?.message || "Fotografo cadastrado e convite de senha enviado por email.");
     } catch (error) {
       console.error(error);
-      alert("Erro ao cadastrar fotógrafo.");
+      alert(error instanceof Error ? error.message : "Erro ao cadastrar fotografo.");
     } finally {
       setIsSubmitting(false);
     }
@@ -579,7 +614,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           <div>
             <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Painel Administrativo'}
-              {activeTab === 'photographers' && 'Gestão de Artistas'}
+              {activeTab === 'photographers' && 'Gestao de Fotografos'}
               {activeTab === 'sales' && 'Fluxo de Caixa'}
               {activeTab === 'settings' && 'Preferências'}
             </h2>
@@ -797,35 +832,90 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               key="photographers"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="space-y-8"
+              className="space-y-5"
             >
-              <div className="flex flex-col md:flex-row gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Credenciados</p>
+                  <p className="font-sans font-black text-3xl text-white">{photographers.length}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{activePhotographers.length} ativos</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Pendentes</p>
+                  <p className="font-sans font-black text-3xl text-yellow-400">{pendingPhotographers.length}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Aguardando aprovacao</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Midias publicadas</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{metrics.photoCount + metrics.videoCount}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{metrics.photoCount} fotos / {metrics.videoCount} videos</p>
+                </div>
+              </div>
+
+              <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-col xl:flex-row gap-4">
                 <div className="flex-1 relative">
-                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                  <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
                   <input 
-                    type="text" 
-                    placeholder="BUSCAR FOTÓGRAFOS POR NOME, EMAIL OU ID..." 
-                    className="w-full h-16 pl-12 pr-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent transition-all outline-none"
+                    type="text"
+                    value={photographerSearch}
+                    onChange={(event) => setPhotographerSearch(event.target.value)}
+                    placeholder="Buscar por nome, email, CPF, telefone ou ID"
+                    className="w-full h-12 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent transition-colors"
                   />
                 </div>
-                <div className="flex gap-4">
-                  <button className="bg-white px-8 brutal-border flex items-center gap-3 font-mono text-xs font-bold uppercase hover:bg-gray-50 cursor-pointer">
-                    <Filter className="w-5 h-5" />
-                    Filtrar
-                  </button>
+                <div className="flex flex-col sm:flex-row gap-3">
+                  <div className="h-12 bg-[#080d14] border border-white/15 flex items-center">
+                    {[
+                      ['all', 'Todos'],
+                      ['active', 'Ativos'],
+                      ['pending', 'Pendentes'],
+                    ].map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setPhotographerStatusFilter(value as 'all' | 'active' | 'pending')}
+                        className={`h-full px-4 font-mono text-[10px] uppercase tracking-widest border-r border-white/10 last:border-r-0 transition-colors ${
+                          photographerStatusFilter === value
+                            ? 'bg-brutal-accent text-white'
+                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                        }`}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
                   <button 
                     onClick={() => setShowAddModal(true)}
-                    className="bg-brutal-accent text-white px-8 brutal-border shadow-[4px_4px_0_#000] flex items-center gap-3 font-display uppercase tracking-widest hover:-translate-x-1 hover:-translate-y-1 transition-all cursor-pointer"
+                    className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer"
                   >
                     <Plus className="w-5 h-5" />
-                    Novo Fotógrafo
+                    Novo Fotografo
                   </button>
                 </div>
               </div>
 
-              <div className="bg-white brutal-border overflow-visible relative">
-                <table className="w-full text-left font-mono text-sm">
-                  <thead className="bg-brutal-black text-white uppercase text-[10px] tracking-widest">
+              <div className="bg-[#0d131c] border border-white/10 overflow-visible relative">
+                <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Fotografos</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">{filteredPhotographers.length} resultado(s)</p>
+                  </div>
+                  {(photographerSearch || photographerStatusFilter !== 'all') && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPhotographerSearch('');
+                        setPhotographerStatusFilter('all');
+                      }}
+                      className="font-mono text-[10px] uppercase tracking-widest text-brutal-accent hover:text-white transition-colors"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
+                </div>
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[980px] text-left font-mono text-xs">
+                  <thead className="bg-[#05080d] text-gray-400 uppercase text-[10px] tracking-widest">
                     <tr>
                       <th className="p-6">Fotógrafo</th>
                       <th className="p-6">Status</th>
@@ -835,29 +925,42 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       <th className="p-6"></th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y-2 divide-gray-100">
-                    {photographers.map((p, idx) => (
-                      <tr key={p.id} className="hover:bg-gray-50 transition-colors">
+                  <tbody className="divide-y divide-white/10">
+                    {filteredPhotographers.map((p) => (
+                      <tr key={p.id} className="hover:bg-white/[0.03] transition-colors">
                         <td className="p-6">
                           <div className="flex items-center gap-4">
-                            <img src={p.avatar} alt="" className="w-10 h-10 border-2 border-brutal-black grayscale" />
-                            <div>
-                              <p className="font-display text-lg uppercase leading-none mb-1">{p.name}</p>
-                              <p className="text-[10px] text-gray-400 lowercase">{p.email}</p>
+                            <div className="w-12 h-12 bg-white/10 border border-white/15 overflow-hidden flex items-center justify-center shrink-0">
+                              {p.avatar ? (
+                                <img src={p.avatar} alt={p.name} className="w-full h-full object-cover grayscale" />
+                              ) : (
+                                <span className="font-sans font-black text-sm text-white">{p.name.slice(0, 2).toUpperCase()}</span>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-sans font-black text-sm uppercase text-white truncate max-w-[280px]">{p.name || 'Sem nome'}</p>
+                              <p className="text-[10px] text-gray-400 lowercase truncate max-w-[280px]">{p.email}</p>
+                              <p className="text-[9px] text-gray-600 uppercase truncate max-w-[280px]">ID {p.id}</p>
                             </div>
                           </div>
                         </td>
                         <td className="p-6">
                           {p.verified ? (
-                            <span className="bg-green-100 text-green-700 px-3 py-1 brutal-border-thin text-[9px] font-bold uppercase">Ativo</span>
+                            <span className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 text-[10px] font-bold uppercase">
+                              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                              Ativo
+                            </span>
                           ) : (
-                            <span className="bg-yellow-100 text-yellow-700 px-3 py-1 brutal-border-thin text-[9px] font-bold uppercase">Pendente</span>
+                            <span className="inline-flex items-center gap-2 bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 px-3 py-1 text-[10px] font-bold uppercase">
+                              <span className="w-1.5 h-1.5 rounded-full bg-yellow-300" />
+                              Pendente
+                            </span>
                           )}
                         </td>
-                        <td className="p-6 text-center">{p.stats?.photos || 0}</td>
-                        <td className="p-6 text-center font-bold">R$ {(p.stats?.totalEarnings || 0).toFixed(2)}</td>
+                        <td className="p-6 text-center text-white font-sans font-black">{p.stats?.photos || 0}</td>
+                        <td className="p-6 text-center text-white font-sans font-black">{formatCurrency(Number(p.stats?.totalEarnings || 0))}</td>
                         <td className="p-6 text-center">
-                          <div className="flex items-center justify-center gap-1">
+                          <div className="flex items-center justify-center gap-1 text-gray-200">
                             <CheckCircle2 className="w-4 h-4 text-brutal-accent" />
                             {p.stats?.rating || 5.0}
                           </div>
@@ -867,7 +970,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             {!p.verified && (
                               <button 
                                 onClick={() => handleVerifyPhotographer(p.id)}
-                                className="bg-green-500 text-white px-3 py-1 brutal-border-thin text-[9px] font-bold uppercase hover:bg-green-600 transition-colors cursor-pointer"
+                                className="h-9 px-3 bg-green-500 text-white border border-green-500 text-[10px] font-bold uppercase hover:bg-green-400 transition-colors cursor-pointer"
                               >
                                 Aprovar
                               </button>
@@ -876,7 +979,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                               <button
                                 type="button"
                                 onClick={() => setOpenMenuPhotographerId((current) => (current === p.id ? null : p.id))}
-                                className="p-2 hover:bg-gray-200 rounded transition-colors cursor-pointer"
+                                className="p-2 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                                 aria-label="Opcoes do fotografo"
                               >
                                 <MoreVertical className="w-5 h-5" />
@@ -888,12 +991,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                     initial={{ opacity: 0, y: -6, scale: 0.98 }}
                                     animate={{ opacity: 1, y: 0, scale: 1 }}
                                     exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                    className="absolute right-0 mt-2 w-56 bg-white brutal-border shadow-[6px_6px_0px_#000] z-[200] overflow-hidden"
+                                    className="absolute right-0 mt-2 w-56 bg-[#05080d] border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.45)] z-[200] overflow-hidden"
                                   >
                                     <button
                                       type="button"
                                       onClick={() => openEditPhotographer(p)}
-                                      className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest hover:bg-gray-50 cursor-pointer"
+                                      className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-200 hover:bg-white/10 cursor-pointer"
                                     >
                                       Editar
                                     </button>
@@ -901,7 +1004,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                       type="button"
                                       disabled={isUpdatingPhotographer}
                                       onClick={() => handleDisablePhotographer(p)}
-                                      className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-600 hover:bg-red-50 disabled:text-gray-400 cursor-pointer"
+                                      className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-400 hover:bg-red-500/10 disabled:text-gray-500 cursor-pointer"
                                     >
                                       Excluir / Desativar
                                     </button>
@@ -913,8 +1016,18 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         </td>
                       </tr>
                     ))}
+                    {filteredPhotographers.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="px-5 py-14 text-center">
+                          <Users className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                          <p className="font-sans font-black text-sm uppercase text-white">Nenhum fotografo encontrado</p>
+                          <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Ajuste a busca ou limpe os filtros.</p>
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                 </table>
+                </div>
               </div>
             </motion.div>
           )}
@@ -924,61 +1037,77 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               key="sales"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="grid grid-cols-1 md:grid-cols-2 gap-8"
+              className="space-y-5"
             >
-              <div className="md:col-span-2 bg-white p-8 brutal-border space-y-6">
-                <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saques pendentes</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(pendingWithdrawalTotal)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{pendingWithdrawals.length} solicitacao(oes)</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Pedidos pendentes</p>
+                  <p className="font-sans font-black text-3xl text-yellow-400">{formatCurrency(pendingOrderTotal)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{pendingOrders.length} aguardando confirmacao</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Receita paga</p>
+                  <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidOrderTotal)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{paidOrders.length} pedido(s) pago(s)</p>
+                </div>
+              </div>
+
+              <div className="bg-[#0d131c] border border-white/10 space-y-6">
+                <div className="px-5 py-4 border-b border-white/10 flex flex-col md:flex-row md:items-end justify-between gap-4">
                   <div>
-                    <h3 className="font-display text-2xl uppercase">Saques Pendentes</h3>
-                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mt-1">
+                    <h3 className="font-sans font-black text-base uppercase text-white">Fila de Saques Pix</h3>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
                       Transferencias Pix solicitadas pelos fotografos
                     </p>
                   </div>
-                  <div className="bg-brutal-black text-white brutal-border px-4 py-3">
+                  <div className="bg-[#080d14] text-white border border-white/10 px-4 py-3">
                     <p className="font-mono text-[9px] uppercase text-gray-400">Total pendente</p>
-                    <p className="font-display text-2xl text-brutal-accent">
-                      {formatCurrency(pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0))}
-                    </p>
+                    <p className="font-sans font-black text-2xl text-brutal-accent">{formatCurrency(pendingWithdrawalTotal)}</p>
                   </div>
                 </div>
 
                 {pendingWithdrawals.length > 0 ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="divide-y divide-white/10">
                     {pendingWithdrawals.map((withdrawal) => {
                       const photographer = photographerById.get(withdrawal.photographerId);
                       return (
-                        <div key={withdrawal.id} className="p-4 bg-gray-50 brutal-border-thin space-y-4">
+                        <div key={withdrawal.id} className="p-5 space-y-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
-                              <p className="font-display text-lg uppercase truncate">{photographer?.name ?? 'Fotografo'}</p>
-                              <p className="font-mono text-[10px] text-gray-400 truncate">{photographer?.email ?? withdrawal.photographerId}</p>
+                              <p className="font-sans font-black text-lg uppercase text-white truncate">{photographer?.name ?? 'Fotografo'}</p>
+                              <p className="font-mono text-[10px] text-gray-500 truncate">{photographer?.email ?? withdrawal.photographerId}</p>
                               <p className="font-mono text-[10px] text-gray-500 uppercase mt-2">
                                 Solicitado em {new Date(withdrawal.createdAt).toLocaleString('pt-BR')}
                               </p>
                             </div>
                             <div className="text-right shrink-0">
-                              <p className="font-display text-2xl text-brutal-accent">{formatCurrency(Number(withdrawal.amount))}</p>
-                              <p className="font-mono text-[9px] text-yellow-700 uppercase">Pendente</p>
+                              <p className="font-sans font-black text-2xl text-brutal-accent">{formatCurrency(Number(withdrawal.amount))}</p>
+                              <p className="font-mono text-[9px] text-yellow-300 uppercase">Pendente</p>
                             </div>
                           </div>
 
-                          <div className="bg-white brutal-border-thin p-3">
-                            <p className="font-mono text-[9px] uppercase text-gray-400">Chave Pix</p>
-                            <p className="font-mono text-xs break-all">{withdrawal.pixKey}</p>
+                          <div className="bg-[#080d14] border border-white/10 p-3">
+                            <p className="font-mono text-[9px] uppercase text-gray-500">Chave Pix</p>
+                            <p className="font-mono text-xs text-gray-200 break-all">{withdrawal.pixKey || 'Chave nao informada'}</p>
                           </div>
 
-                          <div className="grid grid-cols-2 gap-2">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             <button
                               disabled={updatingWithdrawalId === withdrawal.id}
                               onClick={() => handleWithdrawalStatus(withdrawal, 'paid')}
-                              className="h-10 bg-green-600 text-white brutal-border-thin font-mono text-[10px] uppercase font-bold hover:bg-green-700 disabled:bg-gray-400 transition-colors cursor-pointer"
+                              className="h-10 bg-green-500 text-white border border-green-500 font-mono text-[10px] uppercase font-bold hover:bg-green-400 disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 transition-colors cursor-pointer"
                             >
                               {updatingWithdrawalId === withdrawal.id ? 'Salvando...' : 'Marcar Pago'}
                             </button>
                             <button
                               disabled={updatingWithdrawalId === withdrawal.id}
                               onClick={() => handleWithdrawalStatus(withdrawal, 'rejected')}
-                              className="h-10 bg-white text-red-600 brutal-border-thin font-mono text-[10px] uppercase font-bold hover:bg-red-50 disabled:text-gray-400 transition-colors cursor-pointer"
+                              className="h-10 bg-transparent text-red-300 border border-red-500/30 font-mono text-[10px] uppercase font-bold hover:bg-red-500/10 disabled:text-gray-500 disabled:border-gray-700 transition-colors cursor-pointer"
                             >
                               Recusar
                             </button>
@@ -988,75 +1117,92 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     })}
                   </div>
                 ) : (
-                  <div className="p-6 bg-gray-50 brutal-border-thin text-center">
-                    <p className="font-mono text-[10px] text-gray-400 uppercase">Nenhum saque pendente.</p>
+                  <div className="px-5 py-12 text-center">
+                    <DollarSign className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                    <p className="font-sans font-black text-sm uppercase text-white">Nenhum saque pendente</p>
+                    <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Novas solicitacoes Pix aparecem aqui.</p>
                   </div>
                 )}
               </div>
 
-              <div className="bg-white p-8 brutal-border space-y-6">
-                <h3 className="font-display text-2xl uppercase">Pagamentos Pendentes</h3>
-                <div className="space-y-4">
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="px-5 py-4 border-b border-white/10">
+                  <h3 className="font-sans font-black text-base uppercase text-white">Pagamentos Pendentes</h3>
+                  <p className="font-mono text-[10px] uppercase text-gray-500">Pedidos aguardando confirmacao manual</p>
+                </div>
+                <div className="divide-y divide-white/10">
                   {pendingOrders.length > 0 ? pendingOrders.map((order) => (
-                    <div key={order.id} className="p-4 bg-gray-50 brutal-border-thin space-y-4">
+                    <div key={order.id} className="p-5 space-y-4">
                       <div className="flex items-start justify-between gap-4">
                         <div className="min-w-0">
-                          <p className="font-display text-sm uppercase truncate">Pedido #{order.id.slice(0, 8)}</p>
-                          <p className="font-mono text-[9px] text-gray-400 uppercase truncate">{order.buyerName} - {order.buyerEmail}</p>
+                          <p className="font-sans font-black text-sm uppercase text-white truncate">Pedido #{order.id.slice(0, 8)}</p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase truncate">{order.buyerName}</p>
+                          <p className="font-mono text-[10px] text-gray-600 truncate">{order.buyerEmail}</p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-display text-lg">R$ {Number(order.total).toFixed(2)}</p>
-                          <p className="font-mono text-[9px] text-yellow-700 uppercase">Pendente</p>
+                        <div className="text-right shrink-0">
+                          <p className="font-sans font-black text-lg text-yellow-400">{formatCurrency(Number(order.total))}</p>
+                          <p className="font-mono text-[9px] text-yellow-300 uppercase">Pendente</p>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <button
                           disabled={updatingOrderId === order.id}
                           onClick={() => handleManualOrderStatus(order, 'paid')}
-                          className="h-10 bg-green-600 text-white brutal-border-thin font-mono text-[10px] uppercase font-bold hover:bg-green-700 disabled:bg-gray-400 transition-colors cursor-pointer"
+                          className="h-10 bg-green-500 text-white border border-green-500 font-mono text-[10px] uppercase font-bold hover:bg-green-400 disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 transition-colors cursor-pointer"
                         >
                           {updatingOrderId === order.id ? 'Salvando...' : 'Confirmar Pago'}
                         </button>
                         <button
                           disabled={updatingOrderId === order.id}
                           onClick={() => handleManualOrderStatus(order, 'cancelled')}
-                          className="h-10 bg-white text-red-600 brutal-border-thin font-mono text-[10px] uppercase font-bold hover:bg-red-50 disabled:text-gray-400 transition-colors cursor-pointer"
+                          className="h-10 bg-transparent text-red-300 border border-red-500/30 font-mono text-[10px] uppercase font-bold hover:bg-red-500/10 disabled:text-gray-500 disabled:border-gray-700 transition-colors cursor-pointer"
                         >
                           Cancelar
                         </button>
                       </div>
-                      <div className="border-t border-gray-200 pt-3 space-y-2">
-                        <p className="font-mono text-[9px] text-gray-400 uppercase">{order.items?.length ?? 0} itens no pedido</p>
+                      <div className="bg-[#080d14] border border-white/10 p-3 space-y-2">
+                        <p className="font-mono text-[9px] text-gray-500 uppercase">{order.items?.length ?? 0} itens no pedido</p>
                         {(order.items ?? []).slice(0, 3).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between gap-3 font-mono text-[10px]">
+                          <div key={item.id} className="flex items-center justify-between gap-3 font-mono text-[10px] text-gray-300">
                             <span className="truncate">{item.name}</span>
-                            <span className="shrink-0 font-bold">R$ {Number(item.price).toFixed(2)}</span>
+                            <span className="shrink-0 text-white font-bold">{formatCurrency(Number(item.price))}</span>
                           </div>
                         ))}
                       </div>
                     </div>
                   )) : (
-                    <div className="p-6 bg-gray-50 brutal-border-thin text-center">
-                      <p className="font-mono text-[10px] text-gray-400 uppercase">Nenhum pagamento pendente.</p>
+                    <div className="px-5 py-12 text-center">
+                      <CheckCircle2 className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                      <p className="font-sans font-black text-sm uppercase text-white">Nenhum pagamento pendente</p>
+                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Pedidos pagos e cancelados seguem para o log.</p>
                     </div>
                   )}
                 </div>
               </div>
 
-              <div className="bg-brutal-black text-white p-8 brutal-border space-y-6">
-                <h3 className="font-display text-2xl uppercase text-brutal-accent">Log de Pedidos</h3>
-                <div className="space-y-6">
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+              <div className="bg-[#05080d] text-white border border-white/10 p-5">
+                <div className="flex items-center justify-between gap-4 mb-5">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-brutal-accent">Log de Pedidos</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">Ultimas transacoes registradas</p>
+                  </div>
+                  <ArrowUpRight className="w-5 h-5 text-gray-500" />
+                </div>
+                <div className="divide-y divide-white/10">
                   {recentOrders.length > 0 ? recentOrders.map((order) => (
-                    <div key={order.id} className="flex justify-between items-center text-xs font-mono border-b border-white/5 pb-4 last:border-0 last:pb-0">
-                      <div className="flex gap-4">
-                        <span className="text-gray-500">#{order.id.slice(0, 8)}</span>
+                    <div key={order.id} className="py-4 first:pt-0 last:pb-0 flex justify-between items-start gap-4 text-xs font-mono">
+                      <div className="min-w-0 flex gap-3">
+                        <span className="text-gray-600 shrink-0">#{order.id.slice(0, 8)}</span>
                         <div className="min-w-0">
-                          <p className="uppercase truncate max-w-[180px]">{order.buyerName}</p>
+                          <p className="uppercase text-white truncate">{order.buyerName}</p>
                           <p className="text-gray-500 text-[10px]">{order.paymentProvider} - {order.status}</p>
                         </div>
                       </div>
-                      <div className="text-right">
-                        <p className={order.status === 'paid' ? 'text-green-500' : 'text-yellow-500'}>R$ {Number(order.total).toFixed(2)}</p>
+                      <div className="text-right shrink-0">
+                        <p className={order.status === 'paid' ? 'text-green-400' : order.status === 'cancelled' ? 'text-red-300' : 'text-yellow-400'}>
+                          {formatCurrency(Number(order.total))}
+                        </p>
                         <p className="text-gray-600 text-[9px]">
                           {new Date(order.createdAt).toLocaleDateString('pt-BR')} - {order.items?.length ?? 0} itens
                         </p>
@@ -1066,17 +1212,26 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <div className="text-xs font-mono text-gray-500 uppercase">Nenhuma transacao registrada.</div>
                   )}
                 </div>
-                <div className="border-t border-white/10 pt-6 space-y-4">
-                  <h4 className="font-display text-lg uppercase text-white">Historico de Saques</h4>
+              </div>
+
+              <div className="bg-[#05080d] text-white border border-white/10 p-5">
+                <div className="flex items-center justify-between gap-4 mb-5">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Historico de Saques</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">Pagos e recusados recentemente</p>
+                  </div>
+                  <DollarSign className="w-5 h-5 text-gray-500" />
+                </div>
+                <div className="divide-y divide-white/10">
                   {processedWithdrawals.length > 0 ? processedWithdrawals.slice(0, 6).map((withdrawal) => {
                     const photographer = photographerById.get(withdrawal.photographerId);
                     return (
-                      <div key={withdrawal.id} className="flex justify-between items-center text-xs font-mono border-b border-white/5 pb-3 last:border-0 last:pb-0">
+                      <div key={withdrawal.id} className="py-4 first:pt-0 last:pb-0 flex justify-between items-start gap-4 text-xs font-mono">
                         <div className="min-w-0">
-                          <p className="uppercase truncate max-w-[180px]">{photographer?.name ?? 'Fotografo'}</p>
+                          <p className="uppercase text-white truncate">{photographer?.name ?? 'Fotografo'}</p>
                           <p className="text-gray-500 text-[10px]">{withdrawal.status} - {new Date(withdrawal.createdAt).toLocaleDateString('pt-BR')}</p>
                         </div>
-                        <p className={withdrawal.status === 'paid' ? 'text-green-500' : 'text-red-400'}>
+                        <p className={withdrawal.status === 'paid' ? 'text-green-400' : 'text-red-300'}>
                           {formatCurrency(Number(withdrawal.amount))}
                         </p>
                       </div>
@@ -1086,6 +1241,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   )}
                 </div>
               </div>
+              </div>
             </motion.div>
           )}
 
@@ -1094,11 +1250,37 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               key="settings"
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              className="max-w-2xl bg-white p-12 brutal-border space-y-12"
+              className="max-w-5xl space-y-5"
             >
-              <div className="space-y-6">
-                <h3 className="font-display text-3xl uppercase tracking-tighter">Taxas do Marketplace</h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Taxa plataforma</p>
+                  <p className="font-sans font-black text-3xl text-white">{settingsForm.platformFeePercent}%</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Comissao sobre vendas</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Taxa saque</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(settingsForm.withdrawalFee)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Cobrada por solicitacao Pix</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Seguranca</p>
+                  <p className={`font-sans font-black text-3xl ${settingsForm.autoBlockSuspicious ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {settingsForm.autoBlockSuspicious ? 'ON' : 'OFF'}
+                  </p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Bloqueio automatico</p>
+                </div>
+              </div>
+
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Taxas do Marketplace</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">Parametros usados em comissao, saldo e saques</p>
+                  </div>
+                  <DollarSign className="w-5 h-5 text-gray-500" />
+                </div>
+                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-5">
                   <div className="space-y-2">
                     <label className="font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Platform Fee (%)</label>
                     <input
@@ -1111,8 +1293,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         ...current,
                         platformFeePercent: Number(event.target.value),
                       }))}
-                      className="w-full h-14 px-4 bg-gray-50 brutal-border font-display text-2xl focus:bg-white transition-all"
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white font-sans font-black text-2xl outline-none focus:border-brutal-accent transition-colors"
                     />
+                    <p className="font-mono text-[10px] uppercase text-gray-600">Valor entre 0 e 100.</p>
                   </div>
                   <div className="space-y-2">
                     <label className="font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Taxa de Saque (R$)</label>
@@ -1125,21 +1308,30 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         ...current,
                         withdrawalFee: Number(event.target.value),
                       }))}
-                      className="w-full h-14 px-4 bg-gray-50 brutal-border font-display text-2xl focus:bg-white transition-all"
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white font-sans font-black text-2xl outline-none focus:border-brutal-accent transition-colors"
                     />
+                    <p className="font-mono text-[10px] uppercase text-gray-600">Use 0 para saque sem tarifa.</p>
                   </div>
                 </div>
               </div>
 
-              <div className="space-y-6 pt-8 border-t-2 border-gray-100">
-                <h3 className="font-display text-3xl uppercase tracking-tighter">Segurança</h3>
-                <div className="space-y-6">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 brutal-border-thin">
-                    <div className="flex items-center gap-3">
-                      <Clock className="w-6 h-6 text-gray-400" />
-                      <div>
-                        <p className="font-display text-sm">AUTO-BLOCK SUSPICIOUS</p>
-                        <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">Bloqueio automático após 3 falhas</p>
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Seguranca Operacional</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">Regras de protecao para comportamento suspeito</p>
+                  </div>
+                  <ShieldCheck className="w-5 h-5 text-gray-500" />
+                </div>
+                <div className="p-5 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-[#080d14] border border-white/10">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 border border-white/10 bg-white/5 flex items-center justify-center shrink-0">
+                        <Clock className="w-5 h-5 text-brutal-accent" />
+                      </div>
+                      <div className="min-w-0">
+                        <p className="font-sans font-black text-sm uppercase text-white">Auto-block suspicious</p>
+                        <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Bloqueio automatico apos 3 falhas</p>
                       </div>
                     </div>
                     <button
@@ -1148,11 +1340,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         ...current,
                         autoBlockSuspicious: !current.autoBlockSuspicious,
                       }))}
-                      className={`w-12 h-6 relative cursor-pointer brutal-border-thin transition-colors ${
-                        settingsForm.autoBlockSuspicious ? 'bg-brutal-black' : 'bg-gray-300'
+                      className={`w-14 h-8 relative cursor-pointer border transition-colors shrink-0 ${
+                        settingsForm.autoBlockSuspicious ? 'bg-brutal-accent border-brutal-accent' : 'bg-[#05080d] border-white/20'
                       }`}
+                      aria-pressed={settingsForm.autoBlockSuspicious}
                     >
-                      <span className={`absolute top-1 w-4 h-4 bg-brutal-accent transition-all ${
+                      <span className={`absolute top-1 w-6 h-6 bg-white transition-all ${
                         settingsForm.autoBlockSuspicious ? 'right-1' : 'left-1'
                       }`} />
                     </button>
@@ -1160,9 +1353,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <button
                     disabled={isSavingSettings}
                     onClick={handleSaveSettings}
-                    className="w-full py-4 bg-brutal-black text-white font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors brutal-border cursor-pointer disabled:bg-gray-400"
+                    className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
-                    Salvar Alterações Globais
+                    {isSavingSettings ? 'Salvando...' : 'Salvar Alteracoes Globais'}
                   </button>
                 </div>
               </div>
@@ -1174,43 +1367,50 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       {/* Add Photographer Modal */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-6">
             <motion.div 
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowAddModal(false)}
-              className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
+              className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
             <motion.div 
-              initial={{ scale: 0.9, y: 20 }}
+              initial={{ scale: 0.96, y: 18 }}
               animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.9, y: 20 }}
-              className="relative w-full max-w-lg bg-brutal-white brutal-border brutal-shadow-heavy p-8 md:p-12"
+              exit={{ scale: 0.96, y: 18 }}
+              className="relative w-full max-w-2xl max-h-[92vh] bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.55)] text-white overflow-y-auto"
             >
+              <div className="h-1.5 bg-brutal-accent" />
               <button 
                 onClick={() => setShowAddModal(false)}
-                className="absolute top-6 right-6 p-2 hover:bg-gray-100 transition-colors cursor-pointer"
+                className="absolute top-5 right-5 p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar modal"
               >
                 <X className="w-6 h-6" />
               </button>
 
-              <div className="mb-8">
-                <h3 className="font-display text-4xl uppercase tracking-tighter mb-2">Novo Membro</h3>
-                <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">Credenciamento de Fotógrafo</p>
+              <div className="p-7 md:p-9 border-b border-white/10">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-brutal-accent/10 border border-brutal-accent/30 text-brutal-accent font-mono text-[10px] uppercase tracking-widest mb-5">
+                  <Users className="w-3.5 h-3.5" />
+                  Credenciamento
+                </div>
+                <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Novo Fotografo</h3>
+                <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">Cadastro operacional para equipe de midia</p>
               </div>
 
-              <form onSubmit={handleAddPhotographer} className="space-y-6">
+              <form onSubmit={handleAddPhotographer} className="p-7 md:p-9 space-y-6">
                 <div className="space-y-2">
                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome Completo</label>
                   <div className="relative">
-                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input 
                       required
                       type="text" 
                       value={newPhotographer.name}
                       onChange={e => setNewPhotographer({...newPhotographer, name: e.target.value})}
-                      className="w-full h-14 pl-12 pr-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none"
+                      placeholder="Nome exibido no marketplace"
+                      className="w-full h-14 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
                     />
                   </div>
                 </div>
@@ -1218,13 +1418,14 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="space-y-2">
                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Email de Acesso</label>
                   <div className="relative">
-                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
                     <input 
                       required
                       type="email" 
                       value={newPhotographer.email}
                       onChange={e => setNewPhotographer({...newPhotographer, email: e.target.value})}
-                      className="w-full h-14 pl-12 pr-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none"
+                      placeholder="fotografo@email.com"
+                      className="w-full h-14 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
                     />
                   </div>
                 </div>
@@ -1234,15 +1435,24 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                    <textarea 
                      value={newPhotographer.bio}
                      onChange={e => setNewPhotographer({...newPhotographer, bio: e.target.value})}
-                     className="w-full h-32 p-4 bg-white brutal-border font-mono text-sm focus:ring-2 focus:ring-brutal-accent outline-none resize-none"
+                     placeholder="Ex.: Corridas de rua, ciclismo, trail, cobertura de chegada..."
+                     className="w-full h-28 p-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors resize-none"
                    />
+                </div>
+
+                <div className="bg-[#080d14] border border-white/10 p-4 flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
+                  <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
+                    O sistema cria o registro e envia um convite por email para o fotografo definir a senha de acesso ao painel.
+                  </p>
                 </div>
 
                 <button 
                   type="submit"
-                  className="w-full h-16 bg-brutal-black text-white brutal-border font-display text-xl uppercase tracking-widest hover:bg-brutal-accent transition-all cursor-pointer"
+                  disabled={isSubmitting}
+                  className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                 >
-                  Concluir Cadastro
+                  {isSubmitting ? 'Enviando convite...' : 'Cadastrar e Enviar Convite'}
                 </button>
               </form>
             </motion.div>
@@ -1424,3 +1634,7 @@ function AdminStatCard({ label, value, icon, sub, accent = false }: { label: str
     </div>
   );
 }
+
+
+
+

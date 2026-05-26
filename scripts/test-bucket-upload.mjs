@@ -45,6 +45,22 @@ export function summarizePayload(payload) {
   };
 }
 
+function cleanProviderError(raw) {
+  const value = String(raw || "");
+  const cleaned = value
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (/sess[aã]o expirada/i.test(cleaned)) {
+    return "Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se persistir, revise o BUCKET_API_TOKEN.";
+  }
+
+  return cleaned || value;
+}
+
 async function uploadOne(index) {
   const formData = new FormData();
   const fileName = `funpace-upload-test-${Date.now()}-${index}.png`;
@@ -79,7 +95,7 @@ async function uploadOne(index) {
   };
 
   if (!response.ok) {
-    result.error = payload?.error || payload?.message || raw || `HTTP ${response.status}`;
+    result.error = cleanProviderError(payload?.error || payload?.message || payload?.raw || raw || `HTTP ${response.status}`);
   }
 
   return result;
@@ -103,7 +119,7 @@ async function checkFilesEndpoint() {
     status: response.status,
     ok: response.ok,
     response: summarizePayload(payload),
-    raw: response.ok ? undefined : raw.slice(0, 500),
+    raw: response.ok ? undefined : cleanProviderError(raw.slice(0, 500)),
   };
 }
 

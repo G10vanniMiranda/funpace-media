@@ -147,6 +147,28 @@ async function getAuthenticatedRequestUser(req: express.Request): Promise<{ id: 
   return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
 }
 
+async function getAuthenticatedAdminUser(req: express.Request): Promise<{ id: string; email: string | null } | null> {
+  const token = getBearerToken(req);
+  if (!token) return null;
+
+  const { data, error } = await getSupabaseAdmin().auth.getUser(token);
+  if (error || !data.user?.id) return null;
+
+  const role = String(data.user.app_metadata?.role || "");
+  if (role !== "admin") return null;
+
+  return {
+    id: data.user.id,
+    email: data.user.email ? data.user.email.toLowerCase() : null,
+  };
+}
+
+function getPhotographerPasswordSetupUrl(req: express.Request) {
+  const configuredFrontend = process.env.FRONTEND_URL || process.env.VITE_FRONTEND_URL || "";
+  const origin = configuredFrontend || `${req.protocol}://${req.get("host")}`;
+  return `${origin.replace(/\/+$/, "")}/fotografo/definir-senha`;
+}
+
 async function createSignedMediaUrl(rawPathOrUrl: string, _expiresIn = 900) {
   return createPublicMediaUrl(rawPathOrUrl);
 }
@@ -189,6 +211,27 @@ function pickUploadedMediaUrl(payload: any) {
   return candidates.find((value) => typeof value === "string" && /^https?:\/\//i.test(value)) || "";
 }
 
+function cleanProviderErrorMessage(raw: string, fallback: string) {
+  const withoutTags = raw
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const decoded = withoutTags
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/&amp;/gi, "&")
+    .trim();
+
+  if (/sess[aã]o expirada/i.test(decoded)) {
+    return "Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se persistir, revise o BUCKET_API_TOKEN.";
+  }
+
+  return decoded || fallback;
+}
+
 async function uploadToExternalBucket(path: string, fileName: string, contentType: string, buffer: Buffer) {
   const { baseUrl, token, bucket } = getExternalBucketConfig();
   const formData = new FormData();
@@ -214,7 +257,8 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error || payload?.message || raw || `Upload externo falhou com status ${response.status}.`);
+    const providerMessage = payload?.error || payload?.message || payload?.raw || raw;
+    throw new Error(cleanProviderErrorMessage(String(providerMessage || ""), `Upload externo falhou com status ${response.status}.`));
   }
 
   const publicUrl = pickUploadedMediaUrl(payload);
@@ -689,6 +733,126 @@ app.get("/api/auth/google/status", async (req, res) => {
       enabled: false,
       error: error?.message || "Nao foi possivel validar o Google no Supabase.",
     });
+  }
+});
+
+app.post("/api/admin/photographers/invite", async (req, res) => {
+  let pool: pg.Pool | null = null;
+
+  try {
+    const adminUser = await getAuthenticatedAdminUser(req);
+    if (!adminUser) {
+      return res.status(403).json({ error: "Apenas administradores podem convidar fotografos." });
+    }
+
+    const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    const bio = typeof req.body?.bio === "string" ? req.body.bio.trim().slice(0, 1000) : "";
+
+    if (name.length < 2 || name.length > 100) {
+      return res.status(400).json({ error: "Nome do fotografo invalido." });
+    }
+
+    if (!email.includes("@") || email.length > 256) {
+      return res.status(400).json({ error: "Email do fotografo invalido." });
+    }
+
+    const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
+    const pendingId = `pending:${email}`;
+
+    pool = new Pool(getDbConfig());
+    await pool.query("begin");
+
+    await pool.query(
+      `
+        insert into public.photographers (
+          id,
+          name,
+          email,
+          bio,
+          avatar,
+          verified,
+          stats,
+          "createdAt",
+          "updatedAt"
+        )
+        values (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          false,
+          jsonb_build_object(
+            'photos', 0,
+            'events', 0,
+            'rating', 5,
+            'totalEarnings', 0,
+            'pendingEarnings', 0,
+            'salesCount', 0
+          ),
+          now(),
+          now()
+        )
+        on conflict (email) do update set
+          name = excluded.name,
+          bio = excluded.bio,
+          avatar = coalesce(nullif(public.photographers.avatar, ''), excluded.avatar),
+          stats = coalesce(public.photographers.stats, excluded.stats),
+          "updatedAt" = now()
+      `,
+      [pendingId, name, email, bio, avatar],
+    );
+
+    const redirectTo = getPhotographerPasswordSetupUrl(req);
+    const supabase = getSupabaseAdmin();
+    let delivery: "invite" | "password_reset" = "invite";
+
+    const inviteResult = await supabase.auth.admin.inviteUserByEmail(email, {
+      data: {
+        name,
+        role: "photographer",
+      },
+      redirectTo,
+    });
+
+    if (inviteResult.error) {
+      const inviteMessage = String(inviteResult.error.message || "").toLowerCase();
+      const userAlreadyExists = inviteMessage.includes("already") ||
+        inviteMessage.includes("registered") ||
+        inviteMessage.includes("exists");
+
+      if (!userAlreadyExists) {
+        throw inviteResult.error;
+      }
+
+      const resetResult = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
+      if (resetResult.error) throw resetResult.error;
+      delivery = "password_reset";
+    }
+
+    await pool.query("commit");
+    return res.json({
+      ok: true,
+      delivery,
+      redirectTo,
+      message: delivery === "invite"
+        ? "Fotografo cadastrado e convite de senha enviado por email."
+        : "Fotografo atualizado e email de redefinicao de senha enviado.",
+    });
+  } catch (error: any) {
+    if (pool) {
+      try {
+        await pool.query("rollback");
+      } catch {
+        // ignore rollback errors
+      }
+    }
+
+    console.error("Erro ao convidar fotografo:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel convidar o fotografo." });
+  } finally {
+    if (pool) await pool.end();
   }
 });
 
@@ -1388,6 +1552,41 @@ app.post("/api/photographers/request", async (req, res) => {
 
     console.error("Erro ao registrar fotografo pendente:", error);
     res.status(500).json({ error: error.message || "Erro ao registrar fotografo pendente." });
+  } finally {
+    if (pool) await pool.end();
+  }
+});
+
+app.post("/api/photographers/password-reset", async (req, res) => {
+  let pool: pg.Pool | null = null;
+
+  try {
+    const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+    if (!email.includes("@") || email.length > 256) {
+      return res.status(400).json({ error: "Email invalido." });
+    }
+
+    pool = new Pool(getDbConfig());
+    const result = await pool.query(
+      `select id from public.photographers where email = $1 limit 1`,
+      [email],
+    );
+
+    if (result.rowCount && result.rowCount > 0) {
+      const resetResult = await getSupabaseAdmin().auth.resetPasswordForEmail(email, {
+        redirectTo: getPhotographerPasswordSetupUrl(req),
+      });
+
+      if (resetResult.error) throw resetResult.error;
+    }
+
+    return res.json({
+      ok: true,
+      message: "Se este email estiver cadastrado como fotografo, enviaremos um link para definir a senha.",
+    });
+  } catch (error: any) {
+    console.error("Erro ao solicitar definicao de senha:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel enviar o link de senha." });
   } finally {
     if (pool) await pool.end();
   }

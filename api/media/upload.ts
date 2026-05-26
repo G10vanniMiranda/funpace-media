@@ -106,6 +106,27 @@ function pickUploadedMediaUrl(payload: any) {
   return candidates.find((value) => typeof value === 'string' && /^https?:\/\//i.test(value)) || '';
 }
 
+function cleanProviderErrorMessage(raw: string, fallback: string) {
+  const withoutTags = raw
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  const decoded = withoutTags
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&amp;/gi, '&')
+    .trim();
+
+  if (/sess[aã]o expirada/i.test(decoded)) {
+    return 'Sessao expirada no provedor de bucket. Atualize a pagina e tente novamente. Se persistir, revise o BUCKET_API_TOKEN.';
+  }
+
+  return decoded || fallback;
+}
+
 async function uploadToExternalBucket(path: string, fileName: string, contentType: string, buffer: Buffer) {
   if (!externalBucketToken) throw new Error('BUCKET_API_TOKEN nao configurado no servidor.');
   assertMediaBucketConfigured();
@@ -132,7 +153,8 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   }
 
   if (!response.ok) {
-    throw new Error(payload?.error || payload?.message || raw || `Upload externo falhou com status ${response.status}.`);
+    const providerMessage = payload?.error || payload?.message || payload?.raw || raw;
+    throw new Error(cleanProviderErrorMessage(String(providerMessage || ''), `Upload externo falhou com status ${response.status}.`));
   }
 
   const publicUrl = pickUploadedMediaUrl(payload);

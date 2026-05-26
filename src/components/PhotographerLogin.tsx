@@ -20,6 +20,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isSendingPasswordLink, setIsSendingPasswordLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -43,6 +44,36 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
       throw new Error(`Nao foi possivel registrar cadastro pendente: ${detail}`);
     }
   }
+
+  const handleSendPasswordSetupLink = async () => {
+    setError(null);
+    setSuccess(null);
+
+    if (!email.trim() || !email.includes('@')) {
+      setError('Informe seu e-mail cadastrado para receber o link de senha.');
+      return;
+    }
+
+    setIsSendingPasswordLink(true);
+    try {
+      const response = await fetch('/api/photographers/password-reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email }),
+      });
+
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(payload?.error || payload?.message || 'Nao foi possivel enviar o link.');
+      }
+
+      setSuccess(payload?.message || 'Se este e-mail estiver cadastrado, enviaremos um link para criar a senha.');
+    } catch (err: any) {
+      setError(err?.message || 'Nao foi possivel enviar o link de senha.');
+    } finally {
+      setIsSendingPasswordLink(false);
+    }
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -311,6 +342,16 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
                 className="w-full h-14 pl-12 pr-4 bg-gray-50 brutal-border font-mono text-sm focus:bg-white focus:ring-2 focus:ring-brutal-accent outline-none transition-all"
               />
             </div>
+            {!isRegistering && (
+              <button
+                type="button"
+                onClick={handleSendPasswordSetupLink}
+                disabled={isSendingPasswordLink || isLoading}
+                className="font-mono text-[10px] uppercase font-bold text-brutal-accent hover:underline tracking-widest disabled:text-gray-400 disabled:no-underline"
+              >
+                {isSendingPasswordLink ? 'Enviando link...' : 'Primeiro acesso ou esqueci minha senha'}
+              </button>
+            )}
           </div>
 
           {error && (

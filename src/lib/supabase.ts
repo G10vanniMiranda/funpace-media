@@ -464,6 +464,10 @@ export const loginWithGoogle = async (returnPath = window.location.pathname) => 
 
 // Call on app start: Supabase can return either PKCE `code` in query or legacy token data in hash.
 export const handleOAuthCallbackFromUrl = async () => {
+  if (window.location.pathname.startsWith('/fotografo/definir-senha')) {
+    return false;
+  }
+
   const query = parseSearchParams(window.location.search);
   if (query.error) {
     clearOAuthParamsFromUrl();
@@ -514,6 +518,78 @@ export const handleOAuthCallbackFromUrl = async () => {
   clearOAuthParamsFromUrl();
   window.dispatchEvent(new Event('supabase-auth-changed'));
   return true;
+};
+
+export const completePasswordSetupFromUrl = async () => {
+  const query = parseSearchParams(window.location.search);
+  if (query.error) {
+    throw new Error(decodeURIComponent(query.error_description || query.error));
+  }
+
+  const parsed = parseHashParams(window.location.hash);
+  if (parsed.error) {
+    throw new Error(decodeURIComponent(parsed.error_description || parsed.error));
+  }
+
+  if (!parsed.access_token) {
+    return getCurrentUser();
+  }
+
+  if (!isJwtLikeToken(parsed.access_token)) {
+    throw new Error('Link de definicao de senha invalido. Solicite um novo convite.');
+  }
+
+  const expiresAt = parsed.expires_at
+    ? Number(parsed.expires_at)
+    : parsed.expires_in
+      ? Math.floor(Date.now() / 1000) + Number(parsed.expires_in)
+      : undefined;
+
+  const user = await fetchUserWithToken(parsed.access_token);
+  setStoredSession({
+    access_token: parsed.access_token,
+    refresh_token: parsed.refresh_token,
+    expires_at: expiresAt,
+    user,
+  });
+
+  window.history.replaceState({}, '', window.location.pathname);
+  window.dispatchEvent(new Event('supabase-auth-changed'));
+  return toAppUser(user);
+};
+
+export const updateCurrentUserPassword = async (password: string) => {
+  assertSupabaseConfig();
+
+  const token = await getCurrentAccessToken();
+  if (!token) {
+    throw new Error('Link expirado. Solicite um novo convite para definir sua senha.');
+  }
+
+  const response = await fetch(`${supabaseConfig.url}/auth/v1/user`, {
+    method: 'PUT',
+    headers: {
+      apikey: supabaseConfig.anonKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ password }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || 'Nao foi possivel atualizar a senha.');
+  }
+
+  const payload = await response.json() as SupabaseAuthUser | { user?: SupabaseAuthUser };
+  const user = 'user' in payload && payload.user ? payload.user : payload as SupabaseAuthUser;
+  const session = getStoredSession();
+  if (session) {
+    setStoredSession({ ...session, user });
+  }
+
+  window.dispatchEvent(new Event('supabase-auth-changed'));
+  return toAppUser(user);
 };
 
 export const loginWithEmail = async (email: string, password: string) => {

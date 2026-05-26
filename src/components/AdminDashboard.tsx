@@ -892,7 +892,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         checkpoint: 'Ponto Principal',
         status: 'active',
       });
-      alert('Evento criado com sucesso.');
+      alert(created.id.startsWith('local-event-')
+        ? 'Evento salvo localmente. A tabela public.events ainda precisa ser criada no Supabase para sincronizar entre usuarios.'
+        : 'Evento criado com sucesso.');
     } catch (error) {
       console.error('Erro ao criar evento:', error);
       alert(error instanceof Error ? error.message : 'Nao foi possivel criar o evento.');

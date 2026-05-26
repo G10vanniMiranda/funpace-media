@@ -20,6 +20,37 @@ type SupabaseRow<T> = T & { id: string };
 const selectAll = 'select=*';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
+const localEventsStorageKey = 'funpace:local-events:v1';
+
+function isMissingEventsTableError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message.includes('public.events') ||
+    message.includes("Could not find the table") ||
+    message.includes('PGRST205');
+}
+
+function loadLocalEvents(): Event[] {
+  try {
+    const raw = localStorage.getItem(localEventsStorageKey);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed as Event[] : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalEvents(events: Event[]) {
+  localStorage.setItem(localEventsStorageKey, JSON.stringify(events));
+}
+
+function sortEvents(events: Event[]) {
+  return [...events].sort((left, right) => {
+    const byDate = String(left.date || '').localeCompare(String(right.date || ''));
+    if (byDate !== 0) return byDate;
+    return String(right.createdAt || '').localeCompare(String(left.createdAt || ''));
+  });
+}
 
 function createPublicMediaUrl(rawPathOrUrl?: string | null) {
   const value = rawPathOrUrl || '';
@@ -399,7 +430,16 @@ export const eventService = {
       order: 'date.asc,createdAt.desc',
       limit: String(count),
     });
-    return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+    try {
+      const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+      return sortEvents([...events, ...loadLocalEvents()]).slice(0, count);
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        console.warn('Tabela public.events ausente no Supabase; usando eventos locais neste navegador.');
+        return sortEvents(loadLocalEvents()).slice(0, count);
+      }
+      throw error;
+    }
   },
 
   async getTodayEvents(): Promise<Event[]> {
@@ -415,7 +455,17 @@ export const eventService = {
       order: 'createdAt.desc',
       limit: '100',
     });
-    return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+    try {
+      const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+      return events;
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        return loadLocalEvents().filter((event) =>
+          event.date === today && (event.status === 'scheduled' || event.status === 'active')
+        );
+      }
+      throw error;
+    }
   },
 
   async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'>): Promise<Event> {
@@ -427,16 +477,30 @@ export const eventService = {
       };
     }
 
-    const [created] = await supabaseRest.post<SupabaseRow<Event>[]>(
-      `/rest/v1/events?${selectAll}`,
-      {
-        ...input,
-        createdAt: new Date().toISOString(),
-      },
-      true,
-    );
+    const payload = {
+      ...input,
+      createdAt: new Date().toISOString(),
+    };
 
-    return created;
+    try {
+      const [created] = await supabaseRest.post<SupabaseRow<Event>[]>(
+        `/rest/v1/events?${selectAll}`,
+        payload,
+        true,
+      );
+
+      return created;
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        const created: Event = {
+          id: `local-event-${crypto.randomUUID()}`,
+          ...payload,
+        };
+        saveLocalEvents([created, ...loadLocalEvents()]);
+        return created;
+      }
+      throw error;
+    }
   },
 };
 

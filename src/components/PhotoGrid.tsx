@@ -162,18 +162,43 @@ export function PhotoGrid({
                 </button>
               </div>
             </div>
-            <div className="mt-4 flex justify-between items-start font-mono text-sm uppercase">
-              <div>
-                <p className="font-bold">{photo.event}</p>
-                <p className="text-gray-500">Ponto: {photo.checkpoint}</p>
+            <div className="mt-4 space-y-3 font-mono text-sm uppercase">
+              <div className="flex justify-between items-start gap-3">
+                <div className="min-w-0">
+                  <p className="font-bold truncate">{photo.event}</p>
+                  <p className="text-gray-500 truncate">Ponto: {photo.checkpoint}</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => sharePhoto(photo)}
+                  className="inline-flex shrink-0 items-center gap-1 text-gray-500 hover:text-brutal-accent transition-colors cursor-pointer"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span className="text-[10px]">{copiedId === photo.id ? 'Link copiado' : 'Compartilhar'}</span>
+                </button>
               </div>
+
               <button
                 type="button"
-                onClick={() => sharePhoto(photo)}
-                className="inline-flex items-center gap-1 text-gray-500 hover:text-brutal-accent transition-colors cursor-pointer"
+                onClick={() => onAddToCart(photo)}
+                disabled={isInCart(photo.id)}
+                className={`sm:hidden min-h-11 w-full brutal-border font-display text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 transition-colors ${
+                  isInCart(photo.id)
+                    ? 'bg-green-500 text-white cursor-not-allowed'
+                    : 'bg-brutal-black text-white hover:bg-brutal-accent cursor-pointer'
+                }`}
               >
-                <Share2 className="w-4 h-4" />
-                <span className="text-[10px]">{copiedId === photo.id ? 'Link copiado' : 'Compartilhar'}</span>
+                {isInCart(photo.id) ? (
+                  <>
+                    <Check className="w-4 h-4" />
+                    No Carrinho
+                  </>
+                ) : (
+                  <>
+                    <Plus className="w-4 h-4" />
+                    Comprar Foto
+                  </>
+                )}
               </button>
             </div>
           </div>

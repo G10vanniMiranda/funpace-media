@@ -940,7 +940,6 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
 });
 
 app.post("/api/checkout/create-session", async (req, res) => {
-  let pool: pg.Pool | null = null;
   let orderId = "";
 
   try {
@@ -968,35 +967,18 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(400).json({ error: "Carrinho contem produto invalido." });
     }
 
-    pool = new Pool(getDbConfig());
-    await pool.query("begin");
+    const { data: products, error: productsError } = await getSupabaseAdmin()
+      .from("products")
+      .select("id,name,price,url,type,vendedorId,bib,event,checkpoint,thumbnailUrl")
+      .in("id", productIds)
+      .eq("status", "published");
 
-    const productsResult = await pool.query(
-      `
-        select
-          id,
-          name,
-          price,
-          url,
-          type,
-          "vendedorId",
-          bib,
-          event,
-          checkpoint,
-          "thumbnailUrl"
-        from public.products
-        where id = any($1::uuid[])
-          and status = 'published'
-      `,
-      [productIds],
-    );
+    if (productsError) throw productsError;
 
-    if (productsResult.rowCount !== productIds.length) {
-      await pool.query("rollback");
+    if (!products || products.length !== productIds.length) {
       return res.status(400).json({ error: "Um ou mais produtos nao estao disponiveis." });
     }
 
-    const products = productsResult.rows;
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
     const buyerCpf = onlyCpfDigits(buyer.cpf);
     const buyerEmail = authUser.email || String(buyer.email).trim().toLowerCase();
@@ -1004,103 +986,66 @@ app.post("/api/checkout/create-session", async (req, res) => {
     const buyerPhone = String((buyer as any).phone || "nao_informado").trim();
 
     if (total <= 1) {
-      await pool.query("rollback");
       return res.status(400).json({
         error: "A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.",
       });
     }
 
-    await pool.query(
-      `
-        insert into public.customers (
-          id,
-          email,
-          name,
-          phone,
-          cpf
-        )
-        values ($1, $2, $3, $4, $5)
-        on conflict (id) do update
-        set
-          email = excluded.email,
-          name = excluded.name,
-          phone = excluded.phone,
-          cpf = excluded.cpf
-      `,
-      [
-        authUser.id,
-        buyerEmail,
-        buyerName,
-        buyerPhone,
-        buyerCpf,
-      ],
-    );
+    const { error: customerError } = await getSupabaseAdmin()
+      .from("customers")
+      .upsert({
+        id: authUser.id,
+        email: buyerEmail,
+        name: buyerName,
+        phone: buyerPhone,
+        cpf: buyerCpf,
+      }, { onConflict: "id" });
 
-    const orderResult = await pool.query(
-      `
-        insert into public.orders (
-          "userId",
-          "buyerName",
-          "buyerEmail",
-          "buyerPhone",
-          "buyerCpf",
-          total,
-          status,
-          "paymentProvider"
-        )
-        values ($1, $2, $3, $4, $5, $6, 'pending', 'infinitepay')
-        returning id
-      `,
-      [
-        authUser.id,
+    if (customerError) throw customerError;
+
+    const { data: order, error: orderError } = await getSupabaseAdmin()
+      .from("orders")
+      .insert({
+        userId: authUser.id,
         buyerName,
         buyerEmail,
         buyerPhone,
         buyerCpf,
         total,
-      ],
-    );
+        status: "pending",
+        paymentProvider: "infinitepay",
+      })
+      .select("id")
+      .single();
 
-    orderId = orderResult.rows[0].id;
+    if (orderError) throw orderError;
 
-    for (const product of products) {
-      await pool.query(
-        `
-          insert into public.order_items (
-            "orderId",
-            "productId",
-            name,
-            type,
-            price,
-            url,
-            "vendedorId",
-            bib,
-            event,
-            checkpoint,
-            "thumbnailUrl"
-          )
-          values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-        `,
-        [
-          orderId,
-          product.id,
-          product.name,
-          product.type,
-          product.price,
-          product.url,
-          product.vendedorId,
-          product.bib,
-          product.event,
-          product.checkpoint,
-          product.thumbnailUrl,
-        ],
-      );
+    orderId = order?.id || "";
+    if (!orderId) {
+      return res.status(500).json({ error: "Supabase nao retornou o ID do pedido." });
     }
+
+    const { error: orderItemsError } = await getSupabaseAdmin()
+      .from("order_items")
+      .insert(products.map((product: any) => ({
+        orderId,
+        productId: product.id,
+        name: product.name,
+        type: product.type,
+        price: product.price,
+        url: product.url,
+        vendedorId: product.vendedorId,
+        bib: product.bib,
+        event: product.event,
+        checkpoint: product.checkpoint,
+        thumbnailUrl: product.thumbnailUrl,
+      })));
+
+    if (orderItemsError) throw orderItemsError;
 
     const handle = process.env.INFINITEPAY_HANDLE;
 
     if (!handle) {
-      await pool.query("rollback");
       return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
     }
 
@@ -1142,7 +1087,10 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     if (!checkoutResponse.ok) {
       const message = await checkoutResponse.text();
-      await pool.query("rollback");
+      await getSupabaseAdmin()
+        .from("orders")
+        .update({ status: "failed" })
+        .eq("id", orderId);
       return res.status(502).json({ error: message || "Falha ao gerar link na InfinitePay." });
     }
 
@@ -1155,31 +1103,24 @@ app.post("/api/checkout/create-session", async (req, res) => {
       "";
 
     if (!checkoutUrlWithOrder) {
-      await pool.query("rollback");
+      await getSupabaseAdmin()
+        .from("orders")
+        .update({ status: "failed" })
+        .eq("id", orderId);
       return res.status(502).json({ error: "Resposta invalida da InfinitePay ao criar link." });
     }
 
-    await pool.query(
-      `update public.orders set "checkoutUrl" = $1 where id = $2`,
-      [checkoutUrlWithOrder, orderId],
-    );
+    const { error: checkoutUrlError } = await getSupabaseAdmin()
+      .from("orders")
+      .update({ checkoutUrl: checkoutUrlWithOrder })
+      .eq("id", orderId);
 
-    await pool.query("commit");
+    if (checkoutUrlError) throw checkoutUrlError;
 
     res.json({ url: checkoutUrlWithOrder, orderId, total });
   } catch (error: any) {
-    if (pool) {
-      try {
-        await pool.query("rollback");
-      } catch {
-        // Ignore rollback errors after connection failures.
-      }
-    }
-
     console.error("Erro ao criar checkout:", error);
     res.status(500).json({ error: error.message });
-  } finally {
-    if (pool) await pool.end();
   }
 });
 

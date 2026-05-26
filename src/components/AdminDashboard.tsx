@@ -14,12 +14,17 @@ import {
   XCircle,
   Clock,
   ArrowUpRight,
+  Bell,
+  CalendarDays,
+  ChevronDown,
+  Download,
   Filter,
   BarChart3,
   Plus,
   X,
   Mail,
-  User as UserIcon
+  User as UserIcon,
+  ShoppingCart
 } from 'lucide-react';
 import { AdminMetrics, Order, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
 import { orderService, photographerService, platformSettingsService, productService, withdrawalService } from '../lib/services';
@@ -510,20 +515,20 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   };
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-[#F0F0F0] font-sans text-brutal-black">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#080d14] font-sans text-white">
       {/* Sidebar */}
-      <aside className="w-full md:w-72 bg-brutal-black text-white border-r-4 border-brutal-black flex flex-col">
-        <div className="p-8 border-b-2 border-white/10 flex items-center gap-3">
-          <div className="bg-brutal-accent p-2 brutal-border-thin">
+      <aside className="w-full md:w-72 bg-[#05080d] text-white border-r border-white/10 flex flex-col shadow-[20px_0_60px_rgba(0,0,0,0.35)]">
+        <div className="p-6 border-b border-white/10 flex items-center gap-3">
+          <div className="bg-brutal-accent p-2 brutal-border-thin border-brutal-accent shadow-[0_0_24px_rgba(255,78,0,0.35)]">
             <ShieldCheck className="w-6 h-6 text-white" />
           </div>
           <div>
-            <h1 className="font-display text-2xl tracking-tighter">ADMIN</h1>
+            <h1 className="font-display text-2xl tracking-normal">ADMIN</h1>
             <p className="font-mono text-[10px] text-brutal-accent uppercase tracking-widest">Control Center</p>
           </div>
         </div>
 
-        <nav className="flex-1 p-6 space-y-4">
+        <nav className="flex-1 p-5 space-y-3">
           <AdminSidebarLink 
             icon={<BarChart3 />} 
             label="Visão Geral" 
@@ -550,10 +555,17 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           />
         </nav>
 
-        <div className="p-6 border-t border-white/10">
+        <div className="p-5 border-t border-white/10 space-y-4">
+          <div className="bg-white/5 border border-white/10 p-4 flex items-center gap-3">
+            <div className="w-10 h-10 rounded-full bg-white/10 flex items-center justify-center font-display">A</div>
+            <div className="min-w-0">
+              <p className="font-mono text-xs uppercase truncate">Administrador</p>
+              <p className="font-mono text-[10px] text-gray-500 truncate">admin@funpace.media</p>
+            </div>
+          </div>
           <button 
             onClick={onLogout}
-            className="w-full flex items-center justify-center gap-3 py-4 bg-white/5 border-2 border-white/20 font-mono text-xs uppercase font-bold hover:bg-red-500 hover:border-red-500 transition-all cursor-pointer"
+            className="w-full flex items-center justify-center gap-3 py-4 bg-transparent border border-white/10 font-mono text-xs uppercase font-bold hover:bg-red-500 hover:border-red-500 transition-all cursor-pointer"
           >
             <LogOut className="w-4 h-4" />
             Sair do Admin
@@ -562,11 +574,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-6 md:p-12 overflow-y-auto">
-        <header className="mb-12 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+      <main className="flex-1 p-5 md:p-8 overflow-y-auto">
+        <header className="mb-8 flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6">
           <div>
-            <h2 className="font-display text-5xl md:text-7xl tracking-tighter uppercase mb-2">
-              {activeTab === 'overview' && 'Painel Central'}
+            <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
+              {activeTab === 'overview' && 'Painel Administrativo'}
               {activeTab === 'photographers' && 'Gestão de Artistas'}
               {activeTab === 'sales' && 'Fluxo de Caixa'}
               {activeTab === 'settings' && 'Preferências'}
@@ -577,14 +589,30 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             </div>
           </div>
 
-          <div className="flex gap-4">
-            <div className="bg-white p-4 brutal-border flex items-center gap-4">
-              <div className="text-right">
-                <p className="font-mono text-[10px] text-gray-400 uppercase">Uptime</p>
-                <p className="font-display text-xl">99.9%</p>
+          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-[280px]">
+              <div className="flex items-center gap-3 min-w-0">
+                <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="font-sans text-sm text-gray-200 truncate">20/05/2024 - 26/05/2024</span>
               </div>
-              <TrendingUp className="w-8 h-8 text-brutal-accent" />
+              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
             </div>
+            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center gap-4">
+              <div className="relative">
+                <Bell className="w-5 h-5 text-gray-300" />
+                <span className="absolute -right-2 -top-2 h-5 min-w-5 px-1 rounded-full bg-brutal-accent text-white font-sans text-[10px] font-black flex items-center justify-center">3</span>
+              </div>
+              <div className="h-7 w-px bg-white/10" />
+              <div>
+                <p className="font-mono text-[9px] text-gray-500 uppercase tracking-widest">Uptime</p>
+                <p className="font-sans text-sm font-black text-white">99.9%</p>
+              </div>
+              <TrendingUp className="w-5 h-5 text-green-400" />
+            </div>
+            <button className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide flex items-center justify-center gap-2 hover:bg-white hover:text-brutal-accent transition-colors">
+              <Download className="w-4 h-4" />
+              Exportar relatorio
+            </button>
           </div>
         </header>
 
@@ -595,9 +623,25 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="space-y-12"
+              className="space-y-5"
             >
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
+              <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-wrap items-center gap-3">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mr-2">Periodo</span>
+                {['Hoje', 'Esta semana', 'Este mes', 'Este ano', 'Personalizado'].map((label) => (
+                  <button
+                    key={label}
+                    className={`h-10 px-4 border font-mono text-xs uppercase transition-colors ${
+                      label === 'Esta semana'
+                        ? 'bg-brutal-accent/20 border-brutal-accent text-white'
+                        : 'bg-[#080d14] border-white/10 text-gray-300 hover:border-white/30'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                 <AdminStatCard 
                   label="GMV (Volume Bruto)" 
                   value={`R$ ${metrics.grossRevenue.toFixed(2)}`} 
@@ -625,24 +669,24 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 />
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div className="bg-white p-8 brutal-border">
-                  <h3 className="font-display text-2xl mb-6 uppercase flex items-center justify-between">
+              <div className="grid grid-cols-1 xl:grid-cols-[1.1fr_1fr_0.95fr] gap-5">
+                <div className="bg-[#0d131c] p-6 border border-white/10">
+                  <h3 className="font-sans font-black text-base mb-6 uppercase flex items-center justify-between">
                     Atividade Recente
-                    <ArrowUpRight className="w-5 h-5 text-gray-400" />
+                    <span className="font-mono text-[10px] text-gray-500 uppercase font-normal">Ver todas</span>
                   </h3>
                   <div className="space-y-6">
                     {recentActivity.length === 0 ? (
-                      <div className="p-6 bg-gray-50 brutal-border-thin text-center">
+                      <div className="p-6 bg-white/5 border border-white/10 text-center">
                         <p className="font-mono text-[10px] text-gray-400 uppercase">Nenhuma atividade recente encontrada.</p>
                       </div>
                     ) : (
                       recentActivity.map((activity) => (
-                        <div key={activity.id} className="flex items-center gap-4 pb-6 border-b border-gray-50 last:border-0 last:pb-0">
-                          <div className={`p-3 brutal-border-thin ${
-                            activity.kind === 'product' ? 'bg-yellow-100'
-                              : activity.kind === 'photographer' ? 'bg-blue-100'
-                                : 'bg-green-100'
+                        <div key={activity.id} className="flex items-center gap-4 pb-5 border-b border-white/10 last:border-0 last:pb-0">
+                          <div className={`p-3 border rounded-md ${
+                            activity.kind === 'product' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                              : activity.kind === 'photographer' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                                : 'bg-green-500/10 border-green-500/20 text-green-400'
                           }`}>
                             {activity.kind === 'product'
                               ? <Camera className="w-5 h-5" />
@@ -652,7 +696,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             }
                           </div>
                           <div className="flex-1 min-w-0">
-                            <p className="font-display text-lg truncate">{activity.title}</p>
+                            <p className="font-sans font-bold text-sm truncate text-white">{activity.title}</p>
                             <p className="font-mono text-[10px] text-gray-400 uppercase">{activity.meta}</p>
                           </div>
                         </div>
@@ -661,11 +705,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </div>
                 </div>
 
-                <div className="bg-white p-8 brutal-border space-y-6">
-                  <h3 className="font-display text-2xl uppercase">Manutencao de Midias</h3>
-                  <div className="bg-gray-50 brutal-border-thin p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="bg-[#0d131c] p-6 border border-white/10 space-y-6">
+                  <h3 className="font-sans font-black text-base uppercase">Manutencao de Midias</h3>
+                  <div className="bg-[#080d14] border border-dashed border-white/20 p-5 flex flex-col md:items-center justify-between gap-4 text-center">
                     <div>
-                      <p className="font-display text-xl uppercase">Previews antigos</p>
+                      <p className="font-sans font-bold text-lg uppercase">Previews antigos</p>
                       <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">
                         {productsMissingThumbnails.length} produto(s) sem thumbnail dedicado.
                       </p>
@@ -678,7 +722,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <button
                       onClick={handleBackfillThumbnails}
                       disabled={isBackfillingThumbnails || productsMissingThumbnails.length === 0}
-                      className="h-12 px-5 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer disabled:bg-gray-300 disabled:text-gray-500 disabled:cursor-not-allowed"
+                      className="h-12 px-5 bg-transparent text-brutal-accent border border-brutal-accent font-display text-sm uppercase tracking-widest hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer disabled:border-gray-700 disabled:text-gray-600 disabled:cursor-not-allowed"
                     >
                       {isBackfillingThumbnails ? 'Gerando...' : 'Gerar Previews'}
                     </button>
@@ -688,7 +732,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </p>
                 </div>
 
-                <div className="bg-brutal-black text-white p-8 brutal-border shadow-[12px_12px_0px_#FFD100]">
+                <div className="bg-[#0d131c] text-white p-6 border border-white/10">
                   <h3 className="font-display text-2xl mb-6 uppercase">Saúde da Plataforma</h3>
                   <div className="space-y-8">
                     <div className="space-y-2">
@@ -696,7 +740,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         <span>Ocupação do Storage</span>
                         <span>{storageUsagePercent}%</span>
                       </div>
-                      <div className="h-4 bg-white/10 brutal-border-thin overflow-hidden">
+                      <div className="h-3 bg-white/10 overflow-hidden rounded-full">
                         <div className="h-full bg-brutal-accent" style={{ width: `${storageUsagePercent}%` }} />
                       </div>
                     </div>
@@ -705,16 +749,16 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         <span>Conversão de Vendas</span>
                         <span>{paidConversionPercent}%</span>
                       </div>
-                      <div className="h-4 bg-white/10 brutal-border-thin overflow-hidden">
+                      <div className="h-3 bg-white/10 overflow-hidden rounded-full">
                         <div className="h-full bg-blue-500" style={{ width: `${Math.min(100, paidConversionPercent)}%` }} />
                       </div>
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-4">
-                      <div className="p-4 bg-white/5 brutal-border-thin text-center text-brutal-accent">
+                      <div className="p-4 bg-white/5 border border-white/10 text-center text-brutal-accent">
                          <p className="font-display text-3xl">{metrics.totalProducts}</p>
                          <p className="font-mono text-[8px] uppercase">Produtos</p>
                       </div>
-                      <div className="p-4 bg-white/5 brutal-border-thin text-center text-green-500">
+                      <div className="p-4 bg-white/5 border border-white/10 text-center text-green-500">
                          <p className="font-display text-3xl">{metrics.totalOrders}</p>
                          <p className="font-mono text-[8px] uppercase">Pedidos</p>
                       </div>
@@ -723,7 +767,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
                 <ReportCard
                   title="Receita por Evento"
                   emptyLabel="Nenhuma venda paga por evento."
@@ -1310,13 +1354,13 @@ function AdminSidebarLink({ icon, label, active, onClick }: { icon: React.ReactN
   return (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center gap-4 px-6 py-4 font-display text-sm uppercase tracking-widest transition-all cursor-pointer ${
+      className={`w-full flex items-center gap-4 px-4 py-4 font-mono text-xs uppercase tracking-widest transition-all cursor-pointer ${
         active 
-          ? 'bg-brutal-accent text-white border-2 border-brutal-black shadow-[4px_4px_0px_#000]' 
-          : 'text-gray-500 hover:text-white hover:bg-white/5'
+          ? 'bg-brutal-accent/80 text-white border border-brutal-accent shadow-[0_0_24px_rgba(255,78,0,0.22)]' 
+          : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
       }`}
     >
-      <span className={active ? 'text-white' : 'text-gray-600'}>
+      <span className={active ? 'text-white' : 'text-gray-500'}>
         {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-5 h-5' })}
       </span>
       {label}
@@ -1326,18 +1370,18 @@ function AdminSidebarLink({ icon, label, active, onClick }: { icon: React.ReactN
 
 function ReportCard({ title, emptyLabel, rows }: { title: string; emptyLabel: string; rows: Array<{ id: string; title: string; subtitle: string; value: string }> }) {
   return (
-    <div className="bg-white p-8 brutal-border">
-      <h3 className="font-display text-2xl uppercase mb-6">{title}</h3>
+    <div className="bg-[#0d131c] p-6 border border-white/10">
+      <h3 className="font-sans font-black text-base uppercase mb-6 text-white">{title}</h3>
       {rows.length > 0 ? (
         <div className="space-y-4">
           {rows.map((row, index) => (
-            <div key={row.id} className="flex items-center justify-between gap-4 border-b border-gray-100 pb-4 last:border-0 last:pb-0">
+            <div key={row.id} className="flex items-center justify-between gap-4 border-b border-white/10 pb-4 last:border-0 last:pb-0">
               <div className="flex items-center gap-4 min-w-0">
-                <span className="w-8 h-8 bg-brutal-black text-white brutal-border-thin flex items-center justify-center font-display text-sm">
+                <span className="w-8 h-8 bg-white/5 text-white border border-white/10 flex items-center justify-center font-display text-sm">
                   {index + 1}
                 </span>
                 <div className="min-w-0">
-                  <p className="font-display text-lg uppercase truncate">{row.title}</p>
+                  <p className="font-sans font-bold text-sm uppercase truncate text-white">{row.title}</p>
                   <p className="font-mono text-[10px] text-gray-400 uppercase">{row.subtitle}</p>
                 </div>
               </div>
@@ -1346,7 +1390,7 @@ function ReportCard({ title, emptyLabel, rows }: { title: string; emptyLabel: st
           ))}
         </div>
       ) : (
-        <div className="p-6 bg-gray-50 brutal-border-thin text-center">
+        <div className="p-6 bg-white/5 border border-white/10 text-center">
           <p className="font-mono text-[10px] text-gray-400 uppercase">{emptyLabel}</p>
         </div>
       )}
@@ -1356,18 +1400,27 @@ function ReportCard({ title, emptyLabel, rows }: { title: string; emptyLabel: st
 
 function AdminStatCard({ label, value, icon, sub, accent = false }: { label: string, value: string | number, icon: React.ReactNode, sub: string, accent?: boolean }) {
   return (
-    <div className={`p-8 brutal-border transition-all hover:-translate-y-2 hover:shadow-[12px_12px_0px_#000] ${
-      accent ? 'bg-brutal-black text-white' : 'bg-white'
+    <div className={`p-5 border border-white/10 bg-gradient-to-br from-[#121923] to-[#0d131c] transition-all hover:-translate-y-1 hover:border-white/20 ${
+      accent ? 'text-white' : 'text-white'
     }`}>
       <div className="flex items-center justify-between mb-6">
-        <div className={`p-3 brutal-border-thin ${accent ? 'bg-brutal-accent' : 'bg-gray-100'}`}>
-          {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: `w-6 h-6 ${accent ? 'text-white' : 'text-brutal-black'}` })}
+        <div className={`p-3 rounded-md ${accent ? 'bg-brutal-accent' : 'bg-white/10'}`}>
+          {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-6 h-6 text-white' })}
         </div>
-        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-brutal-accent">Real-Time</span>
+        <span className="font-mono text-[10px] font-bold uppercase tracking-widest text-green-400">↗ 8,3%</span>
       </div>
-      <p className={`font-mono text-[10px] uppercase tracking-[0.2em] mb-2 ${accent ? 'text-gray-400' : 'text-gray-500'}`}>{label}</p>
-      <p className={`font-display text-5xl tracking-tighter ${accent ? 'text-white' : 'text-brutal-black'}`}>{value}</p>
-      <p className={`font-mono text-[10px] mt-4 uppercase tracking-tighter font-bold ${accent ? 'text-gray-500' : 'text-gray-400'}`}>{sub}</p>
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em] mb-2 text-gray-400">{label}</p>
+      <p className="font-sans font-black text-3xl tracking-normal text-white">{value}</p>
+      <p className="font-mono text-[10px] mt-4 uppercase leading-relaxed text-gray-400">{sub}</p>
+      <div className="mt-6 flex items-end gap-1 h-9 opacity-80">
+        {[18, 24, 16, 28, 36, 24, 34, 20, 26, 38, 32, 42].map((height, index) => (
+          <span
+            key={index}
+            className={`flex-1 ${accent ? 'bg-brutal-accent' : 'bg-blue-500'}`}
+            style={{ height }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

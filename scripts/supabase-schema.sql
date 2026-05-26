@@ -159,28 +159,6 @@ insert into public.platform_settings (id, "platformFeePercent", "withdrawalFee",
 values ('default', 30, 5, true)
 on conflict (id) do nothing;
 
-insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values (
-  'funpace-media',
-  'funpace-media',
-  false,
-  524288000,
-  array[
-    'image/jpeg',
-    'image/png',
-    'image/webp',
-    'image/gif',
-    'video/mp4',
-    'video/webm',
-    'video/quicktime'
-  ]
-)
-on conflict (id) do update
-set
-  public = excluded.public,
-  file_size_limit = excluded.file_size_limit,
-  allowed_mime_types = excluded.allowed_mime_types;
-
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -420,52 +398,3 @@ on public.platform_settings
 for update
 using (public.is_admin())
 with check (public.is_admin());
-
-drop policy if exists "media_select_public" on storage.objects;
-create policy "media_select_public"
-on storage.objects
-for select
-using (bucket_id = 'funpace-media');
-
-drop policy if exists "media_insert_verified_owner_folder" on storage.objects;
-create policy "media_insert_verified_owner_folder"
-on storage.objects
-for insert
-with check (
-  bucket_id = 'funpace-media'
-  and auth.uid() is not null
-  and (
-    public.is_admin()
-    or (
-      (storage.foldername(name))[1] = auth.uid()::text
-      and exists (
-        select 1
-        from public.photographers p
-        where p.id = auth.uid()::text
-          and p.verified = true
-      )
-    )
-  )
-);
-
-drop policy if exists "media_update_owner_folder_or_admin" on storage.objects;
-create policy "media_update_owner_folder_or_admin"
-on storage.objects
-for update
-using (
-  bucket_id = 'funpace-media'
-  and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin())
-)
-with check (
-  bucket_id = 'funpace-media'
-  and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin())
-);
-
-drop policy if exists "media_delete_owner_folder_or_admin" on storage.objects;
-create policy "media_delete_owner_folder_or_admin"
-on storage.objects
-for delete
-using (
-  bucket_id = 'funpace-media'
-  and ((storage.foldername(name))[1] = auth.uid()::text or public.is_admin())
-);

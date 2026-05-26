@@ -12,12 +12,11 @@ import {
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
-import { getCurrentAccessToken, getCurrentUser, supabaseRest, supabaseStorage } from './supabase';
+import { getCurrentAccessToken, getCurrentUser, supabaseRest } from './supabase';
 
 type SupabaseRow<T> = T & { id: string };
 
 const selectAll = 'select=*';
-const mediaBucket = 'funpace-media';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
 
@@ -25,10 +24,12 @@ function createPublicMediaUrl(rawPathOrUrl?: string | null) {
   const value = rawPathOrUrl || '';
   if (!value || /^https?:\/\//i.test(value)) return value;
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  if (!supabaseUrl) return value;
+  const mediaBaseUrl = import.meta.env.VITE_MEDIA_PUBLIC_BASE_URL || '';
+  if (mediaBaseUrl) {
+    return `${String(mediaBaseUrl).replace(/\/+$/, '')}/${encodeURI(value.replace(/^\/+/, ''))}`;
+  }
 
-  return `${String(supabaseUrl).replace(/\/+$/, '')}/storage/v1/object/public/${mediaBucket}/${encodeURI(value.replace(/^\/+/, ''))}`;
+  return value;
 }
 
 function mediaPathKey(value?: string | null) {
@@ -79,6 +80,41 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
     console.error('Erro ao assinar URLs de midia:', error);
     return withPublicFallback();
   }
+}
+
+async function uploadMediaFile(path: string, file: File) {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) {
+    throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
+  }
+
+  const response = await fetch('/api/media/upload', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-File-Name': encodeURIComponent(file.name),
+      'X-Storage-Path': encodeURIComponent(path),
+    },
+    body: file,
+  });
+
+  const raw = await response.text();
+  let payload: any = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { error: raw };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || raw || `Falha no upload. HTTP ${response.status}`);
+  }
+
+  return {
+    path: String(payload.path || payload.publicUrl || path),
+    publicUrl: String(payload.publicUrl || payload.url || payload.path || ''),
+  };
 }
 
 function sanitizeStorageFileName(fileName: string) {
@@ -275,7 +311,7 @@ export const productService = {
 
     const safeName = sanitizeStorageFileName(file.name);
     const path = `${vendedorId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-    return supabaseStorage.upload(mediaBucket, path, file);
+    return uploadMediaFile(path, file);
   },
 
   async uploadProductThumbnail(vendedorId: string, file: File) {
@@ -288,7 +324,7 @@ export const productService = {
 
     const safeName = sanitizeStorageFileName(file.name);
     const path = `${vendedorId}/thumbs/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-    return supabaseStorage.upload(mediaBucket, path, file);
+    return uploadMediaFile(path, file);
   },
 };
 

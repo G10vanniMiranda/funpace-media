@@ -59,13 +59,6 @@ const requiredPolicies = [
   "platform_settings_update_admin_only",
 ];
 
-const requiredStoragePolicies = [
-  "media_select_public",
-  "media_insert_verified_owner_folder",
-  "media_update_owner_folder_or_admin",
-  "media_delete_owner_folder_or_admin",
-];
-
 const pool = new pg.Pool(dbConfig);
 
 try {
@@ -121,39 +114,15 @@ try {
   const presentPolicies = new Set(policyRows.rows.map((row) => row.policyname));
   const missingPolicies = requiredPolicies.filter((policy) => !presentPolicies.has(policy));
 
-  const bucketRows = await pool.query(
-    `
-      select id, public
-      from storage.buckets
-      where id = 'funpace-media'
-    `,
-  );
-  const mediaBucketReady = bucketRows.rowCount === 1 && bucketRows.rows[0].public === true;
-
-  const storagePolicyRows = await pool.query(
-    `
-      select policyname
-      from pg_policies
-      where schemaname = 'storage'
-        and tablename = 'objects'
-    `,
-  );
-  const presentStoragePolicies = new Set(storagePolicyRows.rows.map((row) => row.policyname));
-  const missingStoragePolicies = requiredStoragePolicies.filter((policy) => !presentStoragePolicies.has(policy));
-
   const ok = missingColumns.length === 0 &&
     rlsDisabled.length === 0 &&
-    missingPolicies.length === 0 &&
-    mediaBucketReady &&
-    missingStoragePolicies.length === 0;
+    missingPolicies.length === 0;
 
   console.log("validation:", {
     ok,
     missingColumns,
     rlsDisabled,
     missingPolicies,
-    mediaBucketReady,
-    missingStoragePolicies,
   });
 
   if (!ok) process.exitCode = 1;

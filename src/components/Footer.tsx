@@ -1,4 +1,4 @@
-import { Instagram, Twitter, Mail } from 'lucide-react';
+import { Instagram, Mail, Twitter } from 'lucide-react';
 
 export function Footer() {
   return (
@@ -7,7 +7,7 @@ export function Footer() {
         <div className="sm:col-span-2">
           <h3 className="font-display text-3xl md:text-4xl mb-4 text-brutal-black">FUNPACE MEDIA</h3>
           <p className="font-mono text-sm text-gray-600 max-w-sm mb-6">
-            O marketplace do corredor. Encontre, compre e reviva suas memórias de corrida. Feito para a comunidade, movido pelo ritmo.
+            O marketplace do corredor. Encontre, compre e reviva suas memorias de corrida. Feito para a comunidade, movido pelo ritmo.
           </p>
           <div className="flex gap-4">
             <button className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer">
@@ -21,35 +21,35 @@ export function Footer() {
             </button>
           </div>
         </div>
-        
+
         <div>
-          <h4 className="font-mono font-bold uppercase tracking-widest mb-6">Links Rápidos</h4>
+          <h4 className="font-mono font-bold uppercase tracking-widest mb-6">Links Rapidos</h4>
           <ul className="space-y-4 font-mono text-sm uppercase">
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Buscar Fotos</a></li>
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Eventos Recentes</a></li>
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Para Fotógrafos</a></li>
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Preços</a></li>
+            <li><a href="/" className="hover:text-brutal-accent transition-colors">Buscar Fotos</a></li>
+            <li><a href="/eventos" className="hover:text-brutal-accent transition-colors">Eventos Recentes</a></li>
+            <li><a href="/para-fotografos" className="hover:text-brutal-accent transition-colors">Para Fotografos</a></li>
+            <li><a href="/precos" className="hover:text-brutal-accent transition-colors">Precos</a></li>
           </ul>
         </div>
-        
+
         <div>
           <h4 className="font-mono font-bold uppercase tracking-widest mb-6">Suporte</h4>
           <ul className="space-y-4 font-mono text-sm uppercase">
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Dúvidas Frequentes</a></li>
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Fale Conosco</a></li>
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Termos de Serviço</a></li>
-            <li><a href="#" className="hover:text-brutal-accent transition-colors">Política de Privacidade</a></li>
+            <li><a href="/faq" className="hover:text-brutal-accent transition-colors">Duvidas Frequentes</a></li>
+            <li><a href="/contato" className="hover:text-brutal-accent transition-colors">Fale Conosco</a></li>
+            <li><a href="/termos" className="hover:text-brutal-accent transition-colors">Termos de Servico</a></li>
+            <li><a href="/privacidade" className="hover:text-brutal-accent transition-colors">Politica de Privacidade</a></li>
           </ul>
         </div>
       </div>
-      
+
       <div className="max-w-[1400px] mx-auto pt-8 border-t-2 border-dashed border-gray-300 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="font-mono text-xs uppercase text-gray-500">
           © {new Date().getFullYear()} FUNPACE MEDIA. Todos os direitos reservados.
         </p>
         <div className="font-mono text-xs uppercase text-gray-500 flex items-center gap-2">
           <span>Ultrapasse.</span>
-          <span className="text-brutal-accent font-bold">Nunca Olhe Para Trás.</span>
+          <span className="text-brutal-accent font-bold">Nunca Olhe Para Tras.</span>
         </div>
       </div>
     </footer>

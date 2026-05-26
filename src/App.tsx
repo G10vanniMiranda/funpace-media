@@ -4,6 +4,7 @@ import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import { PhotoGrid } from './components/PhotoGrid';
 import { VideoGrid } from './components/VideoGrid';
+import { EventGrid } from './components/EventGrid';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutPage } from './components/CheckoutPage';
 import { CustomerOrdersDrawer } from './components/CustomerOrdersDrawer';
@@ -16,13 +17,19 @@ import { PhotographerLogin } from './components/PhotographerLogin';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLogin } from './components/AdminLogin';
 import { PagamentoSucesso } from './routes/pagamento/sucesso';
+import { ParaFotografos } from './routes/ParaFotografos';
+import { Precos } from './routes/Precos';
+import { Faq } from './routes/Faq';
+import { Contato } from './routes/Contato';
+import { Termos } from './routes/Termos';
+import { Privacidade } from './routes/Privacidade';
 import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
 import { productService, photographerService, orderService, withdrawalService, paymentService } from './lib/services';
 import { logout } from './lib/supabase';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CheckCircle2, Loader2, ReceiptText, Scan, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, Video, X, XCircle } from 'lucide-react';
 
 enum OperationType {
   CREATE = 'create',
@@ -46,6 +53,24 @@ function isValidCartProductId(value: unknown) {
     value.trim().length > 0 &&
     value.length <= 120 &&
     !/[(),]/.test(value);
+}
+
+function normalizeEventName(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function createEventSlug(value: string) {
+  return normalizeEventName(value)
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'evento';
+}
+
+function getEventSlugFromPath(pathname: string) {
+  const match = pathname.match(/^\/eventos\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
 }
 
 function loadStoredCart(): Product[] {
@@ -89,6 +114,8 @@ function Storefront() {
   const [loggedInPhotographer, setLoggedInPhotographer] = useState<Photographer | null>(null);
   const [photos, setPhotos] = useState<Product[]>([]);
   const [videos, setVideos] = useState<Product[]>([]);
+  const [selectedEventName, setSelectedEventName] = useState<string | null>(null);
+  const [eventQuery, setEventQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<{
@@ -96,6 +123,7 @@ function Storefront() {
     orderId?: string | null;
     message: string;
   } | null>(null);
+  const eventSelfieInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     const validCart = cart.filter((item) => isValidCartProductId(item.id));
@@ -111,7 +139,7 @@ function Storefront() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const products = await productService.getLatestProducts();
+        const products = await productService.getLatestProducts(200);
         setPhotos(products.filter(p => p.type === 'IMG'));
         setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
       } catch (error) {
@@ -207,8 +235,55 @@ function Storefront() {
     }
   };
 
-  const displayPhotos = photos;
-  const displayVideos = videos;
+  const displayPhotos = selectedEventName
+    ? photos.filter((photo) => normalizeEventName(photo.event || '') === normalizeEventName(selectedEventName))
+    : photos;
+  const displayVideos = selectedEventName
+    ? videos.filter((video) => normalizeEventName(video.event || '') === normalizeEventName(selectedEventName))
+    : videos;
+  const allDisplayProducts = React.useMemo(() => [...photos, ...videos], [photos, videos]);
+  const eventNames = React.useMemo(() => (
+    Array.from(new Map(
+      allDisplayProducts.map((product) => {
+        const eventName = String(product.event || 'Evento sem nome').trim();
+        return [normalizeEventName(eventName), eventName] as const;
+      }),
+    ).values())
+  ), [allDisplayProducts]);
+  const selectedEventCheckpoints = Array.from(new Set(
+    [...displayPhotos, ...displayVideos]
+      .map((item) => item.checkpoint)
+      .filter(Boolean),
+  ));
+  const selectedEventCover = displayPhotos[0]?.thumbnailUrl || displayPhotos[0]?.url || displayVideos[0]?.thumbnailUrl || displayVideos[0]?.url || '';
+  const selectedEventDate = [...displayPhotos, ...displayVideos]
+    .map((item) => item.createdAt)
+    .filter(Boolean)
+    .sort()
+    .at(-1);
+  const selectedEventDateLabel = selectedEventDate
+    ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(selectedEventDate))
+    : 'Data a confirmar';
+  const isEventsRoute = location.pathname === '/eventos';
+  const eventSlugFromPath = getEventSlugFromPath(location.pathname);
+  const isEventDetailRoute = Boolean(eventSlugFromPath);
+
+  React.useEffect(() => {
+    if (eventSlugFromPath) {
+      const matchedEvent = eventNames.find((eventName) => createEventSlug(eventName) === eventSlugFromPath);
+      setSelectedEventName(matchedEvent ?? null);
+      setEventQuery('');
+      setSearchBib(null);
+      setSearchType(null);
+      return;
+    }
+
+    if (isEventsRoute) {
+      setSelectedEventName(null);
+      setSearchBib(null);
+      setSearchType(null);
+    }
+  }, [eventNames, eventSlugFromPath, isEventsRoute]);
 
   const handleAddToCart = (item: Product) => {
     if (!isValidCartProductId(item.id)) {
@@ -231,6 +306,8 @@ function Storefront() {
     setSearchBib(bib);
     setSearchType('bib');
     setSelectedPhotographerId(null);
+    setSelectedEventName(null);
+    setEventQuery('');
     setShowDashboard(false);
 
     try {
@@ -266,9 +343,11 @@ function Storefront() {
     setSearchType(null);
     setSelfieFile(null);
     setSelectedPhotographerId(null);
+    setSelectedEventName(null);
+    setEventQuery('');
 
     try {
-      const products = await productService.getLatestProducts();
+      const products = await productService.getLatestProducts(200);
       setPhotos(products.filter(p => p.type === 'IMG'));
       setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
     } catch (error) {
@@ -383,6 +462,8 @@ function Storefront() {
           localStorage.removeItem('funpace:photographer-panel-active');
           clearSearch();
           setActiveView('photos');
+          setSelectedEventName(null);
+          setEventQuery('');
           navigate('/');
         }}
         onOpenAuth={() => setIsAuthOpen(true)}
@@ -405,10 +486,10 @@ function Storefront() {
         />
       ) : (
         <>
-          {!searchBib && !searchType && (
+          {!isEventsRoute && !isEventDetailRoute && !searchBib && !searchType && !selectedEventName && (
             <Hero
-              onSearch={handleSearch}
-              onSelfieSearch={handleSelfieSearch}
+              eventQuery={eventQuery}
+              onEventQueryChange={setEventQuery}
             />
           )}
 
@@ -437,10 +518,125 @@ function Storefront() {
             </div>
           )}
 
-          {!isLoading && (activeView === 'photos' ? (
+          {!isLoading && !searchBib && !searchType && !selectedEventName && (
+            <EventGrid
+              products={allDisplayProducts}
+              query={eventQuery}
+              onSelectEvent={(eventName) => {
+                setSelectedEventName(eventName);
+                setEventQuery('');
+                setActiveView('photos');
+                navigate(`/eventos/${createEventSlug(eventName)}`);
+              }}
+            />
+          )}
+
+          {!isLoading && selectedEventName && !searchBib && !searchType && (
+            <div className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-4">
+              <button
+                onClick={() => {
+                  setSelectedEventName(null);
+                  navigate('/eventos');
+                }}
+                className="font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-6 flex items-center gap-2 cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                Voltar para eventos
+              </button>
+
+              <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
+                <div className="space-y-6">
+                  <div className="bg-white brutal-border brutal-shadow p-5 md:p-8">
+                    <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
+                      Evento selecionado
+                    </p>
+                    <h1 className="font-display text-[clamp(2.35rem,8vw,5rem)] uppercase leading-[0.9] tracking-normal break-words">
+                      {selectedEventName}
+                    </h1>
+
+                    <div className="mt-6 grid gap-3 border-t-2 border-dashed border-gray-200 pt-5 sm:grid-cols-2">
+                      <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-gray-600">
+                        <MapPin className="w-5 h-5 text-brutal-accent shrink-0" />
+                        <span className="truncate">{selectedEventCheckpoints[0] || 'Local a confirmar'}</span>
+                      </div>
+                      <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-gray-600">
+                        <CalendarDays className="w-5 h-5 text-brutal-accent shrink-0" />
+                        <span>{selectedEventDateLabel}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {selectedEventCover && (
+                    <div className="bg-white brutal-border brutal-shadow overflow-hidden">
+                      <div className="aspect-[16/9] bg-brutal-black">
+                        <img
+                          src={selectedEventCover}
+                          alt={selectedEventName}
+                          className="h-full w-full object-cover"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <aside className="space-y-4 lg:sticky lg:top-28">
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="bg-white brutal-border p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Fotos</p>
+                      <div className="flex items-end justify-between gap-2">
+                        <span className="font-display text-3xl leading-none">{displayPhotos.length}</span>
+                        <Camera className="w-5 h-5 text-brutal-accent" />
+                      </div>
+                    </div>
+                    <div className="bg-white brutal-border p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Videos</p>
+                      <div className="flex items-end justify-between gap-2">
+                        <span className="font-display text-3xl leading-none">{displayVideos.length}</span>
+                        <Video className="w-5 h-5 text-brutal-accent" />
+                      </div>
+                    </div>
+                    <div className="bg-white brutal-border p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Pontos</p>
+                      <div className="flex items-end justify-between gap-2">
+                        <span className="font-display text-3xl leading-none">{selectedEventCheckpoints.length || 1}</span>
+                        <MapPin className="w-5 h-5 text-brutal-accent" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white brutal-border brutal-shadow p-5 md:p-6 text-center">
+                    <p className="font-mono text-xs uppercase tracking-[0.22em] text-gray-500 mb-5">
+                      Busque por reconhecimento facial
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => eventSelfieInputRef.current?.click()}
+                      className="min-h-14 w-full px-6 bg-brutal-black text-white brutal-border brutal-shadow-hover font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                    >
+                      <input
+                        ref={eventSelfieInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(event) => {
+                          const file = event.target.files?.[0];
+                          if (file) handleSelfieSearch(file);
+                          event.target.value = '';
+                        }}
+                      />
+                      <ImageIcon className="w-5 h-5 shrink-0" />
+                      Selecionar selfie
+                    </button>
+                  </div>
+                </aside>
+              </div>
+            </div>
+          )}
+
+          {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
             <PhotoGrid
-              title={searchType ? 'SUAS FOTOS' : 'ÚLTIMOS LANÇAMENTOS'}
-              subtitle={searchType ? `Encontramos fotos incríveis suas!` : 'FOTOS DOS ÚLTIMOS EVENTOS'}
+              title={searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ÚLTIMOS LANÇAMENTOS'}
+              subtitle={searchType ? `Encontramos fotos incríveis suas!` : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ÚLTIMOS EVENTOS'}
               photos={displayPhotos}
               onAddToCart={handleAddToCart}
               cartItems={cart}
@@ -457,8 +653,8 @@ function Storefront() {
             />
           ))}
 
-          {!searchType && activeView === 'photos' && (
-            <div className="pb-20" />
+          {!searchType && !selectedEventName && activeView === 'photos' && (
+            <div className="pb-6 md:pb-20" />
           )}
         </>
       )}
@@ -923,6 +1119,14 @@ export default function App() {
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
+        <Route path="/eventos" element={<Storefront />} />
+        <Route path="/eventos/:slug" element={<Storefront />} />
+        <Route path="/para-fotografos" element={<ParaFotografos />} />
+        <Route path="/precos" element={<Precos />} />
+        <Route path="/faq" element={<Faq />} />
+        <Route path="/contato" element={<Contato />} />
+        <Route path="/termos" element={<Termos />} />
+        <Route path="/privacidade" element={<Privacidade />} />
         <Route path="/pagar" element={<PagamentoSucesso />} />
         <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
         <Route path="/" element={<Storefront />} />

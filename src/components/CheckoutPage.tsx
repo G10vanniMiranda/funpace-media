@@ -14,16 +14,17 @@ interface CheckoutPageProps {
 }
 
 const MIN_CHECKOUT_TOTAL = 1;
-const MEDIA_BUCKET = 'funpace-media';
 
 function publicMediaUrl(rawPathOrUrl?: string | null) {
   const value = rawPathOrUrl || '';
   if (!value || /^blob:/i.test(value) || /^data:/i.test(value) || /^https?:\/\//i.test(value)) return value;
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || import.meta.env.NEXT_PUBLIC_SUPABASE_URL || '';
-  if (!supabaseUrl) return value;
+  const mediaBaseUrl = import.meta.env.VITE_MEDIA_PUBLIC_BASE_URL || '';
+  if (mediaBaseUrl) {
+    return `${String(mediaBaseUrl).replace(/\/+$/, '')}/${encodeURI(value.replace(/^\/+/, ''))}`;
+  }
 
-  return `${String(supabaseUrl).replace(/\/+$/, '')}/storage/v1/object/public/${MEDIA_BUCKET}/${encodeURI(value.replace(/^\/+/, ''))}`;
+  return value;
 }
 
 function getProductPreviewUrl(item: Product) {

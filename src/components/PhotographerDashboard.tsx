@@ -7,6 +7,9 @@ import {
   Settings, 
   LogOut, 
   Upload, 
+  Bell,
+  CalendarDays,
+  ChevronDown,
   Plus, 
   TrendingUp, 
   Users, 
@@ -253,6 +256,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [products, productSearch, productTypeFilter, productStatusFilter]);
+  const upcomingEvents = React.useMemo(() => {
+    const eventNames = Array.from(new Set(products.map((product) => product.event).filter(Boolean)));
+    return eventNames.slice(0, 3).map((eventName, index) => ({
+      id: `${eventName}-${index}`,
+      title: eventName,
+      date: ['27 MAI, 2026', '01 JUN, 2026', '05 JUN, 2026'][index] ?? '10 JUN, 2026',
+      time: ['16:00', '14:00', '18:00'][index] ?? '08:00',
+    }));
+  }, [products]);
 
   React.useEffect(() => {
     async function loadPhotographerContent() {
@@ -510,7 +522,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-brutal-white flex flex-col items-center justify-center p-6">
+      <div className="min-h-screen bg-[#080d14] flex flex-col items-center justify-center p-6">
         <Loader2 className="w-12 h-12 text-brutal-accent animate-spin mb-4" />
         <p className="font-mono text-sm uppercase tracking-widest text-gray-500 animate-pulse">Carregando painel...</p>
       </div>
@@ -518,7 +530,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-brutal-white font-sans text-brutal-black overflow-hidden">
+    <div className="flex flex-col md:flex-row min-h-screen bg-[#080d14] font-sans text-white overflow-hidden">
       {/* Mobile Header */}
       <div className="md:hidden flex items-center justify-between p-4 bg-brutal-black text-white border-b-2 border-brutal-black">
         <div className="flex items-center gap-2">
@@ -533,16 +545,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       </div>
 
       {/* Sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-brutal-black text-white border-r-4 border-brutal-black">
-        <div className="p-8 border-b-2 border-white/10">
-          <h1 className="font-display text-3xl tracking-tighter mb-1">STUDIO</h1>
+      <aside className="hidden md:flex flex-col w-64 bg-[#05080d] text-white border-r border-white/10 shadow-2xl shadow-black/40">
+        <div className="p-8 border-b border-white/10">
+          <h1 className="font-sans font-black text-3xl tracking-tight mb-1">STUDIO</h1>
           <p className="font-mono text-[10px] text-brutal-accent uppercase tracking-[0.3em]">Photographer Hub</p>
         </div>
 
-        <nav className="flex-1 p-4 space-y-2">
+        <nav className="flex-1 p-5 space-y-3">
           <SidebarLink 
             icon={<LayoutDashboard />} 
-            label="Overview" 
+            label="Dashboard" 
             active={activeTab === 'overview'} 
             onClick={() => setActiveTab('overview')} 
           />
@@ -560,14 +572,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           />
         </nav>
 
-        <div className="p-4 mt-auto">
-          <div className="bg-white/5 p-4 brutal-border-thin mb-4">
+        <div className="p-5 mt-auto">
+          <div className="bg-white/5 p-4 border border-white/10 mb-5">
             <div className="flex items-center gap-3 mb-2">
-              <div className="w-10 h-10 brutal-border overflow-hidden bg-white">
+              <div className="w-11 h-11 rounded-full overflow-hidden bg-white border border-white/15">
                 <img src={photographer.avatar} alt="Me" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-display text-sm truncate">{photographer.name}</p>
+                <p className="font-sans text-sm font-black truncate">{photographer.name}</p>
                 <p className="font-mono text-[10px] text-gray-400 truncate tracking-tight">{photographer.email}</p>
               </div>
             </div>
@@ -583,24 +595,37 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-12">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+      <main className="flex-1 overflow-y-auto p-5 md:p-8">
+        <header className="flex flex-col xl:flex-row xl:items-center justify-between gap-6 mb-8">
           <div>
-            <h2 className="font-display text-5xl md:text-7xl tracking-tighter uppercase">
+            <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Dashboard'}
               {activeTab === 'products' && 'Produtos'}
               {activeTab === 'earnings' && 'Estatísticas'}
             </h2>
-            <p className="font-mono text-gray-500 mt-2">Bem-vindo de volta, {photographer.name.split(' ')[0]}!</p>
+            <p className="font-sans text-sm text-gray-400">Bem-vindo de volta, {photographer.name.split(' ')[0]}!</p>
           </div>
 
-          <button 
-            onClick={() => setShowUploadModal(true)}
-            className="bg-brutal-accent text-white px-8 py-4 brutal-border brutal-shadow-hover flex items-center gap-3 font-display text-lg uppercase tracking-widest hover:-translate-x-1 hover:-translate-y-1 transition-all cursor-pointer"
-          >
-            <Plus className="w-6 h-6" />
-            Nova Captura
-          </button>
+          <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
+            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-[280px]">
+              <div className="flex items-center gap-3 min-w-0">
+                <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
+                <span className="font-sans text-sm text-gray-200 truncate">20/05/2024 - 26/05/2024</span>
+              </div>
+              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+            </div>
+            <div className="h-12 w-12 bg-[#0d131c] border border-white/15 flex items-center justify-center relative">
+              <Bell className="w-5 h-5 text-gray-300" />
+              <span className="absolute -right-2 -top-2 h-5 min-w-5 px-1 rounded-full bg-brutal-accent text-white font-sans text-[10px] font-black flex items-center justify-center">3</span>
+            </div>
+            <button
+              onClick={() => setShowUploadModal(true)}
+              className="h-12 px-6 bg-brutal-accent text-white border border-brutal-accent flex items-center justify-center gap-3 font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer"
+            >
+              <Plus className="w-5 h-5" />
+              Nova Captura
+            </button>
+          </div>
         </header>
 
         <AnimatePresence mode="wait">
@@ -610,10 +635,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
-              className="space-y-12"
+              className="space-y-5"
             >
+              <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-wrap items-center gap-3">
+                <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mr-2">Periodo</span>
+                {['Hoje', 'Esta semana', 'Este mes', 'Personalizado'].map((label) => (
+                  <button
+                    key={label}
+                    className={`h-10 px-4 border font-sans text-xs font-bold transition-colors ${
+                      label === 'Esta semana'
+                        ? 'bg-brutal-accent/20 border-brutal-accent text-white'
+                        : 'bg-white/5 border-white/10 text-gray-300 hover:border-white/30'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
               {/* Quick Stats Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                 <StatCard 
                   label="Ganhos Totais" 
                   value={formatCurrency(dashboardMetrics.totalEarnings)} 
@@ -643,38 +684,38 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               </div>
 
               {/* Main Grid: Recent Sales & Top Photos */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 space-y-6">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="font-display text-2xl uppercase">Vendas Recentes</h3>
+              <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+                <div className="xl:col-span-2 bg-[#0d131c] border border-white/10">
+                  <div className="flex items-center justify-between p-5 border-b border-white/10">
+                    <h3 className="font-sans font-black text-base uppercase">Vendas Recentes</h3>
                     <button
                       onClick={() => setActiveTab('earnings')}
-                      className="font-mono text-[10px] uppercase text-gray-400 hover:text-brutal-black cursor-pointer"
+                      className="font-mono text-[10px] uppercase text-gray-400 hover:text-white cursor-pointer"
                     >
                       Ver todas
                     </button>
                   </div>
-                  <div className="space-y-4">
+                  <div className="divide-y divide-white/10">
                     {recentSales.length === 0 ? (
-                      <div className="bg-white p-8 brutal-border text-center">
-                        <p className="font-display text-xl uppercase">Nenhuma venda paga ainda</p>
+                      <div className="p-8 text-center">
+                        <p className="font-sans font-black text-xl uppercase">Nenhuma venda paga ainda</p>
                         <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest mt-2">
                           As vendas aparecem aqui quando o pagamento for confirmado.
                         </p>
                       </div>
-                    ) : recentSales.map((sale) => (
-                      <div key={sale.id} className="bg-white p-4 brutal-border flex items-center gap-4 group hover:bg-gray-50 transition-colors">
-                        <div className="w-16 h-16 brutal-border bg-gray-100 overflow-hidden">
+                    ) : recentSales.slice(0, 5).map((sale) => (
+                      <div key={sale.id} className="p-5 flex items-center gap-4 group hover:bg-white/[0.03] transition-colors">
+                        <div className="w-14 h-14 bg-white/5 border border-white/10 overflow-hidden shrink-0">
                           <img src={sale.thumbnailUrl || sale.url} alt={sale.name} className="w-full h-full object-cover" />
                         </div>
-                        <div className="flex-1">
-                          <p className="font-display text-lg">{sale.name}</p>
-                          <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest leading-none">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-sans text-sm font-black truncate">{sale.name}</p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
                             ID {sale.orderId.substring(0, 8)} - {sale.event}
                           </p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-display text-xl text-green-600">+ {formatCurrency(sale.netAmount)}</p>
+                        <div className="text-right shrink-0">
+                          <p className="font-sans text-base font-black text-green-400">+ {formatCurrency(sale.netAmount)}</p>
                           <p className="font-mono text-[10px] text-gray-400 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
                         </div>
                       </div>
@@ -682,11 +723,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                 </div>
 
-                <div className="space-y-6">
-                  <h3 className="font-display text-2xl uppercase">Top Performance</h3>
-                  <div className="bg-brutal-black text-white p-8 brutal-border brutal-shadow">
+                <div className="space-y-5">
+                  <h3 className="font-sans font-black text-base uppercase">Top Performance</h3>
+                  <div className="bg-[#0d131c] text-white p-6 border border-white/10">
                     <div className="flex items-center gap-4 mb-8">
-                      <div className="bg-brutal-accent p-3 brutal-border-thin">
+                      <div className="bg-brutal-accent p-3 border border-brutal-accent">
                         <Star className="w-6 h-6 fill-current" />
                       </div>
                       <div>
@@ -697,18 +738,44 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <div className="space-y-6">
                       <div className="flex justify-between items-end border-b border-white/10 pb-4">
                         <span className="font-mono text-xs uppercase text-gray-400">Score Geral</span>
-                        <span className="font-display text-4xl text-brutal-accent">{dashboardMetrics.rating}</span>
+                        <span className="font-sans text-4xl font-black text-brutal-accent">{dashboardMetrics.rating}</span>
                       </div>
                       <div className="flex justify-between items-end border-b border-white/10 pb-4">
                         <span className="font-mono text-xs uppercase text-gray-400">Downloads</span>
-                        <span className="font-display text-4xl">{dashboardMetrics.downloads}</span>
+                        <span className="font-sans text-4xl font-black">{dashboardMetrics.downloads}</span>
                       </div>
                       <button
                         onClick={() => setActiveTab('earnings')}
-                        className="w-full py-4 mt-4 bg-white text-brutal-black font-display text-sm uppercase tracking-widest hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer"
+                        className="w-full py-4 mt-4 bg-white text-brutal-black font-sans text-sm font-black uppercase tracking-wide hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer"
                       >
                         Ver Relatório
                       </button>
+                    </div>
+                  </div>
+                  <div className="bg-[#0d131c] border border-white/10">
+                    <div className="p-5 border-b border-white/10 flex items-center justify-between">
+                      <h3 className="font-sans font-black text-base uppercase">Proximos Eventos</h3>
+                      <button className="font-mono text-[10px] uppercase text-gray-400 hover:text-white">Ver todos</button>
+                    </div>
+                    <div className="divide-y divide-white/10">
+                      {(upcomingEvents.length ? upcomingEvents : [
+                        { id: 'event-1', title: 'Ensaio Externo', date: '27 MAI, 2026', time: '16:00' },
+                        { id: 'event-2', title: 'Casamento', date: '01 JUN, 2026', time: '14:00' },
+                        { id: 'event-3', title: 'Aniversario', date: '05 JUN, 2026', time: '18:00' },
+                      ]).map((event) => (
+                        <div key={event.id} className="p-4 flex items-center gap-3">
+                          <div className="w-10 h-10 rounded bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center">
+                            <CalendarDays className="w-5 h-5 text-brutal-accent" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-sans text-sm font-black truncate">{event.title}</p>
+                            <p className="font-mono text-[10px] text-gray-500 uppercase">{event.date} - {event.time}</p>
+                          </div>
+                          <span className="px-3 py-1 rounded border border-purple-400/30 bg-purple-400/10 font-mono text-[9px] text-purple-200 uppercase">
+                            Confirmado
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -1406,10 +1473,10 @@ function SidebarLink({ icon, label, active, onClick }: { icon: React.ReactNode, 
   return (
     <button 
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 font-display text-sm uppercase tracking-wide transition-all cursor-pointer ${
+      className={`w-full flex items-center gap-3 px-4 py-3 font-sans text-sm font-bold transition-all cursor-pointer border ${
         active 
-          ? 'bg-brutal-accent text-white brutal-border-thin shadow-[4px_4px_0px_#000]' 
-          : 'text-gray-400 hover:text-white hover:bg-white/5'
+          ? 'bg-brutal-accent/25 text-brutal-accent border-brutal-accent/60 shadow-[inset_3px_0_0_#ff4d00]' 
+          : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5 hover:border-white/10'
       }`}
     >
       <span className={active ? 'text-white' : 'text-gray-500'}>
@@ -1422,17 +1489,24 @@ function SidebarLink({ icon, label, active, onClick }: { icon: React.ReactNode, 
 
 function StatCard({ label, value, icon, trend, accent = false, warning = false }: { label: string, value: string | number, icon: React.ReactNode, trend: string, accent?: boolean, warning?: boolean }) {
   return (
-    <div className={`p-6 brutal-border transition-all hover:-translate-y-1 hover:brutal-shadow ${
-      accent ? 'bg-brutal-black text-white border-brutal-black' : 'bg-white'
-    }`}>
-      <div className="flex items-center justify-between mb-4">
-        <div className={`p-2 brutal-border-thin ${accent ? 'bg-brutal-accent border-white' : 'bg-gray-50'}`}>
-          {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: `w-5 h-5 ${accent ? 'text-white' : 'text-brutal-black'}` })}
+    <div className="p-5 bg-gradient-to-br from-[#111923] to-[#0b1018] border border-white/10 transition-all hover:border-white/20">
+      <div className="flex items-start justify-between mb-5">
+        <div className={`p-3 rounded ${accent ? 'bg-brutal-accent' : warning ? 'bg-green-600' : 'bg-blue-600'}`}>
+          {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-6 h-6 text-white' })}
         </div>
-        <span className={`font-mono text-[10px] uppercase tracking-tighter ${warning ? 'text-red-500' : 'text-gray-500'}`}>{trend}</span>
+        <span className={`font-sans text-xs font-bold ${warning ? 'text-brutal-accent' : 'text-green-400'}`}>{trend}</span>
       </div>
-      <p className={`font-mono text-[10px] uppercase tracking-widest mb-1 ${accent ? 'text-gray-400' : 'text-gray-500'}`}>{label}</p>
-      <p className={`font-display text-4xl tracking-tighter ${accent ? 'text-brutal-accent' : ''}`}>{value}</p>
+      <p className="font-mono text-[10px] uppercase tracking-widest mb-2 text-gray-400">{label}</p>
+      <p className="font-sans text-3xl font-black tracking-tight text-white">{value}</p>
+      <div className="mt-6 h-8 flex items-end gap-1">
+        {[35, 26, 42, 56, 48, 62, 39, 31, 44, 58].map((height, index) => (
+          <span
+            key={index}
+            className={`flex-1 rounded-t ${accent ? 'bg-brutal-accent' : warning ? 'bg-green-500' : 'bg-blue-500'} opacity-${index % 3 === 0 ? '100' : '70'}`}
+            style={{ height: `${height}%` }}
+          />
+        ))}
+      </div>
     </div>
   );
 }

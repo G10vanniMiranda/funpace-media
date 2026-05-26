@@ -1,4 +1,9 @@
-const mediaBucket = process.env.SUPABASE_BUCKET || process.env.BUCKET || 'funpace-media';
+const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
+const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
+
+function usesExternalBucket() {
+  return mediaStorageProvider === 'external_bucket' || Boolean(process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN);
+}
 
 function setCors(req: any, res: any) {
   const origins = new Set([
@@ -36,52 +41,25 @@ function getSupabaseConfig() {
   };
 }
 
-function extractStoragePath(value: string) {
-  if (!value) return '';
-  if (!/^https?:\/\//i.test(value)) return value.replace(/^\/+/, '');
-
-  try {
-    const parsed = new URL(value);
-    const publicMarker = `/storage/v1/object/public/${mediaBucket}/`;
-    const signedMarker = `/storage/v1/object/sign/${mediaBucket}/`;
-    const marker = parsed.pathname.includes(publicMarker) ? publicMarker : signedMarker;
-    const index = parsed.pathname.indexOf(marker);
-    return index === -1 ? '' : decodeURIComponent(parsed.pathname.slice(index + marker.length));
-  } catch {
-    return '';
+function assertMediaBucketConfigured() {
+  if (!mediaBucket) {
+    throw new Error('MEDIA_BUCKET nao configurado no servidor.');
   }
 }
 
 function publicMediaUrl(rawPathOrUrl: string) {
   if (/^https?:\/\//i.test(rawPathOrUrl)) return rawPathOrUrl;
-  const { supabaseUrl } = getSupabaseConfig();
-  const path = extractStoragePath(rawPathOrUrl);
-  return path ? `${supabaseUrl}/storage/v1/object/public/${mediaBucket}/${encodeURI(path)}` : rawPathOrUrl;
+
+  const mediaBaseUrl = process.env.MEDIA_PUBLIC_BASE_URL || process.env.VITE_MEDIA_PUBLIC_BASE_URL || '';
+  if (mediaBaseUrl) {
+    return `${mediaBaseUrl.replace(/\/+$/, '')}/${encodeURI(rawPathOrUrl.replace(/^\/+/, ''))}`;
+  }
+
+  return rawPathOrUrl;
 }
 
 async function signedMediaUrl(rawPathOrUrl: string) {
-  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
-  const path = extractStoragePath(rawPathOrUrl);
-  if (!path || !supabaseKey) return publicMediaUrl(rawPathOrUrl);
-
-  const response = await fetch(`${supabaseUrl}/storage/v1/object/sign/${mediaBucket}/${encodeURI(path)}`, {
-    method: 'POST',
-    headers: {
-      apikey: supabaseKey,
-      Authorization: `Bearer ${supabaseKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ expiresIn: 900 }),
-  });
-
-  if (!response.ok) return publicMediaUrl(rawPathOrUrl);
-
-  const payload: any = await response.json().catch(() => ({}));
-  const signedPath = payload?.signedURL || payload?.signedUrl || payload?.url || '';
-  if (!signedPath) return publicMediaUrl(rawPathOrUrl);
-  if (signedPath.startsWith('http')) return signedPath;
-  if (signedPath.startsWith('/storage/v1/')) return `${supabaseUrl}${signedPath}`;
-  return `${supabaseUrl}/storage/v1${signedPath.startsWith('/') ? signedPath : `/${signedPath}`}`;
+  return publicMediaUrl(rawPathOrUrl);
 }
 
 export default async function handler(req: any, res: any) {

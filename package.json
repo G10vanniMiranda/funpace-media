@@ -10,6 +10,7 @@
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
     "test": "node --import tsx --test tests/*.test.ts",
+    "bucket:upload:test": "node scripts/test-bucket-upload.mjs 5",
     "supabase:schema:apply": "node scripts/apply-supabase-schema.mjs",
     "supabase:schema:validate": "node scripts/validate-supabase-schema.mjs",
     "supabase:admin:set": "node scripts/set-supabase-admin.mjs"

@@ -80,10 +80,10 @@ Dados disponiveis:
 
 O modo de dados e controlado por variavel de ambiente:
 
-- `VITE_DATA_MODE=production`: usa Supabase Auth, Supabase REST e Supabase Storage.
+- `VITE_DATA_MODE=production`: usa Supabase Auth, Supabase REST e a API de storage configurada por `MEDIA_STORAGE_PROVIDER`.
 - `VITE_DATA_MODE=mock`: usa os dados de `src/data.ts`, sem depender de Supabase para carregar vitrine e paines.
 
-No `PhotographerDashboard`, o preview local ainda utiliza `URL.createObjectURL(file)` para exibir a midia antes da publicacao. Ao publicar, o arquivo e enviado para o bucket `funpace-media` do Supabase Storage, e a tabela `products` recebe a URL publica permanente e o `storagePath`.
+No `PhotographerDashboard`, o preview local ainda utiliza `URL.createObjectURL(file)` para exibir a midia antes da publicacao. Ao publicar, o arquivo e enviado para `/api/media/upload`, que usa o provider definido em `MEDIA_STORAGE_PROVIDER`, e a tabela `products` recebe a URL permanente e o `storagePath`.
 
 Essa abordagem permite testar:
 
@@ -93,7 +93,7 @@ Essa abordagem permite testar:
 - listagem visual do produto;
 - cadastro visual antes do envio definitivo.
 
-Observacao importante: URLs criadas com `URL.createObjectURL(file)` continuam sendo temporarias e devem ser usadas apenas para preview. O armazenamento final deve usar a URL publica gerada pelo Supabase Storage.
+Observacao importante: URLs criadas com `URL.createObjectURL(file)` continuam sendo temporarias e devem ser usadas apenas para preview. O armazenamento final deve usar a URL gerada pela API de storage configurada no backend.
 
 ## 5. Fluxo de Cadastro de Produto
 
@@ -163,8 +163,8 @@ Esse modelo cobre os dados basicos de uma midia vendavel. Para producao, recomen
 - A presenca de carrinho e checkout indica que a jornada de compra ja esta desenhada.
 - As tabelas Supabase `products` e `photographers` ja foram criadas com colunas compativeis com o frontend.
 - As policies RLS basicas para `products` e `photographers` ja foram aplicadas e validadas.
-- O bucket Supabase Storage `funpace-media` ja foi criado com policies para leitura publica e escrita restrita ao fotografo verificado.
-- O upload de produto ja envia arquivos reais para o Supabase Storage e salva `url`/`storagePath` permanentes em `products`.
+- O upload de produto passa pelo endpoint `/api/media/upload`, mantendo o token do storage apenas no backend.
+- O upload de produto ja envia arquivos reais para o storage configurado e salva `url`/`storagePath` permanentes em `products`.
 - Videos publicados pelo painel do fotografo ja geram thumbnail JPEG automaticamente e salvam `thumbnailUrl`.
 - O modo mock e o modo producao ja foram separados por `VITE_DATA_MODE`.
 - O modal de cadastro ja possui campo de numero de peito e salva o valor em `Product.bib`.

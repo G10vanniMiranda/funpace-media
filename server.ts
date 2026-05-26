@@ -64,14 +64,21 @@ function getDbConfig() {
       };
 }
 
-const mediaBucket = process.env.SUPABASE_BUCKET || process.env.BUCKET || "funpace-media";
+const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || "supabase";
+const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || "";
+const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || "https://99dev.pro/bucket/bucket/api").replace(/\/+$/, "");
+const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || "";
+
+function usesExternalBucket() {
+  return mediaStorageProvider === "external_bucket" || Boolean(process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN);
+}
 
 function getSupabaseApiConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || "";
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error("Supabase Storage nao configurado para assinar URLs. Defina SUPABASE_SERVICE_ROLE_KEY no .env do servidor.");
+    throw new Error("Supabase API nao configurada. Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env do servidor.");
   }
 
   return { supabaseUrl, supabaseKey };
@@ -93,8 +100,26 @@ function getSupabaseAdmin() {
   return supabaseAdmin;
 }
 
-function getSupabaseStorageUrl() {
-  return process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+function getExternalBucketConfig() {
+  if (!externalBucketToken) {
+    throw new Error("BUCKET_API_TOKEN nao configurado no servidor.");
+  }
+
+  if (!mediaBucket) {
+    throw new Error("MEDIA_BUCKET nao configurado no servidor.");
+  }
+
+  return {
+    baseUrl: externalBucketApiBaseUrl,
+    token: externalBucketToken,
+    bucket: mediaBucket,
+  };
+}
+
+function assertMediaBucketConfigured() {
+  if (!mediaBucket) {
+    throw new Error("MEDIA_BUCKET nao configurado no servidor.");
+  }
 }
 
 function getBearerToken(req: express.Request) {
@@ -122,62 +147,82 @@ async function getAuthenticatedRequestUser(req: express.Request): Promise<{ id: 
   return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
 }
 
-function extractStoragePathFromUrl(value: string) {
-  if (!value) return "";
-  if (!/^https?:\/\//i.test(value)) return value.replace(/^\/+/, "");
-
-  try {
-    const parsed = new URL(value);
-    const publicMarker = `/storage/v1/object/public/${mediaBucket}/`;
-    const signedMarker = `/storage/v1/object/sign/${mediaBucket}/`;
-    const marker = parsed.pathname.includes(publicMarker) ? publicMarker : signedMarker;
-    const index = parsed.pathname.indexOf(marker);
-    if (index === -1) return "";
-    return decodeURIComponent(parsed.pathname.slice(index + marker.length));
-  } catch {
-    return "";
-  }
-}
-
-async function createSignedMediaUrl(rawPathOrUrl: string, expiresIn = 900) {
-  const path = extractStoragePathFromUrl(rawPathOrUrl);
-  if (!path) throw new Error("Caminho de midia invalido.");
-
-  const { supabaseUrl, supabaseKey } = getSupabaseApiConfig();
-  const response = await fetch(
-    `${supabaseUrl}/storage/v1/object/sign/${mediaBucket}/${encodeURI(path)}`,
-    {
-      method: "POST",
-      headers: {
-        apikey: supabaseKey,
-        Authorization: `Bearer ${supabaseKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ expiresIn }),
-    },
-  );
-
-  if (!response.ok) {
-    const message = await response.text();
-    throw new Error(message || "Falha ao assinar midia.");
-  }
-
-  const payload: any = await response.json().catch(() => ({}));
-  const signedPath = payload?.signedURL || payload?.signedUrl || payload?.url || "";
-  if (!signedPath) throw new Error("Supabase nao retornou URL assinada.");
-  if (signedPath.startsWith("http")) return signedPath;
-  if (signedPath.startsWith("/storage/v1/")) return `${supabaseUrl}${signedPath}`;
-  return `${supabaseUrl}/storage/v1${signedPath.startsWith("/") ? signedPath : `/${signedPath}`}`;
+async function createSignedMediaUrl(rawPathOrUrl: string, _expiresIn = 900) {
+  return createPublicMediaUrl(rawPathOrUrl);
 }
 
 function createPublicMediaUrl(rawPathOrUrl: string) {
   if (/^https?:\/\//i.test(rawPathOrUrl)) return rawPathOrUrl;
 
-  const supabaseUrl = getSupabaseStorageUrl();
-  const path = extractStoragePathFromUrl(rawPathOrUrl);
-  if (!supabaseUrl || !path) return rawPathOrUrl;
+  const mediaBaseUrl = process.env.MEDIA_PUBLIC_BASE_URL || process.env.VITE_MEDIA_PUBLIC_BASE_URL || "";
+  if (mediaBaseUrl) {
+    return `${mediaBaseUrl.replace(/\/+$/, "")}/${encodeURI(rawPathOrUrl.replace(/^\/+/, ""))}`;
+  }
 
-  return `${supabaseUrl}/storage/v1/object/public/${mediaBucket}/${encodeURI(path)}`;
+  return rawPathOrUrl;
+}
+
+function decodeHeaderValue(value: string | undefined) {
+  if (!value) return "";
+
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
+  }
+}
+
+function pickUploadedMediaUrl(payload: any) {
+  const candidates = [
+    payload?.url,
+    payload?.publicUrl,
+    payload?.public_url,
+    payload?.downloadUrl,
+    payload?.download_url,
+    payload?.file?.url,
+    payload?.file?.publicUrl,
+    payload?.arquivo?.url,
+    payload?.data?.url,
+    payload?.data?.publicUrl,
+  ];
+
+  return candidates.find((value) => typeof value === "string" && /^https?:\/\//i.test(value)) || "";
+}
+
+async function uploadToExternalBucket(path: string, fileName: string, contentType: string, buffer: Buffer) {
+  const { baseUrl, token, bucket } = getExternalBucketConfig();
+  const formData = new FormData();
+  const safeFileName = path.split("/").pop() || fileName || "arquivo";
+
+  formData.set("bucket", bucket);
+  formData.set("arquivo", new Blob([buffer], { type: contentType || "application/octet-stream" }), safeFileName);
+
+  const response = await fetch(`${baseUrl}/upload`, {
+    method: "POST",
+    headers: {
+      "X-API-Token": token,
+    },
+    body: formData,
+  });
+
+  const raw = await response.text();
+  let payload: any = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { raw };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || raw || `Upload externo falhou com status ${response.status}.`);
+  }
+
+  const publicUrl = pickUploadedMediaUrl(payload);
+  return {
+    path: publicUrl || payload?.path || payload?.key || path,
+    publicUrl,
+    providerPayload: payload,
+  };
 }
 
 function isUuid(value: unknown) {
@@ -1001,6 +1046,45 @@ app.post("/api/checkout/confirm", async (req, res) => {
   }
 });
 
+app.post("/api/media/upload", express.raw({
+  type: ["image/*", "video/*", "application/octet-stream"],
+  limit: process.env.MEDIA_UPLOAD_LIMIT || "500mb",
+}), async (req, res) => {
+  const authUser = await getAuthenticatedRequestUser(req);
+  const storagePath = decodeHeaderValue(req.header("x-storage-path"));
+  const fileName = decodeHeaderValue(req.header("x-file-name")) || storagePath.split("/").pop() || "arquivo";
+  const contentType = String(req.header("content-type") || "application/octet-stream");
+  const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+
+  if (!authUser?.id) {
+    return res.status(401).json({ error: "Entre novamente no painel para enviar arquivos." });
+  }
+
+  if (!storagePath || storagePath.includes("..") || storagePath.startsWith("/") || !storagePath.startsWith(`${authUser.id}/`)) {
+    return res.status(403).json({ error: "Caminho de upload invalido para este fotografo." });
+  }
+
+  if (fileBuffer.length === 0) {
+    return res.status(400).json({ error: "Arquivo vazio ou nao enviado." });
+  }
+
+  try {
+    const uploaded = usesExternalBucket()
+      ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
+      : (() => {
+          throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.");
+        })();
+
+    return res.json({
+      path: uploaded.publicUrl || uploaded.path,
+      publicUrl: uploaded.publicUrl || uploaded.path,
+    });
+  } catch (error: any) {
+    console.error("Erro ao enviar midia:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel enviar a midia." });
+  }
+});
+
 app.post("/api/media/sign", async (req, res) => {
   const paths: string[] = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [];
   const uniquePaths = Array.from(new Set(paths)).filter(Boolean).slice(0, 200);
@@ -1036,16 +1120,9 @@ app.post("/api/media/sign", async (req, res) => {
       return res.json({ urls: {} });
     }
 
-    const hasSigningKey = Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY);
-    const entries = hasSigningKey
-      ? await Promise.all(
-          signablePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
-        )
-      : signablePaths.map((path) => [path, createPublicMediaUrl(path)] as const);
-
-    if (!hasSigningKey) {
-      console.warn("SUPABASE_SERVICE_ROLE_KEY ausente. /api/media/sign retornou URLs publicas; downloads protegidos exigem a service role key.");
-    }
+    const entries = await Promise.all(
+      signablePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
+    );
 
     return res.json({ urls: Object.fromEntries(entries) });
   } catch (error: any) {

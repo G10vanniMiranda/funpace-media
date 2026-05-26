@@ -197,13 +197,13 @@ export function CustomerOrdersDrawer({
   };
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    const target = window.open('about:blank', '_blank', 'noopener,noreferrer');
-    const signedUrl = await authorizeDownload(order.id, item.id);
-    if (target) {
-      target.location.href = signedUrl;
-      return;
+    try {
+      const signedUrl = await authorizeDownload(order.id, item.id);
+      window.location.href = signedUrl;
+    } catch (error) {
+      console.error('Erro ao abrir arquivo:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel abrir o arquivo.');
     }
-    window.open(signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const showCopied = (message: string) => {
@@ -564,13 +564,13 @@ export function CustomerOrdersPage({
   };
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    const target = window.open('about:blank', '_blank', 'noopener,noreferrer');
-    const signedUrl = await authorizeDownload(order.id, item.id);
-    if (target) {
-      target.location.href = signedUrl;
-      return;
+    try {
+      const signedUrl = await authorizeDownload(order.id, item.id);
+      window.location.href = signedUrl;
+    } catch (error) {
+      console.error('Erro ao abrir arquivo:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel abrir o arquivo.');
     }
-    window.open(signedUrl, '_blank', 'noopener,noreferrer');
   };
 
   const downloadPaidOrder = async (order: Order) => {

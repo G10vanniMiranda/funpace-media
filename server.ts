@@ -1455,39 +1455,29 @@ app.post("/api/downloads/authorize", async (req, res) => {
     return res.status(401).json({ error: "Entre novamente para baixar sua compra." });
   }
 
-  const pool = new Pool(getDbConfig());
-
   try {
-    const itemResult = await pool.query(
-      `
-        select
-          oi.id,
-          oi."orderId",
-          oi."productId",
-          oi."vendedorId",
-          oi.name,
-          oi.type,
-          oi.url,
-          p."storagePath",
-          o."buyerEmail",
-          o."userId",
-          o.status
-        from public.order_items oi
-        join public.orders o on o.id = oi."orderId"
-        left join public.products p on p.id = oi."productId"
-        where oi.id = $1
-          and oi."orderId" = $2
-        limit 1
-      `,
-      [orderItemId, orderId],
-    );
+    const { data: item, error: itemError } = await getSupabaseAdmin()
+      .from("order_items")
+      .select(`
+        id,
+        orderId,
+        productId,
+        vendedorId,
+        name,
+        type,
+        url,
+        orders!inner(buyerEmail,userId,status),
+        products(storagePath)
+      `)
+      .eq("id", orderItemId)
+      .eq("orderId", orderId)
+      .single();
 
-    const item = itemResult.rows[0];
-    if (!item || item.status !== "paid") {
+    if (itemError || !item || (item as any).orders?.status !== "paid") {
       return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
     }
 
-    if (item.userId !== authUser.id) {
+    if ((item as any).orders?.userId !== authUser.id) {
       return res.status(403).json({ error: "Este pedido nao pertence ao usuario logado." });
     }
 
@@ -1496,39 +1486,31 @@ app.post("/api/downloads/authorize", async (req, res) => {
       ? crypto.createHash("sha256").update(ipSource).digest("hex")
       : null;
 
-    await pool.query(
-      `
-        insert into public.download_events (
-          "orderId",
-          "orderItemId",
-          "productId",
-          "vendedorId",
-          "buyerEmail",
-          "userId",
-          "ipHash",
-          "userAgent"
-        )
-        values ($1, $2, $3, $4, $5, $6, $7, $8)
-      `,
-      [
-        item.orderId,
-        item.id,
-        item.productId,
-        item.vendedorId,
-        item.buyerEmail,
-        item.userId,
+    const { error: eventError } = await getSupabaseAdmin()
+      .from("download_events")
+      .insert({
+        orderId: (item as any).orderId,
+        orderItemId: (item as any).id,
+        productId: (item as any).productId,
+        vendedorId: (item as any).vendedorId,
+        buyerEmail: (item as any).orders?.buyerEmail,
+        userId: (item as any).orders?.userId,
         ipHash,
-        String(req.header("user-agent") || "").slice(0, 500),
-      ],
-    );
+        userAgent: String(req.header("user-agent") || "").slice(0, 500),
+      });
 
-    const signedUrl = await createSignedMediaUrl(item.storagePath || item.url, 300);
+    if (eventError) {
+      console.error("Erro ao registrar evento de download:", eventError);
+    }
+
+    const storagePath = Array.isArray((item as any).products)
+      ? (item as any).products[0]?.storagePath
+      : (item as any).products?.storagePath;
+    const signedUrl = await createSignedMediaUrl(storagePath || (item as any).url, 300);
     return res.json({ url: signedUrl });
   } catch (error: any) {
     console.error("Erro ao autorizar download:", error);
     return res.status(500).json({ error: "Nao foi possivel autorizar o download." });
-  } finally {
-    await pool.end();
   }
 });
 

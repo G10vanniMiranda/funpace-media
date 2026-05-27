@@ -468,6 +468,27 @@ export const eventService = {
     }
   },
 
+  async getActiveEvents(count = 100): Promise<Event[]> {
+    if (isMockMode) {
+      return [];
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      status: 'in.(scheduled,active)',
+      order: 'date.asc,createdAt.desc',
+      limit: String(count),
+    });
+    try {
+      return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        return loadLocalEvents().filter((event) => event.status === 'scheduled' || event.status === 'active');
+      }
+      throw error;
+    }
+  },
+
   async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'>): Promise<Event> {
     if (isMockMode) {
       return {

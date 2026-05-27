@@ -377,7 +377,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawalError, setWithdrawalError] = useState('');
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
-  const [todayEvents, setTodayEvents] = useState<Event[]>([]);
+  const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [batchPriceInput, setBatchPriceInput] = useState('19.90');
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -569,12 +569,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         setProducts(visibleProducts);
         const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
         const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
-        const events = await eventService.getTodayEvents();
+        const events = await eventService.getActiveEvents();
         setDashboardMetrics(dashboard.metrics);
         setRecentSales(dashboard.recentSales);
         setProductPerformance(dashboard.productPerformance);
         setWithdrawals(pWithdrawals);
-        setTodayEvents(events);
+        setAvailableEvents(events);
       } catch (error) {
         console.error("Error loading photographer content:", error);
       } finally {
@@ -667,7 +667,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
   const handleTodayEventSelect = (eventId: string) => {
     setSelectedEventId(eventId);
-    const selectedEvent = todayEvents.find((eventItem) => eventItem.id === eventId);
+    const selectedEvent = availableEvents.find((eventItem) => eventItem.id === eventId);
     if (!selectedEvent) return;
 
     setEventInput(selectedEvent.name);
@@ -1914,22 +1914,22 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
                 <div className="space-y-6 pb-6">
                   <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Eventos de hoje</label>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Eventos ativos</label>
                     <select
                       value={selectedEventId}
                       onChange={(event) => handleTodayEventSelect(event.target.value)}
                       className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
                     >
                       <option value="">Selecionar evento cadastrado pelo admin</option>
-                      {todayEvents.map((eventItem) => (
+                      {availableEvents.map((eventItem) => (
                         <option key={eventItem.id} value={eventItem.id}>
                           {eventItem.name} {eventItem.location ? `- ${eventItem.location}` : ''}
                         </option>
                       ))}
                     </select>
-                    {todayEvents.length === 0 && (
+                    {availableEvents.length === 0 && (
                       <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
-                        Nenhum evento ativo cadastrado para hoje. Preencha manualmente ou solicite ao admin.
+                        Nenhum evento ativo cadastrado. Preencha manualmente ou solicite ao admin.
                       </p>
                     )}
                   </div>

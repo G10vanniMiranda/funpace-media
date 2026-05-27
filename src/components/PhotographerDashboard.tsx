@@ -441,6 +441,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [productSearch, setProductSearch] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<ProductTypeFilter>('all');
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('all');
+  const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set());
+  const [isBulkRemovingProducts, setIsBulkRemovingProducts] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<PhotographerPeriodKey>('week');
   const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
@@ -476,6 +478,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [products, productSearch, productTypeFilter, productStatusFilter]);
+  const selectedProducts = React.useMemo(
+    () => products.filter((product) => selectedProductIds.has(product.id) && (product.status ?? 'published') !== 'removed'),
+    [products, selectedProductIds],
+  );
+  const allFilteredProductsSelected = filteredProducts.length > 0 &&
+    filteredProducts.every((product) => selectedProductIds.has(product.id));
   const upcomingEvents = React.useMemo(() => {
     const eventNames = Array.from(new Set(products.map((product) => product.event).filter(Boolean)));
     return eventNames.slice(0, 3).map((eventName, index) => ({
@@ -835,6 +843,61 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       alert('Erro ao remover produto.');
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const toggleProductSelection = (productId: string) => {
+    setSelectedProductIds((current) => {
+      const next = new Set(current);
+      if (next.has(productId)) {
+        next.delete(productId);
+      } else {
+        next.add(productId);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllFilteredProducts = () => {
+    setSelectedProductIds((current) => {
+      const next = new Set(current);
+      if (allFilteredProductsSelected) {
+        filteredProducts.forEach((product) => next.delete(product.id));
+      } else {
+        filteredProducts.forEach((product) => next.add(product.id));
+      }
+      return next;
+    });
+  };
+
+  const handleBulkRemoveProducts = async () => {
+    if (selectedProducts.length === 0) return;
+
+    const shouldRemove = window.confirm(`Remover ${selectedProducts.length} produto(s) da vitrine? Eles nao aparecerao para clientes.`);
+    if (!shouldRemove) return;
+
+    setIsBulkRemovingProducts(true);
+    try {
+      const failedIds = new Set<string>();
+      for (const product of selectedProducts) {
+        try {
+          await productService.removeProduct(product.id);
+        } catch {
+          failedIds.add(product.id);
+        }
+      }
+
+      const removedIds = new Set(selectedProducts.filter((product) => !failedIds.has(product.id)).map((product) => product.id));
+      setProducts((current) => current.filter((item) => !removedIds.has(item.id)));
+      setSelectedProductIds(failedIds);
+
+      if (failedIds.size > 0) {
+        alert(`${removedIds.size} produto(s) removido(s). ${failedIds.size} falharam e continuam selecionados.`);
+      } else {
+        alert(`${removedIds.size} produto(s) removido(s) da vitrine.`);
+      }
+    } finally {
+      setIsBulkRemovingProducts(false);
     }
   };
 
@@ -1343,23 +1406,57 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     {filteredProducts.length} de {products.length} produtos encontrados
                   </p>
                 </div>
-                {(productSearch || productTypeFilter !== 'all' || productStatusFilter !== 'all') && (
+                <div className="flex flex-wrap items-center gap-3">
                   <button
-                    onClick={() => {
-                      setProductSearch('');
-                      setProductTypeFilter('all');
-                      setProductStatusFilter('all');
-                    }}
-                    className="self-start md:self-auto font-mono text-[10px] uppercase font-bold text-brutal-accent hover:text-white transition-colors cursor-pointer"
+                    type="button"
+                    onClick={toggleAllFilteredProducts}
+                    disabled={filteredProducts.length === 0 || isBulkRemovingProducts}
+                    className="min-h-10 px-4 border border-white/15 bg-[#0d131c] text-white font-mono text-[10px] uppercase font-bold hover:border-brutal-accent disabled:text-gray-600 disabled:cursor-not-allowed"
                   >
-                    Limpar filtros
+                    {allFilteredProductsSelected ? 'Desmarcar filtrados' : 'Selecionar filtrados'}
                   </button>
-                )}
+                  {selectedProducts.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedProductIds(new Set())}
+                        disabled={isBulkRemovingProducts}
+                        className="min-h-10 px-4 border border-white/15 text-gray-300 font-mono text-[10px] uppercase font-bold hover:text-white disabled:text-gray-600"
+                      >
+                        Limpar selecao ({selectedProducts.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBulkRemoveProducts}
+                        disabled={isBulkRemovingProducts}
+                        className="min-h-10 px-4 bg-red-600 text-white border border-red-600 font-mono text-[10px] uppercase font-bold hover:bg-white hover:text-red-600 disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400"
+                      >
+                        {isBulkRemovingProducts ? 'Removendo...' : `Remover ${selectedProducts.length} da vitrine`}
+                      </button>
+                    </>
+                  )}
+                  {(productSearch || productTypeFilter !== 'all' || productStatusFilter !== 'all') && (
+                    <button
+                      onClick={() => {
+                        setProductSearch('');
+                        setProductTypeFilter('all');
+                        setProductStatusFilter('all');
+                      }}
+                      className="font-mono text-[10px] uppercase font-bold text-brutal-accent hover:text-white transition-colors cursor-pointer"
+                    >
+                      Limpar filtros
+                    </button>
+                  )}
+                </div>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-                {filteredProducts.map((product) => (
-                  <div key={product.id} className="group bg-[#0d131c] border border-white/10 overflow-hidden transition-colors hover:border-brutal-accent/70">
+                {filteredProducts.map((product) => {
+                  const isSelected = selectedProductIds.has(product.id);
+                  return (
+                  <div key={product.id} className={`group bg-[#0d131c] border overflow-hidden transition-colors ${
+                    isSelected ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-white/10 hover:border-brutal-accent/70'
+                  }`}>
                     <div className="aspect-[4/5] relative bg-[#080d14]">
                       {product.type === 'IMG' ? (
                         <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
@@ -1369,9 +1466,24 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
                       )}
                       <div className="absolute inset-x-0 top-0 p-3 flex items-start justify-between gap-2">
-                        <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
-                          {product.type}
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              toggleProductSelection(product.id);
+                            }}
+                            className={`h-8 w-8 border flex items-center justify-center transition-colors ${
+                              isSelected ? 'bg-brutal-accent border-brutal-accent text-white' : 'bg-[#05080d]/90 border-white/15 text-white hover:border-brutal-accent'
+                            }`}
+                            aria-label={isSelected ? 'Desmarcar produto' : 'Selecionar produto'}
+                          >
+                            {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <span className="h-3.5 w-3.5 border border-current" />}
+                          </button>
+                          <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
+                            {product.type}
+                          </span>
+                        </div>
                         <div className="flex flex-col items-end gap-1">
                           <span className="bg-brutal-accent text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
                             {formatCurrency(product.price)}
@@ -1416,7 +1528,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       </div>
                     </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
               {filteredProducts.length === 0 && (
                 <div className="bg-[#0d131c] border border-white/10 p-10 text-center">

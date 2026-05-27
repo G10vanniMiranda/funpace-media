@@ -436,7 +436,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [selectedEventId, setSelectedEventId] = useState('');
   const [batchPriceInput, setBatchPriceInput] = useState('19.90');
   const [previewIndex, setPreviewIndex] = useState(0);
-  const [eventInput, setEventInput] = useState('Geral');
+  const [eventInput, setEventInput] = useState('');
   const [checkpointInput, setCheckpointInput] = useState('Ponto Principal');
   const [productSearch, setProductSearch] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<ProductTypeFilter>('all');
@@ -653,6 +653,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
     loadPhotographerContent();
   }, [photographer.id]);
+
+  React.useEffect(() => {
+    if (selectedEventId || availableEvents.length !== 1) return;
+
+    const [eventItem] = availableEvents;
+    setSelectedEventId(eventItem.id);
+    setEventInput(eventItem.name);
+    setCheckpointInput(eventItem.checkpoint || eventItem.location || 'Ponto Principal');
+  }, [availableEvents, selectedEventId]);
 
   const handleWithdrawalRequest = async () => {
     const pixKey = withdrawalPixKey.trim();
@@ -902,11 +911,17 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const handleUpload = async () => {
-    const normalizedEvent = eventInput.trim();
-    const normalizedCheckpoint = checkpointInput.trim();
+    const selectedEvent = availableEvents.find((eventItem) => eventItem.id === selectedEventId);
+    const normalizedEvent = selectedEvent?.name.trim() || eventInput.trim();
+    const normalizedCheckpoint = (selectedEvent?.checkpoint || selectedEvent?.location || checkpointInput).trim();
 
     if (selectedFiles.length === 0) {
       alert("Selecione ao menos um arquivo para publicar.");
+      return;
+    }
+
+    if (availableEvents.length > 0 && !selectedEvent) {
+      alert("Selecione o evento cadastrado antes de publicar.");
       return;
     }
 
@@ -1465,7 +1480,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       ) : (
                         <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
                       )}
-                      <div className="absolute inset-x-0 top-0 p-3 flex items-start justify-between gap-2">
+                      <div className="absolute inset-x-0 top-0 z-20 p-3 flex items-start justify-between gap-2">
                         <div className="flex items-center gap-2">
                           <button
                             type="button"
@@ -1495,7 +1510,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                           )}
                         </div>
                       </div>
-                      <div className="absolute inset-0 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
+                      <div className="absolute inset-0 z-10 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
                         <p className="text-white font-sans font-black text-sm uppercase mb-4 text-center px-4">{product.name}</p>
                         <div className="flex gap-2">
                           <button
@@ -2175,8 +2190,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       type="text" 
                       value={eventInput}
                       onChange={e => setEventInput(e.target.value)}
+                      disabled={availableEvents.length > 0}
                       placeholder="EX: TREINO DE SABADO, MARATONA SP" 
-                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
+                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
                     />
                   </div>
 
@@ -2186,8 +2202,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       type="text" 
                       value={checkpointInput}
                       onChange={e => setCheckpointInput(e.target.value)}
+                      disabled={availableEvents.length > 0}
                       placeholder="EX: KM 15, CHEGADA" 
-                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent"
+                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
                     />
                   </div>
 

@@ -357,6 +357,7 @@ for select
 using (
   public.is_admin()
   or ("userId" is not null and "userId" = auth.uid()::text)
+  or ("buyerEmail" = (auth.jwt() ->> 'email'))
 );
 
 drop policy if exists "orders_update_admin_only" on public.orders;
@@ -379,6 +380,7 @@ using (
     where o.id = order_items."orderId"
       and (
         (o."userId" is not null and o."userId" = auth.uid()::text)
+        or (o."buyerEmail" = (auth.jwt() ->> 'email'))
       )
   )
 );

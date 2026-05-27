@@ -85,6 +85,49 @@ function getCheckoutEndpoint() {
   return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || 'https://api.checkout.infinitepay.io/links';
 }
 
+function getAllowedRedirectOrigins(req: any) {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host = req.headers.host;
+  return new Set([
+    `https://${host}`,
+    `${proto}://${host}`,
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+}
+
+function buildSafeSuccessUrl(req: any, inputUrl: string | undefined, orderId: string) {
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host = req.headers.host;
+  const fallback = `${proto}://${host}/pagamento/sucesso`;
+  const candidate = new URL(inputUrl || fallback, fallback);
+  const origin = candidate.origin.replace(/\/+$/, '');
+
+  if (!getAllowedRedirectOrigins(req).has(origin)) {
+    throw new Error('URL de retorno do checkout nao autorizada.');
+  }
+
+  candidate.searchParams.set('payment', 'success');
+  candidate.searchParams.set('order', orderId);
+  return candidate.toString();
+}
+
+function assertInfinitePayCheckoutUrl(value: string) {
+  const parsed = new URL(value);
+  const allowedHosts = (process.env.INFINITEPAY_CHECKOUT_ALLOWED_HOSTS || 'infinitepay.io,checkout.infinitepay.io,api.checkout.infinitepay.io')
+    .split(',')
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  const hostname = parsed.hostname.toLowerCase();
+  const allowed = parsed.protocol === 'https:' && allowedHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+
+  if (!allowed) {
+    throw new Error('InfinitePay retornou uma URL de checkout fora dos dominios permitidos.');
+  }
+}
+
 function getBearerToken(req: any) {
   const header = String(req.headers?.authorization || req.headers?.Authorization || '');
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -160,7 +203,12 @@ export default async function handler(req: any, res: any) {
     }
 
     const buyerName = String(buyer.fullName).trim();
-    const buyerEmail = authUser.email || String(buyer.email).trim().toLowerCase();
+    const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
+    if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
+      return res.status(403).json({ error: 'Use o mesmo e-mail da conta logada para finalizar a compra.' });
+    }
+
+    const buyerEmail = authUser.email || inputBuyerEmail;
     const buyerPhone = String(buyer.phone || 'nao_informado').trim();
     const buyerCpf = onlyCpfDigits(buyer.cpf);
 
@@ -218,18 +266,14 @@ export default async function handler(req: any, res: any) {
       return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
     }
 
-    const proto = req.headers['x-forwarded-proto'] || 'https';
-    const host = req.headers.host;
-    const successRedirect = new URL(successUrl || `${proto}://${host}/pagamento/sucesso`);
-    successRedirect.searchParams.set('payment', 'success');
-    successRedirect.searchParams.set('order', orderId);
+    const successRedirectUrl = buildSafeSuccessUrl(req, successUrl, orderId);
 
     const phoneDigits = typeof buyer.phone === 'string' ? String(buyer.phone).replace(/\D/g, '') : '';
     const checkoutPayload: any = {
       handle,
       order_nsu: orderId,
-      redirect_url: successRedirect.toString(),
-      webhook_url: `${proto}://${host}/api/webhooks/infinitepay`,
+      redirect_url: successRedirectUrl,
+      webhook_url: `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/webhooks/infinitepay`,
       items: products.map((product: any) => ({
         quantity: 1,
         price: Math.round(Number(product.price) * 100),
@@ -280,6 +324,18 @@ export default async function handler(req: any, res: any) {
       }).catch(() => undefined);
 
       return res.status(502).json({ error: 'Resposta invalida da InfinitePay ao criar link.' });
+    }
+
+    try {
+      assertInfinitePayCheckoutUrl(checkoutUrl);
+    } catch (error: any) {
+      await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ status: 'failed' }),
+      }).catch(() => undefined);
+
+      return res.status(502).json({ error: error?.message || 'URL de checkout invalida.' });
     }
 
     await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}`, {

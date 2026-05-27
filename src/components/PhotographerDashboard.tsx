@@ -64,6 +64,11 @@ const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: st
   { key: 'custom', label: 'Personalizado' },
 ];
 
+const safeServerlessUploadBytes = 4 * 1024 * 1024;
+const clientUploadMaxBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || safeServerlessUploadBytes);
+const imageCompressionMaxBytes = 900 * 1024;
+const imageCompressionMaxSide = 1800;
+
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
   approved: 'Aprovado',
@@ -95,6 +100,13 @@ function formatCurrency(value: number) {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+}
+
+function formatFileSize(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
+  const mb = bytes / (1024 * 1024);
+  if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1).replace('.', ',')} MB`;
+  return `${Math.ceil(bytes / 1024)} KB`;
 }
 
 function startOfDay(date: Date) {
@@ -303,10 +315,7 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
 async function prepareImageForUpload(file: File): Promise<File> {
   if (!file.type.startsWith('image')) return file;
 
-  const maxUploadBytes = 900 * 1024;
-  const maxSide = 1800;
-
-  if (file.size <= maxUploadBytes) return file;
+  if (file.size <= imageCompressionMaxBytes) return file;
 
   return new Promise((resolve) => {
     const image = new Image();
@@ -315,7 +324,7 @@ async function prepareImageForUpload(file: File): Promise<File> {
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+      const scale = Math.min(1, imageCompressionMaxSide / Math.max(image.width, image.height));
       const width = Math.max(1, Math.round(image.width * scale));
       const height = Math.max(1, Math.round(image.height * scale));
       const canvas = document.createElement('canvas');
@@ -349,9 +358,31 @@ async function prepareImageForUpload(file: File): Promise<File> {
   });
 }
 
-function formatUploadErrorMessage(message: string) {
+function assertFileFitsUploadLimit(file: File) {
+  if (file.size <= clientUploadMaxBytes) return;
+
+  if (file.type.startsWith('video')) {
+    throw new Error(`Video muito grande para este deploy (${formatFileSize(file.size)}). O limite atual e ${formatFileSize(clientUploadMaxBytes)}. Comprima o MP4 ou publique um video menor.`);
+  }
+
+  if (file.type.startsWith('image')) {
+    throw new Error(`Imagem muito grande para este deploy mesmo apos a compressao (${formatFileSize(file.size)}). O limite atual e ${formatFileSize(clientUploadMaxBytes)}. Reduza a resolucao antes de publicar.`);
+  }
+
+  throw new Error(`Arquivo muito grande para este deploy (${formatFileSize(file.size)}). O limite atual e ${formatFileSize(clientUploadMaxBytes)}.`);
+}
+
+function formatUploadErrorMessage(message: string, file?: File) {
   if (/FUNCTION_PAYLOAD_TOO_LARGE|Request Entity Too Large|payload too large|entity too large/i.test(message)) {
-    return 'Arquivo muito grande para envio. A foto foi comprimida automaticamente, mas ainda excedeu o limite do servidor. Tente uma imagem menor ou reduza a resolucao antes de publicar.';
+    if (file?.type.startsWith('video')) {
+      return `Video muito grande para envio neste deploy. O limite atual e ${formatFileSize(clientUploadMaxBytes)}. Comprima o MP4 ou publique um video menor.`;
+    }
+
+    if (file?.type.startsWith('image')) {
+      return 'Arquivo muito grande para envio. A foto foi comprimida automaticamente, mas ainda excedeu o limite do servidor. Tente uma imagem menor ou reduza a resolucao antes de publicar.';
+    }
+
+    return `Arquivo muito grande para envio neste deploy. O limite atual e ${formatFileSize(clientUploadMaxBytes)}.`;
   }
 
   if (/sess[aÃ£]o expirada/i.test(message)) {
@@ -851,7 +882,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       console.error('Erro ao remover produto:', error);
       alert('Erro ao remover produto.');
     } finally {
-      setIsLoading(false);
+      setIsPublishing(false);
     }
   };
 
@@ -943,6 +974,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
 
     setIsLoading(true);
+    setIsPublishing(true);
     try {
       const currentUser = getCurrentUser();
       if (!isMockMode && currentUser?.id && currentUser.id !== photographer.id) {
@@ -956,6 +988,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       for (const [index, item] of selectedFiles.entries()) {
         try {
           const uploadFile = await prepareImageForUpload(item.file);
+          assertFileFitsUploadLimit(uploadFile);
           const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile);
           const thumbnailFile = await generateMediaThumbnail(uploadFile);
           const uploadedThumbnail = thumbnailFile
@@ -985,7 +1018,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           failedUploads.push({
             index,
             name: item.name,
-            message: formatUploadErrorMessage(friendlyMessage),
+            message: formatUploadErrorMessage(friendlyMessage, item.file),
           });
           setPublishProgress({ done: index + 1, total: selectedFiles.length });
         }
@@ -1017,6 +1050,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       console.error("Erro no upload:", error);
       alert(error instanceof Error ? error.message : "Erro ao realizar upload.");
     } finally {
+      setIsLoading(false);
       setIsPublishing(false);
     }
   };

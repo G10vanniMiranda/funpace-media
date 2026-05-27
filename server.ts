@@ -91,7 +91,8 @@ function usesExternalBucket() {
 }
 
 function legacyInfinitePayEnabled() {
-  return process.env.ENABLE_LEGACY_INFINITEPAY_ENDPOINTS === "true";
+  return process.env.ENABLE_LEGACY_INFINITEPAY_ENDPOINTS === "true" &&
+    process.env.ALLOW_INSECURE_LEGACY_INFINITEPAY_ENDPOINTS === "true";
 }
 
 function getSupabaseApiConfig() {
@@ -440,9 +441,8 @@ function getWebhookEventId(payload: any, orderId: string, status: string) {
   );
 }
 
-function mapPaymentStatus(status: unknown) {
+function mapNonPaidPaymentStatus(status: unknown) {
   const normalized = String(status || "").toLowerCase();
-  if (["paid", "approved", "completed", "confirmed"].includes(normalized)) return "paid";
   if (["failed", "rejected", "denied", "expired"].includes(normalized)) return "failed";
   if (["cancelled", "canceled", "voided"].includes(normalized)) return "cancelled";
   if (["refunded", "chargeback"].includes(normalized)) return "refunded";
@@ -471,6 +471,44 @@ function getApiUrl() {
 
 function getInfinitePayCheckoutEndpoint() {
   return process.env.INFINITEPAY_CHECKOUT_ENDPOINT || "https://api.checkout.infinitepay.io/links";
+}
+
+function getAllowedRedirectOrigins(req: express.Request) {
+  return new Set([
+    getRequestOrigin(req),
+    "https://funpace.media",
+    "https://www.funpace.media",
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || "").split(","),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, "")));
+}
+
+function buildSafeCheckoutSuccessUrl(req: express.Request, inputUrl: string | undefined, orderId: string) {
+  const fallback = `${getRequestOrigin(req)}/pagamento/sucesso`;
+  const candidate = new URL(inputUrl || fallback, fallback);
+  const origin = candidate.origin.replace(/\/+$/, "");
+
+  if (!getAllowedRedirectOrigins(req).has(origin)) {
+    throw new Error("URL de retorno do checkout nao autorizada.");
+  }
+
+  candidate.searchParams.set("payment", "success");
+  candidate.searchParams.set("order", orderId);
+  return candidate.toString();
+}
+
+function assertInfinitePayCheckoutUrl(value: string) {
+  const parsed = new URL(value);
+  const allowedHosts = (process.env.INFINITEPAY_CHECKOUT_ALLOWED_HOSTS || "infinitepay.io,checkout.infinitepay.io,api.checkout.infinitepay.io")
+    .split(",")
+    .map((host) => host.trim().toLowerCase())
+    .filter(Boolean);
+  const hostname = parsed.hostname.toLowerCase();
+  const allowed = parsed.protocol === "https:" && allowedHosts.some((host) => hostname === host || hostname.endsWith(`.${host}`));
+
+  if (!allowed) {
+    throw new Error("InfinitePay retornou uma URL de checkout fora dos dominios permitidos.");
+  }
 }
 
 function getInfinitePayPaymentCheckEndpoint() {
@@ -564,7 +602,7 @@ app.post("/payments/infinitepay/create", async (req, res) => {
   if (!legacyInfinitePayEnabled()) {
     return res.status(410).json({
       success: false,
-      error: "Endpoint legado desativado. Use /api/checkout/create-session.",
+      error: "Endpoint legado inseguro desativado. Use /api/checkout/create-session.",
     });
   }
 
@@ -669,7 +707,7 @@ app.post("/payments/infinitepay/webhook", async (req, res) => {
   if (!legacyInfinitePayEnabled()) {
     return res.status(410).json({
       received: false,
-      error: "Webhook legado desativado. Use /api/webhooks/infinitepay.",
+      error: "Webhook legado inseguro desativado. Use /api/webhooks/infinitepay.",
     });
   }
 
@@ -962,8 +1000,8 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(400).json({ error: "Carrinho vazio." });
     }
 
-    const productIds = [...new Set(items.map((item: any) => item.id))];
-    if (!productIds.every(isUuid)) {
+    const productIds = [...new Set(items.map((item: any) => String(item.id || "").trim()))];
+    if (productIds.length !== items.length || !productIds.every(isUuid)) {
       return res.status(400).json({ error: "Carrinho contem produto invalido." });
     }
 
@@ -981,7 +1019,12 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
     const buyerCpf = onlyCpfDigits(buyer.cpf);
-    const buyerEmail = authUser.email || String(buyer.email).trim().toLowerCase();
+    const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
+    if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
+      return res.status(403).json({ error: "Use o mesmo e-mail da conta logada para finalizar a compra." });
+    }
+
+    const buyerEmail = authUser.email || inputBuyerEmail;
     const buyerName = String(buyer.fullName).trim();
     const buyerPhone = String((buyer as any).phone || "nao_informado").trim();
 
@@ -1049,10 +1092,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
     }
 
-    const fallbackSuccessUrl = getRequestOrigin(req);
-    const successRedirect = new URL(successUrl || fallbackSuccessUrl);
-    successRedirect.searchParams.set("payment", "success");
-    successRedirect.searchParams.set("order", orderId);
+    const successRedirectUrl = buildSafeCheckoutSuccessUrl(req, successUrl, orderId);
 
     const phoneDigits = typeof buyer.phone === "string" ? String(buyer.phone).replace(/\D/g, "") : "";
     const phoneE164 = phoneDigits.length >= 10 ? `+55${phoneDigits}` : "";
@@ -1061,7 +1101,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
     const checkoutPayload: any = {
       handle,
       order_nsu: orderId,
-      redirect_url: successRedirect.toString(),
+      redirect_url: successRedirectUrl,
       webhook_url: getInfinitePayWebhookUrl(req),
       items: products.map((product: any) => ({
         quantity: 1,
@@ -1108,6 +1148,16 @@ app.post("/api/checkout/create-session", async (req, res) => {
         .update({ status: "failed" })
         .eq("id", orderId);
       return res.status(502).json({ error: "Resposta invalida da InfinitePay ao criar link." });
+    }
+
+    try {
+      assertInfinitePayCheckoutUrl(checkoutUrlWithOrder);
+    } catch (error: any) {
+      await getSupabaseAdmin()
+        .from("orders")
+        .update({ status: "failed" })
+        .eq("id", orderId);
+      return res.status(502).json({ error: error?.message || "URL de checkout invalida." });
     }
 
     const { error: checkoutUrlError } = await getSupabaseAdmin()
@@ -1160,9 +1210,6 @@ app.post("/api/checkout/confirm", async (req, res) => {
     "nsu",
   ]);
   const slug = getConfirmationValue(["slug", "invoice_slug", "invoiceSlug", "invoice_id", "invoiceId"]);
-  const captureMethod = getConfirmationValue(["capture_method", "captureMethod", "payment_method", "paymentMethod"]);
-  const paymentReturn = getConfirmationValue(["payment"]);
-  const returnSource = getConfirmationValue(["return_source", "returnSource"]);
 
   if (!handle) {
     return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
@@ -1185,6 +1232,10 @@ app.post("/api/checkout/confirm", async (req, res) => {
       return res.status(404).json({ error: "Pedido nao encontrado." });
     }
 
+    if (order.paymentProvider !== "infinitepay") {
+      return res.status(409).json({ error: "Pedido nao pertence ao provedor InfinitePay." });
+    }
+
     if (order.status === "paid") {
       return res.json({
         paid: true,
@@ -1205,25 +1256,12 @@ app.post("/api/checkout/confirm", async (req, res) => {
       }
     }
 
-    const successfulCheckoutReturn = paymentReturn.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") === "success" ||
-      returnSource.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "") === "pagamentosucesso";
-
-    const confirmedByCheckoutReturn = !paid &&
-      successfulCheckoutReturn &&
-      (
-        Boolean(captureMethod || transactionNsu) ||
-        (
-          ["pending", "failed", "cancelled"].includes(order.status) &&
-          order.paymentProvider === "infinitepay"
-        )
-      );
-
-    if (!paid && !confirmedByCheckoutReturn) {
+    if (!paid) {
       return res.status(409).json({
         paid: false,
         message: "Pagamento ainda nao confirmado.",
         source: "checkout-confirm",
-        reason: !transactionNsu && !captureMethod && !slug ? "missing_confirmation_params" : "payment_check_unpaid",
+        reason: !transactionNsu || !slug ? "missing_confirmation_params" : "payment_check_unpaid",
         paymentCheckError,
       });
     }
@@ -1233,12 +1271,13 @@ app.post("/api/checkout/confirm", async (req, res) => {
         update public.orders
         set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
         where id = $2
+          and "paymentProvider" = 'infinitepay'
           and status in ('pending', 'failed', 'cancelled')
       `,
       [transactionNsu, orderId],
     );
 
-    return res.json({ paid: true, confirmedBy: paid ? "payment_check" : "checkout_return" });
+    return res.json({ paid: true, confirmedBy: "payment_check" });
   } finally {
     await pool.end();
   }
@@ -1447,7 +1486,11 @@ app.post("/api/downloads/authorize", async (req, res) => {
       return res.status(403).json({ error: "Download liberado apenas para pedidos pagos." });
     }
 
-    if (order.userId !== authUser.id) {
+    const buyerEmail = String(order.buyerEmail || "").trim().toLowerCase();
+    const authEmail = String(authUser.email || "").trim().toLowerCase();
+    const belongsToUser = order.userId === authUser.id || (buyerEmail && authEmail && buyerEmail === authEmail);
+
+    if (!belongsToUser) {
       return res.status(403).json({ error: "Este pedido nao pertence ao usuario logado." });
     }
 
@@ -1483,7 +1526,7 @@ app.post("/api/downloads/authorize", async (req, res) => {
       console.error("Erro ao registrar evento de download:", eventError);
     }
 
-    const signedUrl = await createSignedMediaUrl((product as any)?.storagePath || (item as any).url, 300);
+    const signedUrl = await createSignedMediaUrl((item as any).url || (product as any)?.storagePath || "", 300);
     return res.json({ url: signedUrl });
   } catch (error: any) {
     console.error("Erro ao autorizar download:", error);
@@ -1711,7 +1754,7 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
     return res.status(502).json({ error: error?.message || "Falha ao validar webhook na InfinitePay." });
   }
 
-  const status = paymentCheck?.paid ? "paid" : mapPaymentStatus(payload?.status);
+  const status = paymentCheck?.paid ? "paid" : mapNonPaidPaymentStatus(payload?.status);
   const eventId = getWebhookEventId(payload, orderId, status);
   const paymentExternalId = transactionNsu || null;
 
@@ -1743,6 +1786,7 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
           update public.orders
           set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
           where id = $2
+            and "paymentProvider" = 'infinitepay'
             and status in ('pending', 'failed', 'cancelled')
         `,
         [paymentExternalId, orderId],
@@ -1753,6 +1797,7 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
           update public.orders
           set status = $1, "paymentExternalId" = coalesce($2, "paymentExternalId")
           where id = $3
+            and "paymentProvider" = 'infinitepay'
             and status <> 'paid'
         `,
         [status, paymentExternalId, orderId],

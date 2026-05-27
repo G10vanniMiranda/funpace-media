@@ -35,9 +35,7 @@ function getPayloadValue(payload: any, names: string[]) {
   return '';
 }
 
-function mapPaymentStatus(payload: any, paid: boolean) {
-  if (paid) return 'paid';
-
+function mapNonPaidPaymentStatus(payload: any) {
   const rawStatus = getPayloadValue(payload, [
     'status',
     'payment_status',
@@ -46,7 +44,6 @@ function mapPaymentStatus(payload: any, paid: boolean) {
     'type',
   ]).toLowerCase();
 
-  if (['paid', 'approved', 'completed', 'confirmed', 'payment_approved'].includes(rawStatus)) return 'paid';
   if (['failed', 'rejected', 'denied', 'expired'].includes(rawStatus)) return 'failed';
   if (['cancelled', 'canceled', 'voided'].includes(rawStatus)) return 'cancelled';
   if (['refunded', 'chargeback'].includes(rawStatus)) return 'refunded';
@@ -130,7 +127,7 @@ async function updateOrderStatus(input: {
   transactionNsu: string;
 }) {
   if (input.status === 'paid') {
-    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&status=in.(pending,failed,cancelled)`, {
+    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled)`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({
@@ -142,7 +139,7 @@ async function updateOrderStatus(input: {
   }
 
   if (['failed', 'cancelled', 'refunded'].includes(input.status)) {
-    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&status=neq.paid`, {
+    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=neq.paid`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({
@@ -229,7 +226,7 @@ export default async function handler(req: any, res: any) {
     return res.status(502).json({ error: error?.message || 'Falha ao validar webhook na InfinitePay.' });
   }
 
-  const status = mapPaymentStatus(payload, Boolean(paymentCheck?.paid));
+  const status = paymentCheck?.paid ? 'paid' : mapNonPaidPaymentStatus(payload);
   const eventId = getWebhookEventId(payload, orderId, status, transactionNsu);
 
   await recordPaymentEvent({

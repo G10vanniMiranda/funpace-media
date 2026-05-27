@@ -184,16 +184,26 @@ export function CustomerOrdersDrawer({
   };
 
   const downloadPaidOrder = async (order: Order) => {
-    const items = (order.items ?? []).filter((item) => item.url && !hiddenItemIds.has(item.id));
-    for (const item of items) {
-      const signedUrl = await authorizeDownload(order.id, item.id);
-      await downloadFile(signedUrl, filenameFromItem(item as any));
+    try {
+      const items = (order.items ?? []).filter((item) => item.url && !hiddenItemIds.has(item.id));
+      for (const item of items) {
+        const signedUrl = await authorizeDownload(order.id, item.id);
+        await downloadFile(signedUrl, filenameFromItem(item as any));
+      }
+    } catch (error) {
+      console.error('Erro ao baixar pedido:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o pedido.');
     }
   };
 
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    const signedUrl = await authorizeDownload(order.id, item.id);
-    await downloadFile(signedUrl, filenameFromItem(item as any));
+    try {
+      const signedUrl = await authorizeDownload(order.id, item.id);
+      await downloadFile(signedUrl, filenameFromItem(item as any));
+    } catch (error) {
+      console.error('Erro ao baixar arquivo:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o arquivo.');
+    }
   };
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
@@ -559,8 +569,13 @@ export function CustomerOrdersPage({
   };
 
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    const signedUrl = await authorizeDownload(order.id, item.id);
-    await downloadFile(signedUrl, filenameFromItem(item as any));
+    try {
+      const signedUrl = await authorizeDownload(order.id, item.id);
+      await downloadFile(signedUrl, filenameFromItem(item as any));
+    } catch (error) {
+      console.error('Erro ao baixar arquivo:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o arquivo.');
+    }
   };
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
@@ -574,9 +589,15 @@ export function CustomerOrdersPage({
   };
 
   const downloadPaidOrder = async (order: Order) => {
-    for (const item of order.items ?? []) {
-      if (!item.url) continue;
-      await downloadPaidItem(order, item);
+    try {
+      for (const item of order.items ?? []) {
+        if (!item.url) continue;
+        const signedUrl = await authorizeDownload(order.id, item.id);
+        await downloadFile(signedUrl, filenameFromItem(item as any));
+      }
+    } catch (error) {
+      console.error('Erro ao baixar pedido:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o pedido.');
     }
   };
 

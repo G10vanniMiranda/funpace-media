@@ -4,6 +4,10 @@ export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
   setCors(req, res);
 
+  if (process.env.ENABLE_CHECKOUT_DEBUG !== 'true') {
+    return res.status(404).json({ ok: false, error: 'Endpoint indisponivel.' });
+  }
+
   try {
     const body = getJsonBody(req);
     const items = Array.isArray(body.items) ? body.items : [];

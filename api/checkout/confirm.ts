@@ -163,9 +163,6 @@ export default async function handler(req: any, res: any) {
   const orderId = getBodyValue(body, ['order', 'order_nsu', 'orderNsu', 'orderNSU', 'order_id', 'orderId']);
   const transactionNsu = getBodyValue(body, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
   const slug = getBodyValue(body, ['slug', 'invoice_slug', 'invoiceSlug', 'invoice_id', 'invoiceId']);
-  const captureMethod = getBodyValue(body, ['capture_method', 'captureMethod', 'payment_method', 'paymentMethod']);
-  const paymentReturn = getBodyValue(body, ['payment']);
-  const returnSource = getBodyValue(body, ['return_source', 'returnSource']);
   const failureReturn = hasFailureReturn(body);
 
   if (!handle) {
@@ -183,6 +180,10 @@ export default async function handler(req: any, res: any) {
 
   if (!existingOrder) {
     return res.status(404).json({ error: 'Pedido nao encontrado.' });
+  }
+
+  if (existingOrder.paymentProvider !== 'infinitepay') {
+    return res.status(409).json({ error: 'Pedido nao pertence ao provedor InfinitePay.' });
   }
 
   if (existingOrder.status === 'paid') {
@@ -240,26 +241,13 @@ export default async function handler(req: any, res: any) {
     }
   }
 
-  const successfulCheckoutReturn = normalizeStatus(paymentReturn) === 'success' ||
-    normalizeStatus(returnSource) === 'pagamentosucesso';
-
-  const confirmedByCheckoutReturn = !paid &&
-    successfulCheckoutReturn &&
-    (
-      Boolean(captureMethod || transactionNsu) ||
-      (
-        ['pending', 'failed', 'cancelled'].includes(existingOrder.status) &&
-        existingOrder.paymentProvider === 'infinitepay'
-      )
-    );
-
-  if (!paid && !confirmedByCheckoutReturn) {
+  if (!paid) {
     await recordPaymentEvent({
       orderId,
       status: 'pending',
       payload: {
         source: 'checkout-confirm',
-        reason: !transactionNsu && !captureMethod && !slug ? 'missing_confirmation_params' : 'payment_check_unpaid',
+        reason: !transactionNsu || !slug ? 'missing_confirmation_params' : 'payment_check_unpaid',
         paymentCheckError,
         payment_check: paymentCheck,
         raw_query: body?.raw_query || {},
@@ -271,13 +259,12 @@ export default async function handler(req: any, res: any) {
       paid: false,
       message: 'Pagamento ainda nao confirmado.',
       source: 'checkout-confirm',
-      reason: !transactionNsu && !captureMethod && !slug ? 'missing_confirmation_params' : 'payment_check_unpaid',
+      reason: !transactionNsu || !slug ? 'missing_confirmation_params' : 'payment_check_unpaid',
       paymentCheckError,
     });
   }
 
-  const confirmedBy = paid ? 'payment_check' : 'checkout_return';
-  await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}&status=in.(pending,failed,cancelled)`, {
+  await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled)`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
@@ -291,12 +278,12 @@ export default async function handler(req: any, res: any) {
     status: 'paid',
     payload: {
       source: 'checkout-confirm',
-      confirmedBy,
+      confirmedBy: 'payment_check',
       payment_check: paymentCheck,
       raw_query: body?.raw_query || {},
       body,
     },
   });
 
-  return res.status(200).json({ paid: true, confirmedBy });
+  return res.status(200).json({ paid: true, confirmedBy: 'payment_check' });
 }

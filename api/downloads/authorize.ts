@@ -158,7 +158,11 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Download liberado apenas para pedidos pagos.' });
     }
 
-    if (order.userId !== authUser.id) {
+    const buyerEmail = String(order.buyerEmail || '').trim().toLowerCase();
+    const authEmail = String(authUser.email || '').trim().toLowerCase();
+    const belongsToUser = order.userId === authUser.id || (buyerEmail && authEmail && buyerEmail === authEmail);
+
+    if (!belongsToUser) {
       return res.status(403).json({ error: 'Este pedido nao pertence ao usuario logado.' });
     }
 
@@ -184,7 +188,7 @@ export default async function handler(req: any, res: any) {
       console.error('Nao foi possivel registrar evento de download:', error);
     });
 
-    const url = await createSignedMediaUrl(product?.storagePath || item.url);
+    const url = await createSignedMediaUrl(item.url || product?.storagePath || '');
     return res.status(200).json({ url });
   } catch (error: any) {
     console.error('Erro ao autorizar download:', error);

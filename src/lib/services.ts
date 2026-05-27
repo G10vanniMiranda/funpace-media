@@ -377,14 +377,19 @@ export const orderService = {
       return [];
     }
 
+    const ownerFilter = user.email
+      ? `or=${encodeURIComponent(`(userId.eq.${user.uid},buyerEmail.eq.${user.email.toLowerCase()})`)}`
+      : `userId=eq.${encodeURIComponent(user.uid)}`;
     const params = new URLSearchParams({
       select: '*',
-      userId: `eq.${user.uid}`,
       order: 'createdAt.desc',
       limit: String(count),
     });
-    const orders = await supabaseRest.get<SupabaseRow<Order>[]>(`/rest/v1/orders?${params.toString()}`, true);
-    const ownOrders = orders.filter((order) => order.userId === user.uid);
+    const orders = await supabaseRest.get<SupabaseRow<Order>[]>(`/rest/v1/orders?${params.toString()}&${ownerFilter}`, true);
+    const ownOrders = orders.filter((order) => (
+      order.userId === user.uid ||
+      (user.email && order.buyerEmail?.toLowerCase() === user.email.toLowerCase())
+    ));
     return attachOrderItems(ownOrders, true);
   },
 

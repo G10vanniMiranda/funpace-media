@@ -290,7 +290,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
       return await new Promise<File>((resolve, reject) => {
         const image = new Image();
         image.onload = () => {
-          const maxSide = 1000;
+          const maxSide = 520;
           const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
           const width = Math.max(1, Math.round(image.width * scale));
           const height = Math.max(1, Math.round(image.height * scale));
@@ -309,7 +309,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
               return;
             }
             resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
-          }, 'image/jpeg', 0.78);
+          }, 'image/jpeg', 0.68);
         };
         image.onerror = () => reject(new Error('Imagem invalida.'));
         image.src = objectUrl;
@@ -328,8 +328,12 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
       };
       video.onseeked = () => {
         const canvas = document.createElement('canvas');
-        canvas.width = video.videoWidth || 1280;
-        canvas.height = video.videoHeight || 720;
+        const maxSide = 640;
+        const videoWidth = video.videoWidth || 1280;
+        const videoHeight = video.videoHeight || 720;
+        const scale = Math.min(1, maxSide / Math.max(videoWidth, videoHeight));
+        canvas.width = Math.max(1, Math.round(videoWidth * scale));
+        canvas.height = Math.max(1, Math.round(videoHeight * scale));
         const context = canvas.getContext('2d');
         if (!context) {
           reject(new Error('Canvas indisponivel.'));
@@ -342,7 +346,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
             return;
           }
           resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
-        }, 'image/jpeg', 0.78);
+        }, 'image/jpeg', 0.7);
       };
     });
   } finally {

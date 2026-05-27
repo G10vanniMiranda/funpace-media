@@ -76,7 +76,7 @@ export default async function handler(req: any, res: any) {
   try {
     const body = getJsonBody(req);
     const paths = Array.isArray(body.paths) ? body.paths.map(String) : [];
-    const uniquePaths = Array.from(new Set(paths)).filter((path): path is string => Boolean(path)).slice(0, 200);
+    const uniquePaths = Array.from(new Set(paths)).filter((path): path is string => Boolean(path)).slice(0, 1000);
 
     const entries = await Promise.all(
       uniquePaths.map(async (path) => [path, await signedMediaUrl(path)] as const),

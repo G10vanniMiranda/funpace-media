@@ -225,8 +225,12 @@ async function generateVideoThumbnail(file: File): Promise<File | null> {
 
     video.onseeked = () => {
       const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 1280;
-      canvas.height = video.videoHeight || 720;
+      const maxSide = 640;
+      const videoWidth = video.videoWidth || 1280;
+      const videoHeight = video.videoHeight || 720;
+      const scale = Math.min(1, maxSide / Math.max(videoWidth, videoHeight));
+      canvas.width = Math.max(1, Math.round(videoWidth * scale));
+      canvas.height = Math.max(1, Math.round(videoHeight * scale));
       const context = canvas.getContext('2d');
 
       if (!context) {
@@ -246,7 +250,7 @@ async function generateVideoThumbnail(file: File): Promise<File | null> {
 
         const thumbnailName = file.name.replace(/\.[^.]+$/, '') || 'video';
         resolve(new File([blob], `${thumbnailName}-thumb.jpg`, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.82);
+      }, 'image/jpeg', 0.7);
     };
   });
 }
@@ -261,7 +265,7 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      const maxSide = 1000;
+      const maxSide = 520;
       const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
       const width = Math.max(1, Math.round(image.width * scale));
       const height = Math.max(1, Math.round(image.height * scale));
@@ -284,7 +288,7 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
 
         const thumbnailName = file.name.replace(/\.[^.]+$/, '') || 'foto';
         resolve(new File([blob], `${thumbnailName}-preview.jpg`, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.78);
+      }, 'image/jpeg', 0.68);
     };
 
     image.onerror = () => {
@@ -299,8 +303,8 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
 async function prepareImageForUpload(file: File): Promise<File> {
   if (!file.type.startsWith('image')) return file;
 
-  const maxUploadBytes = 4 * 1024 * 1024;
-  const maxSide = 2400;
+  const maxUploadBytes = 900 * 1024;
+  const maxSide = 1800;
 
   if (file.size <= maxUploadBytes) return file;
 
@@ -333,7 +337,7 @@ async function prepareImageForUpload(file: File): Promise<File> {
 
         const compressedName = `${(file.name.replace(/\.[^.]+$/, '') || 'foto')}.jpg`;
         resolve(new File([blob], compressedName, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.82);
+      }, 'image/jpeg', 0.76);
     };
 
     image.onerror = () => {

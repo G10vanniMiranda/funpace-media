@@ -49,6 +49,7 @@ interface DataErrorInfo {
 }
 
 const cartStorageKey = 'funpace:cart';
+const storefrontProductLimit = 1000;
 
 function isValidCartProductId(value: unknown) {
   return typeof value === 'string' &&
@@ -143,7 +144,7 @@ function Storefront() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const products = await productService.getLatestProducts(200);
+        const products = await productService.getLatestProducts(storefrontProductLimit);
         setPhotos(products.filter(p => p.type === 'IMG'));
         setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
       } catch (error) {
@@ -272,7 +273,9 @@ function Storefront() {
       .map((item) => item.checkpoint)
       .filter(Boolean),
   ));
-  const selectedEventCover = displayPhotos[0]?.thumbnailUrl || displayPhotos[0]?.url || displayVideos[0]?.thumbnailUrl || displayVideos[0]?.url || '';
+  const selectedEventCover = displayPhotos.find((photo) => photo.thumbnailUrl)?.thumbnailUrl ||
+    displayVideos.find((video) => video.thumbnailUrl)?.thumbnailUrl ||
+    '';
   const selectedEventDate = [...displayPhotos, ...displayVideos]
     .map((item) => item.createdAt)
     .filter(Boolean)
@@ -364,17 +367,21 @@ function Storefront() {
   const handleSelfieSearch = (file: File) => {
     setSelfieFile(file);
     setIsAnalyzingSelfie(true);
+    setSearchBib(null);
+    setSearchType(null);
+    setSelectedPhotographerId(null);
+    setEventQuery('');
+    setShowDashboard(false);
+    setSelfieNotice((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
 
     setTimeout(() => {
       setIsAnalyzingSelfie(false);
-      setSelfieNotice((current) => {
-        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-        return {
-          previewUrl: URL.createObjectURL(file),
-          fileName: file.name,
-        };
-      });
-    }, 3000);
+      setSearchType('selfie');
+      setActiveView('photos');
+    }, 900);
   };
 
   const clearSearch = async () => {
@@ -387,7 +394,7 @@ function Storefront() {
     setEventQuery('');
 
     try {
-      const products = await productService.getLatestProducts(200);
+      const products = await productService.getLatestProducts(storefrontProductLimit);
       setPhotos(products.filter(p => p.type === 'IMG'));
       setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
     } catch (error) {
@@ -612,7 +619,7 @@ function Storefront() {
               <div className="bg-brutal-black text-white p-6 brutal-border brutal-shadow inline-block">
                 <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
                 <p className="font-display text-5xl">
-                  {searchType === 'selfie' ? 'RECONHECIMENTO FACIAL' : `PEITO ${searchBib}`}
+                  {searchType === 'selfie' ? 'BUSCA POR SELFIE' : `PEITO ${searchBib}`}
                 </p>
               </div>
             </div>
@@ -632,7 +639,7 @@ function Storefront() {
           )}
 
           {!isLoading && selectedEventName && !searchBib && !searchType && (
-            <div className="max-w-[1400px] mx-auto px-4 md:px-6 pt-10 pb-4">
+            <div className="max-w-350 mx-auto px-4 md:px-6 pt-10 pb-4">
               <button
                 onClick={() => {
                   setSelectedEventName(null);
@@ -650,7 +657,7 @@ function Storefront() {
                     <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
                       Evento selecionado
                     </p>
-                    <h1 className="font-display text-[clamp(2.35rem,8vw,5rem)] uppercase leading-[0.9] tracking-normal break-words">
+                    <h1 className="font-display text-[clamp(2.35rem,8vw,5rem)] uppercase leading-[0.9] tracking-normal wrap-break-word">
                       {selectedEventName}
                     </h1>
 
@@ -668,10 +675,12 @@ function Storefront() {
 
                   {selectedEventCover && (
                     <div className="bg-white brutal-border brutal-shadow overflow-hidden">
-                      <div className="aspect-[16/9] bg-brutal-black">
+                      <div className="aspect-video bg-brutal-black">
                         <img
                           src={selectedEventCover}
                           alt={selectedEventName}
+                          loading="lazy"
+                          decoding="async"
                           className="h-full w-full object-cover"
                         />
                       </div>
@@ -735,8 +744,8 @@ function Storefront() {
 
           {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
             <PhotoGrid
-              title={searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ÚLTIMOS LANÇAMENTOS'}
-              subtitle={searchType ? `Encontramos fotos incríveis suas!` : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ÚLTIMOS EVENTOS'}
+              title={searchType === 'selfie' ? 'BUSCA POR SELFIE' : searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ULTIMOS LANCAMENTOS'}
+              subtitle={searchType === 'selfie' ? 'Confira as imagens do evento e selecione as suas.' : searchType ? 'Resultados filtrados por numero de peito.' : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ULTIMOS EVENTOS'}
               photos={displayPhotos}
               onAddToCart={handleAddToCart}
               cartItems={cart}
@@ -855,7 +864,7 @@ function SelfieNoticeModal({
   return (
     <AnimatePresence>
       {notice && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-120 flex items-center justify-center p-4 sm:p-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -886,7 +895,7 @@ function SelfieNoticeModal({
                 <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">
                   Busca por selfie
                 </p>
-                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] break-words">
+                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] wrap-break-word">
                   Em preparacao
                 </h2>
                 <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-4">
@@ -920,7 +929,7 @@ function PaymentNoticeModal({
   return (
     <AnimatePresence>
       {notice && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6">
+        <div className="fixed inset-0 z-120 flex items-center justify-center p-6">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -943,19 +952,18 @@ function PaymentNoticeModal({
             </button>
 
             <div className="flex flex-col items-start gap-5 sm:flex-row">
-              <div className={`p-4 brutal-border ${
-                notice.status === 'paid' ? 'bg-green-50 text-green-600' :
-                notice.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
-                'bg-red-50 text-red-600'
-              }`}>
+              <div className={`p-4 brutal-border ${notice.status === 'paid' ? 'bg-green-50 text-green-600' :
+                  notice.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
+                    'bg-red-50 text-red-600'
+                }`}>
                 {notice.status === 'paid' ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 break-words">
+                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 wrap-break-word">
                   Retorno da InfinitePay
                 </p>
-                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] break-words">
+                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] wrap-break-word">
                   {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
                 </h2>
                 <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">

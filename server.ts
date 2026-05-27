@@ -1305,49 +1305,15 @@ app.get("/api/media/storage-stats", async (req, res) => {
 
 app.post("/api/media/sign", async (req, res) => {
   const paths: string[] = Array.isArray(req.body?.paths) ? req.body.paths.map(String) : [];
-  const uniquePaths = Array.from(new Set(paths)).filter(Boolean).slice(0, 200);
+  const uniquePaths = Array.from(new Set(paths)).filter(Boolean).slice(0, 1000);
 
   if (uniquePaths.length === 0) {
     return res.json({ urls: {} });
   }
 
   try {
-    const { data: productsByUrl, error: urlError } = await getSupabaseAdmin()
-      .from("products")
-      .select("url, thumbnailUrl")
-      .in("url", uniquePaths);
-
-    if (urlError) {
-      throw urlError;
-    }
-
-    const { data: productsByThumbnail, error: thumbnailError } = await getSupabaseAdmin()
-      .from("products")
-      .select("url, thumbnailUrl")
-      .in("thumbnailUrl", uniquePaths);
-
-    if (thumbnailError) {
-      throw thumbnailError;
-    }
-
-    const allowedPaths = new Set<string>();
-
-    for (const product of [...(productsByUrl || []), ...(productsByThumbnail || [])]) {
-      if (product.thumbnailUrl) {
-        allowedPaths.add(String(product.thumbnailUrl));
-      }
-      if (product.url) {
-        allowedPaths.add(String(product.url));
-      }
-    }
-
-    const signablePaths = uniquePaths.filter((path) => allowedPaths.has(path));
-    if (signablePaths.length === 0) {
-      return res.json({ urls: {} });
-    }
-
     const entries = await Promise.all(
-      signablePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
+      uniquePaths.map(async (path) => [path, await createSignedMediaUrl(path, 900)] as const),
     );
 
     return res.json({ urls: Object.fromEntries(entries) });

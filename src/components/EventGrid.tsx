@@ -11,7 +11,7 @@ interface EventGridProps {
 interface MediaEvent {
   name: string;
   checkpoint: string;
-  coverUrl: string;
+  coverUrl: string | null;
   createdAt?: string;
   photos: number;
   videos: number;
@@ -45,7 +45,7 @@ function buildEvents(products: Product[]) {
     const name = String(product.event || 'Evento sem nome').trim();
     const key = normalizeText(name);
     const current = events.get(key);
-    const coverUrl = product.thumbnailUrl || product.url;
+    const coverUrl = product.thumbnailUrl || null;
     const isVideo = product.type === 'VIDEO' || product.type === 'VIEW';
 
     if (!current) {
@@ -128,6 +128,9 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
                   <img
                     src={event.coverUrl}
                     alt={event.name}
+                    loading="lazy"
+                    decoding="async"
+                    sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                     className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (

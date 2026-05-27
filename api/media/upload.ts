@@ -8,7 +8,7 @@ const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
 const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || 'https://99dev.pro/bucket/api').replace(/\/+$/, '');
 const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || '';
-const maxUploadBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 60 * 1024 * 1024);
+const maxUploadBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 300 * 1024 * 1024);
 
 function setSecurityHeaders(res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');

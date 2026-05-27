@@ -126,16 +126,23 @@ async function uploadMediaFile(path: string, file: File) {
     throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
   }
 
-  const response = await fetch(apiUrl('/api/media/upload'), {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      'Content-Type': file.type || 'application/octet-stream',
-      'X-File-Name': encodeURIComponent(file.name),
-      'X-Storage-Path': encodeURIComponent(path),
-    },
-    body: file,
-  });
+  let response: Response;
+  const uploadUrl = apiUrl('/api/media/upload');
+  try {
+    response = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': file.type || 'application/octet-stream',
+        'X-File-Name': encodeURIComponent(file.name),
+        'X-Storage-Path': encodeURIComponent(path),
+      },
+      body: file,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error || 'falha de rede');
+    throw new Error(`Nao foi possivel conectar ao servidor de upload (${uploadUrl}). Verifique se VITE_API_URL/API_URL apontam para o backend ativo e se CORS/CSP permitem www.funpace.media. Detalhe: ${detail || 'falha de rede'}`);
+  }
 
   const raw = await response.text();
   let payload: any = {};

@@ -32,8 +32,10 @@ function getClientIp(req: express.Request) {
 function getSecurityCsp() {
   const mediaBaseUrl = process.env.MEDIA_PUBLIC_BASE_URL || process.env.VITE_MEDIA_PUBLIC_BASE_URL || "";
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const apiUrl = process.env.API_URL || process.env.VITE_API_URL || "";
   const connectSources = [
     "'self'",
+    apiUrl,
     "https://api.checkout.infinitepay.io",
     "https://checkout.infinitepay.io",
     "https://*.infinitepay.io",
@@ -1412,7 +1414,7 @@ app.post("/api/checkout/confirm", async (req, res) => {
 
 app.post("/api/media/upload", express.raw({
   type: ["image/*", "video/*", "application/octet-stream"],
-  limit: process.env.MEDIA_UPLOAD_LIMIT || "60mb",
+  limit: process.env.MEDIA_UPLOAD_LIMIT || "300mb",
 }), async (req, res) => {
   const authUser = await getAuthenticatedRequestUser(req);
   const storagePath = decodeHeaderValue(req.header("x-storage-path"));

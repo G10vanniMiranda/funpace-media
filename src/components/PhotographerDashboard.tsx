@@ -64,7 +64,7 @@ const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: st
   { key: 'custom', label: 'Personalizado' },
 ];
 
-const defaultUploadMaxBytes = 50 * 1024 * 1024;
+const defaultUploadMaxBytes = 300 * 1024 * 1024;
 const clientUploadMaxBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadMaxBytes);
 const imageCompressionMaxBytes = 900 * 1024;
 const imageCompressionMaxSide = 2200;

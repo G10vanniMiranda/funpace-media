@@ -15,7 +15,7 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
   const isVideoInCart = (id: string) => cartItems.some(item => item.id === id);
 
   return (
-    <section className="max-w-[1400px] mx-auto px-6 py-12 md:py-20">
+    <section className="max-w-350 mx-auto px-6 py-12 md:py-20">
       <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
         <div className="space-y-2">
           <div className="flex items-center gap-3">
@@ -30,23 +30,21 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
 
         {activeView && onViewChange && (
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => onViewChange('photos')}
-              className={`px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${
-                activeView === 'photos' 
-                  ? 'bg-brutal-black text-white' 
+              className={`px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'photos'
+                  ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
-              }`}
+                }`}
             >
               Fotos
             </button>
-            <button 
+            <button
               onClick={() => onViewChange('videos')}
-              className={`px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${
-                activeView === 'videos' 
-                  ? 'bg-brutal-black text-white' 
+              className={`px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'videos'
+                  ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
-              }`}
+                }`}
             >
               Vídeos
             </button>
@@ -56,7 +54,7 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
         {videos.map((video) => (
-          <motion.div 
+          <motion.div
             key={video.id}
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
@@ -69,8 +67,8 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
                 alt={video.name}
                 className="w-full h-full object-cover opacity-80"
               />
-              
-              <div className="absolute inset-0 bg-gradient-to-t from-brutal-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
+
+              <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
               {/* Video Badge */}
               <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest flex items-center gap-2">
@@ -114,15 +112,14 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
                   <p className="font-mono text-[10px] text-gray-400 uppercase leading-none">Preço un.</p>
                   <p className="font-display text-2xl">R$ {video.price.toFixed(2)}</p>
                 </div>
-                
-                <button 
+
+                <button
                   onClick={() => onAddToCart(video)}
                   disabled={isVideoInCart(video.id)}
-                  className={`flex items-center gap-2 px-6 py-3 brutal-border font-display text-sm uppercase tracking-widest transition-all cursor-pointer ${
-                    isVideoInCart(video.id) 
-                    ? 'bg-brutal-white text-gray-400 cursor-default' 
-                    : 'bg-brutal-black text-white hover:bg-brutal-accent hover:-translate-x-1 hover:-translate-y-1'
-                  }`}
+                  className={`flex items-center gap-2 px-6 py-3 brutal-border font-display text-sm uppercase tracking-widest transition-all cursor-pointer ${isVideoInCart(video.id)
+                      ? 'bg-brutal-white text-gray-400 cursor-default'
+                      : 'bg-brutal-black text-white hover:bg-brutal-accent hover:-translate-x-1 hover:-translate-y-1'
+                    }`}
                 >
                   {isVideoInCart(video.id) ? (
                     <>

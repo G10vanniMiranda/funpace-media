@@ -20,13 +20,13 @@ interface PhotoGridProps {
 const initialVisiblePhotos = 48;
 const visiblePhotosStep = 48;
 
-export function PhotoGrid({ 
-  title, 
-  subtitle, 
-  photos, 
-  onAddToCart, 
-  cartItems, 
-  activeView, 
+export function PhotoGrid({
+  title,
+  subtitle,
+  photos,
+  onAddToCart,
+  cartItems,
+  activeView,
   onViewChange,
   favoriteIds = new Set(),
   likedIds = new Set(),
@@ -60,32 +60,30 @@ export function PhotoGrid({
   };
 
   return (
-    <section className="py-12 md:py-20 px-4 md:px-6 max-w-[1400px] mx-auto">
+    <section className="py-12 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="max-w-2xl">
           <h2 className="text-4xl md:text-6xl mb-2">{title}</h2>
           <p className="font-mono text-xs md:text-sm text-gray-600 uppercase tracking-widest">{subtitle}</p>
         </div>
-        
+
         {activeView && onViewChange && (
           <div className="flex gap-2">
-            <button 
+            <button
               onClick={() => onViewChange('photos')}
-              className={`flex-1 md:flex-none px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${
-                activeView === 'photos' 
-                  ? 'bg-brutal-black text-white' 
+              className={`flex-1 md:flex-none px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'photos'
+                  ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
-              }`}
+                }`}
             >
               Fotos
             </button>
-            <button 
+            <button
               onClick={() => onViewChange('videos')}
-              className={`flex-1 md:flex-none px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${
-                activeView === 'videos' 
-                  ? 'bg-brutal-black text-white' 
+              className={`flex-1 md:flex-none px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'videos'
+                  ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
-              }`}
+                }`}
             >
               Vídeos
             </button>
@@ -100,16 +98,16 @@ export function PhotoGrid({
             className="group relative"
             style={{ contentVisibility: 'auto', containIntrinsicSize: '360px 560px' }}
           >
-            <div className="aspect-[3/4] bg-gray-200 brutal-border overflow-hidden relative brutal-shadow transition-transform duration-300">
-              <img 
-                src={photo.thumbnailUrl || photo.url} 
-                alt={photo.id} 
+            <div className="aspect-3/4 bg-gray-200 brutal-border overflow-hidden relative brutal-shadow transition-transform duration-300">
+              <img
+                src={photo.thumbnailUrl || photo.url}
+                alt={photo.id}
                 loading={index < 8 ? 'eager' : 'lazy'}
                 decoding="async"
                 sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
-              
+
               {/* Fake Watermark */}
               <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none rotate-[-30deg]">
                 {Array(5).fill('FUNPACE').map((text, i) => (
@@ -134,9 +132,8 @@ export function PhotoGrid({
                 <button
                   type="button"
                   onClick={() => onToggleFavorite?.(photo)}
-                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${
-                    favoriteIds.has(photo.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
-                  }`}
+                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${favoriteIds.has(photo.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
+                    }`}
                   title={favoriteIds.has(photo.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                   aria-label={favoriteIds.has(photo.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                 >
@@ -145,9 +142,8 @@ export function PhotoGrid({
                 <button
                   type="button"
                   onClick={() => onToggleLike?.(photo)}
-                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${
-                    likedIds.has(photo.id) ? 'bg-brutal-black text-white' : 'bg-white text-brutal-black hover:bg-brutal-black hover:text-white'
-                  }`}
+                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${likedIds.has(photo.id) ? 'bg-brutal-black text-white' : 'bg-white text-brutal-black hover:bg-brutal-black hover:text-white'
+                    }`}
                   title={likedIds.has(photo.id) ? 'Remover like' : 'Curtir imagem'}
                   aria-label={likedIds.has(photo.id) ? 'Remover like' : 'Curtir imagem'}
                 >
@@ -156,14 +152,13 @@ export function PhotoGrid({
               </div>
 
               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
-                <button 
+                <button
                   onClick={() => onAddToCart(photo)}
                   disabled={isInCart(photo.id)}
-                  className={`pointer-events-auto flex items-center gap-2 px-6 py-3 font-display uppercase tracking-widest transition-all brutal-shadow-hover ${
-                    isInCart(photo.id) 
-                      ? 'bg-green-500 text-brutal-white brutal-border cursor-not-allowed' 
+                  className={`pointer-events-auto flex items-center gap-2 px-6 py-3 font-display uppercase tracking-widest transition-all brutal-shadow-hover ${isInCart(photo.id)
+                      ? 'bg-green-500 text-brutal-white brutal-border cursor-not-allowed'
                       : 'bg-brutal-white text-brutal-black brutal-border hover:bg-brutal-accent hover:text-white'
-                  }`}
+                    }`}
                 >
                   {isInCart(photo.id) ? (
                     <>
@@ -199,11 +194,10 @@ export function PhotoGrid({
                 type="button"
                 onClick={() => onAddToCart(photo)}
                 disabled={isInCart(photo.id)}
-                className={`sm:hidden min-h-11 w-full brutal-border font-display text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 transition-colors ${
-                  isInCart(photo.id)
+                className={`sm:hidden min-h-11 w-full brutal-border font-display text-xs uppercase tracking-widest inline-flex items-center justify-center gap-2 transition-colors ${isInCart(photo.id)
                     ? 'bg-green-500 text-white cursor-not-allowed'
                     : 'bg-brutal-black text-white hover:bg-brutal-accent cursor-pointer'
-                }`}
+                  }`}
               >
                 {isInCart(photo.id) ? (
                   <>

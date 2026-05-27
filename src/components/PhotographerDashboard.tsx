@@ -64,10 +64,12 @@ const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: st
   { key: 'custom', label: 'Personalizado' },
 ];
 
-const safeServerlessUploadBytes = 4 * 1024 * 1024;
-const clientUploadMaxBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || safeServerlessUploadBytes);
+const defaultUploadMaxBytes = 50 * 1024 * 1024;
+const clientUploadMaxBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadMaxBytes);
 const imageCompressionMaxBytes = 900 * 1024;
-const imageCompressionMaxSide = 1800;
+const imageCompressionMaxSide = 2200;
+const minImageCompressionSide = 900;
+const imageCompressionQualities = [0.82, 0.74, 0.66, 0.58, 0.5, 0.42];
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
@@ -315,38 +317,54 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
 async function prepareImageForUpload(file: File): Promise<File> {
   if (!file.type.startsWith('image')) return file;
 
-  if (file.size <= imageCompressionMaxBytes) return file;
+  if (file.size <= Math.min(imageCompressionMaxBytes, clientUploadMaxBytes)) return file;
 
   return new Promise((resolve) => {
     const image = new Image();
     const objectUrl = URL.createObjectURL(file);
 
-    image.onload = () => {
+    image.onload = async () => {
       URL.revokeObjectURL(objectUrl);
+      const maxBytes = Math.min(clientUploadMaxBytes, Math.max(imageCompressionMaxBytes, Math.floor(clientUploadMaxBytes * 0.92)));
+      const originalMaxSide = Math.max(image.width, image.height);
+      const sideTargets = [
+        Math.min(imageCompressionMaxSide, originalMaxSide),
+        1800,
+        1500,
+        1200,
+        minImageCompressionSide,
+      ].filter((value, index, values) => value >= minImageCompressionSide && values.indexOf(value) === index);
 
-      const scale = Math.min(1, imageCompressionMaxSide / Math.max(image.width, image.height));
-      const width = Math.max(1, Math.round(image.width * scale));
-      const height = Math.max(1, Math.round(image.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
-      const context = canvas.getContext('2d');
+      for (const maxSide of sideTargets) {
+        const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
+        const width = Math.max(1, Math.round(image.width * scale));
+        const height = Math.max(1, Math.round(image.height * scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const context = canvas.getContext('2d');
 
-      if (!context) {
-        resolve(file);
-        return;
-      }
-
-      context.drawImage(image, 0, 0, width, height);
-      canvas.toBlob((blob) => {
-        if (!blob) {
+        if (!context) {
           resolve(file);
           return;
         }
 
-        const compressedName = `${(file.name.replace(/\.[^.]+$/, '') || 'foto')}.jpg`;
-        resolve(new File([blob], compressedName, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.76);
+        context.drawImage(image, 0, 0, width, height);
+
+        for (const quality of imageCompressionQualities) {
+          const blob = await new Promise<Blob | null>((blobResolve) => {
+            canvas.toBlob(blobResolve, 'image/jpeg', quality);
+          });
+
+          if (blob && blob.size <= maxBytes) {
+            const compressedName = `${(file.name.replace(/\.[^.]+$/, '') || 'foto')}.jpg`;
+            resolve(new File([blob], compressedName, { type: 'image/jpeg' }));
+            return;
+          }
+        }
+      }
+
+      resolve(file);
     };
 
     image.onerror = () => {
@@ -370,6 +388,17 @@ function assertFileFitsUploadLimit(file: File) {
   }
 
   throw new Error(`Arquivo muito grande para este deploy (${formatFileSize(file.size)}). O limite atual e ${formatFileSize(clientUploadMaxBytes)}.`);
+}
+
+function getSelectionBlockReason(file: File) {
+  if (file.type.startsWith('image')) return '';
+  if (file.size <= clientUploadMaxBytes) return '';
+
+  if (file.type.startsWith('video')) {
+    return `Video ${file.name} tem ${formatFileSize(file.size)} e excede o limite atual de ${formatFileSize(clientUploadMaxBytes)}. Comprima o MP4 antes de selecionar.`;
+  }
+
+  return `Arquivo ${file.name} tem ${formatFileSize(file.size)} e excede o limite atual de ${formatFileSize(clientUploadMaxBytes)}.`;
 }
 
 function formatUploadErrorMessage(message: string, file?: File) {
@@ -601,6 +630,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       .sort((a, b) => b.netRevenue - a.netRevenue || b.downloads - a.downloads)
       .slice(0, 8);
   }, [periodSales, productPerformance]);
+  const periodTopPhotoPerformance = React.useMemo(() => (
+    periodProductPerformance
+      .filter((item) => item.type === 'IMG')
+      .sort((a, b) => b.salesCount - a.salesCount || b.netRevenue - a.netRevenue || b.downloads - a.downloads)
+      .slice(0, 5)
+  ), [periodProductPerformance]);
   const photographerNotifications = React.useMemo(() => {
     const draftCount = products.filter((product) => (product.status ?? 'published') === 'draft').length;
     const openWithdrawalCount = withdrawals.filter((withdrawal) => (
@@ -735,9 +770,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     e.target.value = '';
     if (files.length === 0) return;
 
+    const blockedReasons = files
+      .map(getSelectionBlockReason)
+      .filter(Boolean);
+    const acceptedFiles = files.filter((file) => !getSelectionBlockReason(file));
+
+    if (blockedReasons.length > 0) {
+      alert(`Alguns arquivos nao foram adicionados:\n\n${blockedReasons.slice(0, 5).join('\n')}${blockedReasons.length > 5 ? `\n...e mais ${blockedReasons.length - 5} arquivo(s).` : ''}`);
+    }
+
+    if (acceptedFiles.length === 0) return;
+
     const defaultBatchPrice = Number(batchPriceInput);
     const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
-    const newFiles: UploadItem[] = files.map((file: File) => ({
+    const newFiles: UploadItem[] = acceptedFiles.map((file: File) => ({
       file,
       price: resolvedPrice,
       name: file.name,
@@ -1761,6 +1807,54 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                 )}
               </div>
+
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col md:flex-row md:items-end justify-between gap-4">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Fotos mais vendidas</h3>
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
+                      Ranking por quantidade de vendas pagas no periodo.
+                    </p>
+                  </div>
+                  <span className="font-mono text-[10px] uppercase text-gray-500">{periodTopPhotoPerformance.length} fotos</span>
+                </div>
+
+                {periodTopPhotoPerformance.length === 0 ? (
+                  <div className="m-5 py-10 text-center bg-[#080d14] border border-white/10">
+                    <p className="font-sans font-black text-xl uppercase text-white">Sem fotos vendidas</p>
+                    <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
+                      Fotos entram no ranking depois das primeiras vendas pagas.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="p-5 grid gap-3">
+                    {periodTopPhotoPerformance.map((item, index) => (
+                      <div key={item.productId} className="grid grid-cols-[auto_64px_1fr_auto] items-center gap-4 p-3 bg-[#080d14] border border-white/10">
+                        <span className="font-sans font-black text-xl text-brutal-accent w-8">#{index + 1}</span>
+                        <div className="w-16 h-16 bg-white/5 border border-white/10 overflow-hidden">
+                          {item.thumbnailUrl ? (
+                            <img src={item.thumbnailUrl} alt={item.name} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <ImageIcon className="w-5 h-5 text-gray-600" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="font-sans font-black text-sm text-white truncate">{item.name}</p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
+                            Peito {item.bib || 'N/I'} - {item.event}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-sans font-black text-lg text-green-400">{item.salesCount} venda(s)</p>
+                          <p className="font-mono text-[9px] uppercase text-gray-500">{formatCurrency(item.netRevenue)} liquido</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </motion.div>
           )}
         </AnimatePresence>
@@ -2015,7 +2109,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     Novo lote
                   </div>
                   <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Enviar Capturas</h3>
-                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Selecione fotos ou videos para publicar no catalogo.</p>
+                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
+                    Fotos sao comprimidas automaticamente. Videos precisam estar ate {formatFileSize(clientUploadMaxBytes)}.
+                  </p>
                 </div>
 
                 <input
@@ -2035,7 +2131,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <Upload className="w-6 h-6" />
                   </div>
                   <p className="font-sans font-black text-lg uppercase mb-1">Escolher Arquivos</p>
-                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Suporta multiplos uploads</p>
+                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Limite por arquivo: {formatFileSize(clientUploadMaxBytes)}</p>
                 </div>
 
                 {selectedFiles.length > 0 && (
@@ -2347,7 +2443,3 @@ function StatCard({ label, value, icon, trend, accent = false, warning = false }
     </div>
   );
 }
-
-
-
-

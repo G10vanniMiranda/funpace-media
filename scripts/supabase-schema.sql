@@ -4,9 +4,15 @@ create or replace function public.is_admin()
 returns boolean
 language sql
 stable
+security definer
+set search_path = ''
 as $$
   select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false)
 $$;
+
+revoke all on function public.is_admin() from public;
+grant execute on function public.is_admin() to authenticated;
+grant execute on function public.is_admin() to service_role;
 
 create table if not exists public.photographers (
   id text primary key,
@@ -175,12 +181,15 @@ on conflict (id) do nothing;
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
+set search_path = ''
 as $$
 begin
   new."updatedAt" = now();
   return new;
 end;
 $$;
+
+revoke all on function public.set_updated_at() from public;
 
 drop trigger if exists photographers_set_updated_at on public.photographers;
 create trigger photographers_set_updated_at

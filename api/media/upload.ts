@@ -8,7 +8,7 @@ const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
 const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || 'https://99dev.pro/bucket/api').replace(/\/+$/, '');
 const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || '';
-const maxUploadBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 25 * 1024 * 1024);
+const maxUploadBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 60 * 1024 * 1024);
 
 function setSecurityHeaders(res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -244,6 +244,8 @@ export default async function handler(req: any, res: any) {
       publicUrl: uploaded.publicUrl || uploaded.path,
     });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Nao foi possivel enviar a midia.' });
+    const message = error?.message || 'Nao foi possivel enviar a midia.';
+    const status = /excede o limite|too large|payload/i.test(message) ? 413 : 500;
+    return res.status(status).json({ error: message });
   }
 }

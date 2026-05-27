@@ -22,6 +22,12 @@ let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
 const localEventsStorageKey = 'funpace:local-events:v1';
 
+function apiUrl(path: string) {
+  const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+  if (!baseUrl) return path;
+  return `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+}
+
 function isMissingEventsTableError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
   return message.includes('public.events') ||
@@ -88,7 +94,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
   if (paths.length === 0) return items;
 
   try {
-    const response = await fetch('/api/media/sign', {
+    const response = await fetch(apiUrl('/api/media/sign'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ paths }),
@@ -120,7 +126,7 @@ async function uploadMediaFile(path: string, file: File) {
     throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
   }
 
-  const response = await fetch('/api/media/upload', {
+  const response = await fetch(apiUrl('/api/media/upload'), {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${accessToken}`,

@@ -207,7 +207,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             photographer = photographerByEmail;
           }
         }
-        
+
         if (photographer) {
           if (!photographer.verified) {
             setError('PENDENTE: Seu cadastro ainda nao foi aprovado pelo administrador.');
@@ -232,7 +232,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
   };
 
   return (
-    <div className="fixed inset-0 z-[110] bg-brutal-white flex items-center justify-center p-6 sm:py-20 overflow-y-auto">
+    <div className="fixed inset-0 z-110 bg-brutal-white flex items-center justify-center p-6 sm:py-20 overflow-y-auto">
       <div className="absolute inset-0 overflow-hidden pointer-events-none opacity-5">
         <div className="absolute top-0 left-0 w-full h-full grid grid-cols-6 gap-4 p-4">
           {Array(24).fill(0).map((_, i) => (
@@ -241,12 +241,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         </div>
       </div>
 
-      <motion.div 
+      <motion.div
         initial={{ opacity: 0, scale: 0.9, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="relative w-full max-w-md bg-white brutal-border brutal-shadow-heavy p-8 md:p-12 my-auto"
       >
-        <button 
+        <button
           onClick={onBack}
           className="absolute -top-12 left-0 font-mono text-xs uppercase tracking-widest text-gray-500 hover:text-brutal-accent transition-colors flex items-center gap-2 cursor-pointer"
         >
@@ -264,7 +264,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         </div>
 
         {success && (
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
             className="bg-green-50 border-2 border-green-500 p-4 mb-6 flex items-start gap-3"
@@ -281,7 +281,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             <>
               <div className="space-y-2">
                 <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome Completo</label>
-                <input 
+                <input
                   type="text"
                   required
                   value={name}
@@ -292,7 +292,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
               </div>
               <div className="space-y-2">
                 <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Bio / Portfólio</label>
-                <textarea 
+                <textarea
                   required
                   value={bio}
                   onChange={(e) => setBio(e.target.value)}
@@ -302,7 +302,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
               </div>
               <div className="space-y-2">
                 <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">CPF</label>
-                <input 
+                <input
                   type="text"
                   required
                   value={formatCpf(cpf)}
@@ -318,7 +318,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Email Corporativo</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input 
+              <input
                 type="email"
                 required
                 value={email}
@@ -333,7 +333,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Senha de Acesso</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input 
+              <input
                 type="password"
                 required
                 value={password}
@@ -355,7 +355,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           </div>
 
           {error && (
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, x: -10 }}
               animate={{ opacity: 1, x: 0 }}
               className="bg-red-50 border-2 border-red-500 p-4 flex items-start gap-3"
@@ -365,7 +365,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             </motion.div>
           )}
 
-          <button 
+          <button
             type="submit"
             disabled={isLoading}
             className="w-full h-16 bg-brutal-black text-white brutal-border font-display text-xl uppercase tracking-widest hover:bg-brutal-accent transition-all flex items-center justify-center gap-3 group cursor-pointer disabled:opacity-70 disabled:cursor-wait"
@@ -383,7 +383,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         </form>
 
         <div className="mt-8 text-center">
-          <button 
+          <button
             onClick={() => setIsRegistering(!isRegistering)}
             className="font-mono text-[10px] uppercase font-bold text-brutal-accent hover:underline tracking-widest"
           >
@@ -393,8 +393,8 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
         <div className="mt-8 pt-6 border-t border-gray-100 text-center">
           <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest leading-relaxed">
-            {isRegistering 
-              ? 'Todos os cadastros passam por análise manual da nossa equipe.' 
+            {isRegistering
+              ? 'Todos os cadastros passam por análise manual da nossa equipe.'
               : 'Painel de acesso restrito a fotógrafos autorizados.'}
           </p>
         </div>

@@ -17,16 +17,16 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
       {/* Header / Cover */}
       <div className="relative h-[40vh] bg-brutal-black overflow-hidden border-b-4 border-brutal-black">
         <div className="absolute inset-0 opacity-40">
-          <img 
-            src={photos[0]?.url} 
-            alt="Cover" 
+          <img
+            src={photos[0]?.url}
+            alt="Cover"
             className="w-full h-full object-cover blur-sm"
           />
         </div>
-        <div className="absolute inset-0 bg-gradient-to-t from-brutal-black to-transparent" />
-        
+        <div className="absolute inset-0 bg-linear-to-t from-brutal-black to-transparent" />
+
         <div className="absolute bottom-0 left-0 w-full p-6 md:p-12">
-          <motion.button 
+          <motion.button
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={onBack}
@@ -35,18 +35,18 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
             <ArrowLeft className="w-4 h-4" />
             Voltar para a Galeria
           </motion.button>
-          
+
           <div className="flex flex-col md:flex-row gap-8 items-start md:items-end">
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               className="w-32 h-32 md:w-48 md:h-48 brutal-border border-white overflow-hidden bg-white shadow-2xl"
             >
               <img src={photographer.avatar} alt={photographer.name} className="w-full h-full object-cover" />
             </motion.div>
-            
+
             <div className="flex-1">
-              <motion.div 
+              <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
@@ -59,8 +59,8 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
                 </div>
                 <span className="text-white/60 font-mono text-xs uppercase tracking-widest">{photographer.stats.rating} Score</span>
               </motion.div>
-              
-              <motion.h1 
+
+              <motion.h1
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.2 }}
@@ -70,7 +70,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
               </motion.h1>
             </div>
 
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ delay: 0.3 }}
@@ -88,7 +88,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
       </div>
 
       {/* Stats and Bio */}
-      <div className="max-w-[1400px] mx-auto px-6 py-12">
+      <div className="max-w-350 mx-auto px-6 py-12">
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-12 text-brutal-black">
           <div className="lg:col-span-2 space-y-8">
             <div>
@@ -100,7 +100,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
                 {photographer.bio}
               </p>
             </div>
-            
+
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
               <div className="bg-white p-6 brutal-border">
                 <Camera className="w-6 h-6 text-brutal-accent mb-2" />
@@ -119,7 +119,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
               </div>
             </div>
           </div>
-          
+
           <div className="bg-brutal-accent text-white p-8 brutal-border brutal-shadow">
             <h3 className="font-display text-2xl mb-4">CONTRATE O ARTISTA</h3>
             <p className="font-mono text-sm mb-6">
@@ -134,7 +134,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
 
       {/* Photographer's Photos */}
       <div className="border-t-4 border-brutal-black mt-12 pt-12">
-        <PhotoGrid 
+        <PhotoGrid
           title="GALERIA DO ARTISTA"
           subtitle={`Explorando ${photos.length} capturas selecionadas de ${photographer.name}`}
           photos={photos}

@@ -10,7 +10,7 @@ interface PhotographerSectionProps {
 export function PhotographerSection({ photographers, onSelectPhotographer }: PhotographerSectionProps) {
   return (
     <section id="photographers" className="py-24 bg-brutal-white border-b-4 border-brutal-black px-6">
-      <div className="max-w-[1400px] mx-auto">
+      <div className="max-w-350 mx-auto">
         <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-16">
           <div className="max-w-2xl">
             <h2 className="font-display text-5xl md:text-7xl tracking-tighter mb-6">
@@ -43,9 +43,9 @@ export function PhotographerSection({ photographers, onSelectPhotographer }: Pho
               <div className="flex flex-col sm:flex-row gap-8 items-start sm:items-center">
                 <div className="relative">
                   <div className="w-32 h-32 brutal-border overflow-hidden grayscale group-hover:grayscale-0 transition-all">
-                    <img 
-                      src={photographer.avatar} 
-                      alt={photographer.name} 
+                    <img
+                      src={photographer.avatar}
+                      alt={photographer.name}
                       className="w-full h-full object-cover"
                     />
                   </div>
@@ -71,7 +71,7 @@ export function PhotographerSection({ photographers, onSelectPhotographer }: Pho
                   <p className="font-mono text-sm text-gray-500 mb-6 line-clamp-2">
                     {photographer.bio}
                   </p>
-                  
+
                   <div className="grid grid-cols-2 gap-4">
                     <div className="flex items-center gap-2 text-sm font-mono">
                       <Camera className="w-4 h-4 text-gray-400" />
@@ -83,21 +83,21 @@ export function PhotographerSection({ photographers, onSelectPhotographer }: Pho
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="hidden sm:flex self-stretch items-center justify-center pl-4 border-l-2 border-dashed border-gray-100">
                   <ArrowRight className="w-8 h-8 text-gray-200 group-hover:text-brutal-accent group-hover:translate-x-2 transition-all" />
                 </div>
               </div>
             </motion.div>
           ))}
-          
+
           {/* Future slot placeholder */}
           <div className="bg-gray-50 brutal-border border-dashed p-8 flex flex-col items-center justify-center text-center group cursor-help">
             <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center mb-4 group-hover:bg-white transition-colors">
               <Camera className="w-8 h-8 text-gray-300" />
             </div>
             <h3 className="font-display text-xl text-gray-400 mb-2 uppercase tracking-tighter">O Próximo Criador</h3>
-            <p className="font-mono text-xs text-gray-400 max-w-[200px]">
+            <p className="font-mono text-xs text-gray-400 max-w-50">
               Estamos expandindo nosso time de artistas visuais em breve.
             </p>
           </div>

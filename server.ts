@@ -1412,7 +1412,7 @@ app.post("/api/checkout/confirm", async (req, res) => {
 
 app.post("/api/media/upload", express.raw({
   type: ["image/*", "video/*", "application/octet-stream"],
-  limit: process.env.MEDIA_UPLOAD_LIMIT || "25mb",
+  limit: process.env.MEDIA_UPLOAD_LIMIT || "60mb",
 }), async (req, res) => {
   const authUser = await getAuthenticatedRequestUser(req);
   const storagePath = decodeHeaderValue(req.header("x-storage-path"));

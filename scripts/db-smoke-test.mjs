@@ -34,6 +34,15 @@ try {
       mensagem text not null
     )
   `);
+  await pool.query("alter table public.codex_connection_test enable row level security");
+  await pool.query('drop policy if exists "codex_connection_test_admin_only" on public.codex_connection_test');
+  await pool.query(`
+    create policy "codex_connection_test_admin_only"
+    on public.codex_connection_test
+    for all
+    using (public.is_admin())
+    with check (public.is_admin())
+  `);
   const result = await pool.query(
     "insert into public.codex_connection_test (mensagem) values ($1) returning id, mensagem",
     ["teste de conexao criado pelo codex"],

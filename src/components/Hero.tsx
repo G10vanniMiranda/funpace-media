@@ -19,14 +19,14 @@ export function Hero({
       <div className="absolute top-0 w-full overflow-hidden bg-brutal-accent text-brutal-black py-2 border-b-2 border-brutal-black z-0 flex whitespace-nowrap">
         <div className="animate-marquee flex items-center">
           {Array(15).fill('ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO - ULTRAPASSE - ').map((text, i) => (
-            <span key={i} className="font-display text-lg px-8 flex-shrink-0 tracking-wider">
+            <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
               {text}
             </span>
           ))}
         </div>
         <div className="animate-marquee flex items-center">
           {Array(15).fill('ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO - ULTRAPASSE - ').map((text, i) => (
-            <span key={i} className="font-display text-lg px-8 flex-shrink-0 tracking-wider">
+            <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
               {text}
             </span>
           ))}
@@ -34,7 +34,7 @@ export function Hero({
       </div>
 
       <div className="max-w-6xl mx-auto px-6 pt-20 pb-20 relative z-10 flex flex-col items-center text-center">
-        <span className="font-mono text-[10px] md:text-sm tracking-widest text-brutal-accent mb-4 block uppercase bg-brutal-black px-3 py-1 text-white brutal-border">
+        <span className="font-mono text-[10px] md:text-sm tracking-widest text-brutal-accent mb-4 block uppercase bg-brutal-black px-3 py-1 brutal-border">
           O Marketplace do Corredor
         </span>
 
@@ -61,7 +61,7 @@ export function Hero({
             </div>
             <button
               type="submit"
-              className="h-14 px-8 bg-brutal-black text-brutal-white brutal-border font-display text-lg hover:bg-brutal-accent hover:text-brutal-white transition-colors brutal-shadow-hover flex items-center justify-center sm:min-w-[140px]"
+              className="h-14 px-8 bg-brutal-black text-brutal-white brutal-border font-display text-lg hover:bg-brutal-accent hover:text-brutal-white transition-colors brutal-shadow-hover flex items-center justify-center sm:min-w-35"
             >
               EVENTOS
             </button>

@@ -851,6 +851,34 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
   }, [paidOrders, photographers, reportItemsByPaidOrder]);
+  const topPhotoReports = React.useMemo(() => {
+    const reports = new Map<string, { productId: string; name: string; event: string; bib: string; items: number; orders: Set<string>; revenue: number }>();
+
+    for (const order of paidOrders) {
+      for (const item of reportItemsByPaidOrder.get(order.id) ?? []) {
+        if (item.type !== 'IMG') continue;
+
+        const current = reports.get(item.productId) ?? {
+          productId: item.productId,
+          name: item.name,
+          event: item.event || 'Geral',
+          bib: item.bib || '',
+          items: 0,
+          orders: new Set<string>(),
+          revenue: 0,
+        };
+        current.items += 1;
+        current.orders.add(order.id);
+        current.revenue += Number(item.price || 0);
+        reports.set(item.productId, current);
+      }
+    }
+
+    return Array.from(reports.values())
+      .map((report) => ({ ...report, ordersCount: report.orders.size }))
+      .sort((a, b) => b.items - a.items || b.revenue - a.revenue)
+      .slice(0, 5);
+  }, [paidOrders, reportItemsByPaidOrder]);
   const storageUsagePercent = storageStats?.usagePercent ?? 0;
   const paidConversionPercent = periodMetrics.totalOrders === 0
     ? 0
@@ -1469,8 +1497,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     type="button"
                     onClick={() => setSelectedPeriod(key)}
                     className={`h-10 px-4 border font-mono text-xs uppercase transition-colors ${selectedPeriod === key
-                        ? 'bg-brutal-accent/20 border-brutal-accent text-white'
-                        : 'bg-[#080d14] border-white/10 text-gray-300 hover:border-white/30'
+                      ? 'bg-brutal-accent/20 border-brutal-accent text-white'
+                      : 'bg-[#080d14] border-white/10 text-gray-300 hover:border-white/30'
                       }`}
                   >
                     {label}
@@ -1559,8 +1587,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       visibleRecentActivity.map((activity) => (
                         <div key={activity.id} className="flex items-center gap-4 pb-5 border-b border-white/10 last:border-0 last:pb-0">
                           <div className={`p-3 border rounded-md ${activity.kind === 'product' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
-                              : activity.kind === 'photographer' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
-                                : 'bg-green-500/10 border-green-500/20 text-green-400'
+                            : activity.kind === 'photographer' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
+                              : 'bg-green-500/10 border-green-500/20 text-green-400'
                             }`}>
                             {activity.kind === 'product'
                               ? <Camera className="w-5 h-5" />
@@ -1650,7 +1678,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
                 <ReportCard
                   title="Receita por Evento"
                   emptyLabel="Nenhuma venda paga por evento."
@@ -1668,6 +1696,16 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     id: report.photographerId,
                     title: report.name,
                     subtitle: `${report.ordersCount} pedidos - ${report.items} itens`,
+                    value: `R$ ${report.revenue.toFixed(2)}`,
+                  }))}
+                />
+                <ReportCard
+                  title="Fotos mais vendidas"
+                  emptyLabel="Nenhuma foto vendida no periodo."
+                  rows={topPhotoReports.map((report, index) => ({
+                    id: report.productId,
+                    title: `#${index + 1} ${report.name}`,
+                    subtitle: `${report.items} venda(s) - ${report.ordersCount} pedido(s) - peito ${report.bib || 'N/I'} - ${report.event}`,
                     value: `R$ ${report.revenue.toFixed(2)}`,
                   }))}
                 />
@@ -1723,8 +1761,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         type="button"
                         onClick={() => setPhotographerStatusFilter(value as 'all' | 'active' | 'pending')}
                         className={`h-full px-4 font-mono text-[10px] uppercase tracking-widest border-r border-white/10 last:border-r-0 transition-colors ${photographerStatusFilter === value
-                            ? 'bg-brutal-accent text-white'
-                            : 'text-gray-400 hover:text-white hover:bg-white/5'
+                          ? 'bg-brutal-accent text-white'
+                          : 'text-gray-400 hover:text-white hover:bg-white/5'
                           }`}
                       >
                         {label}
@@ -2115,7 +2153,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       )}
                     </div>
                   </div>
-                  <div className={`${showAllOrderLogs ? 'max-h-[520px] overflow-y-auto' : ''}`}>
+                  <div className={`${showAllOrderLogs ? 'max-h-130 overflow-y-auto' : ''}`}>
                     <div className="divide-y divide-white/10">
                       {visibleOrderLogs.length > 0 ? visibleOrderLogs.map((order) => {
                         const itemCount = order.items?.length ?? 0;
@@ -2123,7 +2161,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         const hasMismatch = Math.abs(itemRevenue - Number(order.total || 0)) > 0.01;
 
                         return (
-                          <div key={order.id} className="px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-mono hover:bg-white/[0.03] transition-colors">
+                          <div key={order.id} className="px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-mono hover:bg-white/3 transition-colors">
                             <div className="min-w-0 flex gap-3">
                               <span className="w-20 shrink-0 text-gray-600">#{order.id.slice(0, 8)}</span>
                               <div className="min-w-0">
@@ -2545,8 +2583,8 @@ function AdminSidebarLink({ icon, label, active, onClick }: { icon: React.ReactN
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-4 px-4 py-4 font-mono text-xs uppercase tracking-widest transition-all cursor-pointer ${active
-          ? 'bg-brutal-accent/80 text-white border border-brutal-accent shadow-[0_0_24px_rgba(255,78,0,0.22)]'
-          : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
+        ? 'bg-brutal-accent/80 text-white border border-brutal-accent shadow-[0_0_24px_rgba(255,78,0,0.22)]'
+        : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
         }`}
     >
       <span className={active ? 'text-white' : 'text-gray-500'}>

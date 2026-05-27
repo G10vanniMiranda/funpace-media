@@ -290,6 +290,10 @@ function Storefront() {
   const isEventDetailRoute = Boolean(eventSlugFromPath);
 
   React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
+  React.useEffect(() => {
     if (eventSlugFromPath) {
       const matchedEvent = eventNames.find((eventName) => createEventSlug(eventName) === eventSlugFromPath);
       setSelectedEventName(matchedEvent ?? null);
@@ -633,6 +637,7 @@ function Storefront() {
                 setSelectedEventName(eventName);
                 setEventQuery('');
                 setActiveView('photos');
+                window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
                 navigate(`/eventos/${createEventSlug(eventName)}`);
               }}
             />

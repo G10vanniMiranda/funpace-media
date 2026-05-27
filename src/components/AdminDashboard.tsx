@@ -1,14 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  ShieldCheck, 
-  Users, 
-  Camera, 
-  DollarSign, 
-  TrendingUp, 
-  LogOut, 
-  Settings, 
-  Search, 
+import {
+  ShieldCheck,
+  Users,
+  Camera,
+  DollarSign,
+  TrendingUp,
+  LogOut,
+  Settings,
+  Search,
   MoreVertical,
   CheckCircle2,
   XCircle,
@@ -59,6 +59,13 @@ function formatCurrency(value: number) {
   }).format(value);
 }
 
+function getOrderItemsRevenue(order: Order) {
+  const items = order.items ?? [];
+  if (items.length === 0) return Number(order.total || 0);
+
+  return items.reduce((sum, item) => sum + Number(item.price || 0), 0);
+}
+
 function formatBytes(bytes: number) {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let value = Number(bytes || 0);
@@ -83,6 +90,22 @@ const ADMIN_PERIOD_OPTIONS: Array<{ key: AdminPeriodKey; label: string }> = [
   { key: 'year', label: 'Este ano' },
   { key: 'custom', label: 'Personalizado' },
 ];
+
+const orderStatusLabels: Record<Order['status'], string> = {
+  paid: 'Pago',
+  pending: 'Pendente',
+  failed: 'Falhou',
+  cancelled: 'Cancelado',
+  refunded: 'Reembolsado',
+};
+
+const orderStatusClasses: Record<Order['status'], string> = {
+  paid: 'border-green-500/30 bg-green-500/10 text-green-300',
+  pending: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300',
+  failed: 'border-red-500/30 bg-red-500/10 text-red-300',
+  cancelled: 'border-gray-500/30 bg-gray-500/10 text-gray-300',
+  refunded: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
+};
 
 function startOfDay(date: Date) {
   const result = new Date(date);
@@ -182,10 +205,10 @@ function htmlEscape(value: unknown) {
   return value == null
     ? ''
     : String(value)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
 }
 
 function formatReportNumber(value: number) {
@@ -253,16 +276,16 @@ function buildReportBarChart(title: string, rows: Array<{ label: string; value: 
   const bars = rows.length === 0
     ? `<text x="24" y="105" fill="#64748b" font-size="14">Sem dados no periodo selecionado.</text>`
     : rows.map((row, index) => {
-        const y = top + index * rowHeight;
-        const barWidth = Math.max(4, Math.round((row.value / maxValue) * 420));
-        return `
+      const y = top + index * rowHeight;
+      const barWidth = Math.max(4, Math.round((row.value / maxValue) * 420));
+      return `
           <text x="24" y="${y + 17}" fill="#0f172a" font-size="13" font-weight="700">${htmlEscape(row.label).slice(0, 42)}</text>
           <rect x="260" y="${y}" width="430" height="20" rx="4" fill="#e2e8f0"></rect>
           <rect x="260" y="${y}" width="${barWidth}" height="20" rx="4" fill="#ff4e00"></rect>
           <text x="704" y="${y + 15}" fill="#0f172a" font-size="12" text-anchor="end">${htmlEscape(formatCurrency(row.value))}</text>
           <text x="260" y="${y + 37}" fill="#64748b" font-size="11">${htmlEscape(row.meta ?? '')}</text>
         `;
-      }).join('');
+    }).join('');
 
   return `
     <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" xmlns="http://www.w3.org/2000/svg">
@@ -373,6 +396,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
   const [showNotifications, setShowNotifications] = useState(false);
   const [showAllRecentActivity, setShowAllRecentActivity] = useState(false);
+  const [showAllOrderLogs, setShowAllOrderLogs] = useState(false);
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [storageStatsError, setStorageStatsError] = useState('');
   const [events, setEvents] = useState<Event[]>([]);
@@ -452,7 +476,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const periodMetrics = React.useMemo<AdminMetrics>(() => {
     const paid = periodOrders.filter((order) => order.status === 'paid');
     const pending = periodOrders.filter((order) => order.status === 'pending');
-    const grossRevenue = paid.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const grossRevenue = paid.reduce((sum, order) => sum + getOrderItemsRevenue(order), 0);
     const publishedProducts = periodProducts.filter((product) => (product.status ?? 'published') === 'published');
     const removedProducts = periodProducts.filter((product) => product.status === 'removed');
 
@@ -496,7 +520,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const previousPeriodMetrics = React.useMemo<AdminMetrics>(() => {
     const paid = previousPeriodOrders.filter((order) => order.status === 'paid');
     const pending = previousPeriodOrders.filter((order) => order.status === 'pending');
-    const grossRevenue = paid.reduce((sum, order) => sum + Number(order.total || 0), 0);
+    const grossRevenue = paid.reduce((sum, order) => sum + getOrderItemsRevenue(order), 0);
     const publishedProducts = previousPeriodProducts.filter((product) => (product.status ?? 'published') === 'published');
     const removedProducts = previousPeriodProducts.filter((product) => product.status === 'removed');
 
@@ -525,14 +549,14 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       periodRange.start,
       periodRange.end,
       (order) => order.createdAt,
-      (order) => Number(order.total || 0),
+      (order) => getOrderItemsRevenue(order),
     ),
     platformFee: buildSparklineBuckets(
       periodOrders.filter((order) => order.status === 'paid'),
       periodRange.start,
       periodRange.end,
       (order) => order.createdAt,
-      (order) => Number(order.total || 0) * platformFeeRate,
+      (order) => getOrderItemsRevenue(order) * platformFeeRate,
     ),
     photographers: Array.from({ length: 12 }, () => activePhotographers.length > 0 ? 42 : 8),
     videos: buildSparklineBuckets(
@@ -544,6 +568,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     ),
   }), [activePhotographers.length, periodOrders, periodRange, periodVideos, platformFeeRate]);
   const recentOrders = periodOrders.slice(0, 5);
+  const visibleOrderLogs = showAllOrderLogs ? periodOrders : recentOrders;
   const pendingOrders = periodOrders.filter((order) => order.status === 'pending');
   const paidOrders = periodOrders.filter((order) => order.status === 'paid');
   const productsMissingThumbnails = [...photos, ...videos].filter((product) => (
@@ -598,7 +623,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     return notifications;
   }, [orders, pendingPhotographers.length, productsMissingThumbnails.length, withdrawals]);
   const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
-  const paidOrderTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
+  const paidOrderStoredTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
   const photographerById = React.useMemo(
     () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
     [photographers],
@@ -703,6 +728,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       return [order.id, []];
     }));
   }, [paidOrders, photos, videos]);
+  const paidSaleItems = React.useMemo(
+    () => paidOrders.flatMap((order) => reportItemsByPaidOrder.get(order.id) ?? []),
+    [paidOrders, reportItemsByPaidOrder],
+  );
+  const paidOrdersWithoutItems = paidOrders.filter((order) => (order.items?.length ?? 0) === 0);
+  const paidRevenueTotal = paidOrders.reduce((sum, order) => sum + getOrderItemsRevenue(order), 0);
+  const paidRevenueMismatch = Math.abs(paidRevenueTotal - paidOrderStoredTotal) > 0.01;
   const recentActivity = React.useMemo(() => {
     type Activity = { id: string; kind: 'photographer' | 'product' | 'order'; at: number; title: string; meta: string };
 
@@ -937,7 +969,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       }
 
       const payload = await response.json().catch(() => ({}));
-      
+
       onRefresh();
       setShowAddModal(false);
       setNewPhotographer({ name: '', email: '', bio: '' });
@@ -1280,35 +1312,35 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         </div>
 
         <nav className="flex-1 p-5 space-y-3">
-          <AdminSidebarLink 
-            icon={<BarChart3 />} 
-            label="Visão Geral" 
-            active={activeTab === 'overview'} 
-            onClick={() => setActiveTab('overview')} 
+          <AdminSidebarLink
+            icon={<BarChart3 />}
+            label="Visão Geral"
+            active={activeTab === 'overview'}
+            onClick={() => setActiveTab('overview')}
           />
-          <AdminSidebarLink 
-            icon={<Users />} 
-            label="Fotógrafos" 
-            active={activeTab === 'photographers'} 
-            onClick={() => setActiveTab('photographers')} 
+          <AdminSidebarLink
+            icon={<Users />}
+            label="Fotógrafos"
+            active={activeTab === 'photographers'}
+            onClick={() => setActiveTab('photographers')}
           />
-          <AdminSidebarLink 
-            icon={<CalendarDays />} 
-            label="Eventos" 
-            active={activeTab === 'events'} 
-            onClick={() => setActiveTab('events')} 
+          <AdminSidebarLink
+            icon={<CalendarDays />}
+            label="Eventos"
+            active={activeTab === 'events'}
+            onClick={() => setActiveTab('events')}
           />
-          <AdminSidebarLink 
-            icon={<DollarSign />} 
-            label="Financeiro" 
-            active={activeTab === 'sales'} 
-            onClick={() => setActiveTab('sales')} 
+          <AdminSidebarLink
+            icon={<DollarSign />}
+            label="Financeiro"
+            active={activeTab === 'sales'}
+            onClick={() => setActiveTab('sales')}
           />
-          <AdminSidebarLink 
-            icon={<Settings />} 
-            label="Configurações" 
-            active={activeTab === 'settings'} 
-            onClick={() => setActiveTab('settings')} 
+          <AdminSidebarLink
+            icon={<Settings />}
+            label="Configurações"
+            active={activeTab === 'settings'}
+            onClick={() => setActiveTab('settings')}
           />
         </nav>
 
@@ -1320,7 +1352,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <p className="font-mono text-[10px] text-gray-500 truncate">admin@funpace.media</p>
             </div>
           </div>
-          <button 
+          <button
             onClick={onLogout}
             className="w-full flex items-center justify-center gap-3 py-4 bg-transparent border border-white/10 font-mono text-xs uppercase font-bold hover:bg-red-500 hover:border-red-500 transition-all cursor-pointer"
           >
@@ -1348,7 +1380,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-[280px]">
+            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-70">
               <div className="flex items-center gap-3 min-w-0">
                 <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
                 <span className="font-sans text-sm text-gray-200 truncate">{periodLabel}</span>
@@ -1436,11 +1468,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     key={key}
                     type="button"
                     onClick={() => setSelectedPeriod(key)}
-                    className={`h-10 px-4 border font-mono text-xs uppercase transition-colors ${
-                      selectedPeriod === key
+                    className={`h-10 px-4 border font-mono text-xs uppercase transition-colors ${selectedPeriod === key
                         ? 'bg-brutal-accent/20 border-brutal-accent text-white'
                         : 'bg-[#080d14] border-white/10 text-gray-300 hover:border-white/30'
-                    }`}
+                      }`}
                   >
                     {label}
                   </button>
@@ -1466,38 +1497,38 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                <AdminStatCardReal 
-                  label="GMV (Volume Bruto)" 
-                  value={`R$ ${periodMetrics.grossRevenue.toFixed(2)}`} 
-                  icon={<DollarSign />} 
+                <AdminStatCardReal
+                  label="GMV (Volume Bruto)"
+                  value={`R$ ${periodMetrics.grossRevenue.toFixed(2)}`}
+                  icon={<DollarSign />}
                   sub="Acumulado no periodo"
                   trend={adminStatTrends.grossRevenue}
                   previousValue={previousPeriodMetrics.grossRevenue}
                   bars={adminStatSparklines.grossRevenue}
                   accent
                 />
-                <AdminStatCardReal 
-                  label="Receita Líquida (Fees)" 
-                  value={`R$ ${periodMetrics.platformFee.toFixed(2)}`} 
-                  icon={<TrendingUp />} 
+                <AdminStatCardReal
+                  label="Receita Líquida (Fees)"
+                  value={`R$ ${periodMetrics.platformFee.toFixed(2)}`}
+                  icon={<TrendingUp />}
                   sub={`Margem de ${platformFeePercentLabel}%`}
                   trend={adminStatTrends.platformFee}
                   previousValue={previousPeriodMetrics.platformFee}
                   bars={adminStatSparklines.platformFee}
                 />
-                <AdminStatCardReal 
-                  label="Total Fotógrafos" 
-                  value={activePhotographers.length} 
-                  icon={<Users />} 
+                <AdminStatCardReal
+                  label="Total Fotógrafos"
+                  value={activePhotographers.length}
+                  icon={<Users />}
                   sub={`${pendingPhotographers.length} pendentes no total`}
                   trend={adminStatTrends.photographers}
                   previousValue={activePhotographers.length}
                   bars={adminStatSparklines.photographers}
                 />
-                <AdminStatCardReal 
-                  label="Total Vídeos" 
-                  value={periodMetrics.videoCount} 
-                  icon={<Camera />} 
+                <AdminStatCardReal
+                  label="Total Vídeos"
+                  value={periodMetrics.videoCount}
+                  icon={<Camera />}
                   sub="Replays em 4k"
                   trend={adminStatTrends.videos}
                   previousValue={previousPeriodMetrics.videoCount}
@@ -1527,11 +1558,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     ) : (
                       visibleRecentActivity.map((activity) => (
                         <div key={activity.id} className="flex items-center gap-4 pb-5 border-b border-white/10 last:border-0 last:pb-0">
-                          <div className={`p-3 border rounded-md ${
-                            activity.kind === 'product' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
+                          <div className={`p-3 border rounded-md ${activity.kind === 'product' ? 'bg-yellow-500/10 border-yellow-500/20 text-yellow-400'
                               : activity.kind === 'photographer' ? 'bg-blue-500/10 border-blue-500/20 text-blue-400'
                                 : 'bg-green-500/10 border-green-500/20 text-green-400'
-                          }`}>
+                            }`}>
                             {activity.kind === 'product'
                               ? <Camera className="w-5 h-5" />
                               : activity.kind === 'photographer'
@@ -1608,12 +1638,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </div>
                     <div className="grid grid-cols-2 gap-4 pt-4">
                       <div className="p-4 bg-white/5 border border-white/10 text-center text-brutal-accent">
-                         <p className="font-display text-3xl">{storageStats?.totalFiles ?? periodMetrics.totalProducts}</p>
-                         <p className="font-mono text-[8px] uppercase">Arquivos</p>
+                        <p className="font-display text-3xl">{storageStats?.totalFiles ?? periodMetrics.totalProducts}</p>
+                        <p className="font-mono text-[8px] uppercase">Arquivos</p>
                       </div>
                       <div className="p-4 bg-white/5 border border-white/10 text-center text-green-500">
-                         <p className="font-display text-3xl">{periodMetrics.totalOrders}</p>
-                         <p className="font-mono text-[8px] uppercase">Pedidos</p>
+                        <p className="font-display text-3xl">{periodMetrics.totalOrders}</p>
+                        <p className="font-mono text-[8px] uppercase">Pedidos</p>
                       </div>
                     </div>
                   </div>
@@ -1673,7 +1703,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-col xl:flex-row gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
-                  <input 
+                  <input
                     type="text"
                     value={photographerSearch}
                     onChange={(event) => setPhotographerSearch(event.target.value)}
@@ -1692,17 +1722,16 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         key={value}
                         type="button"
                         onClick={() => setPhotographerStatusFilter(value as 'all' | 'active' | 'pending')}
-                        className={`h-full px-4 font-mono text-[10px] uppercase tracking-widest border-r border-white/10 last:border-r-0 transition-colors ${
-                          photographerStatusFilter === value
+                        className={`h-full px-4 font-mono text-[10px] uppercase tracking-widest border-r border-white/10 last:border-r-0 transition-colors ${photographerStatusFilter === value
                             ? 'bg-brutal-accent text-white'
                             : 'text-gray-400 hover:text-white hover:bg-white/5'
-                        }`}
+                          }`}
                       >
                         {label}
                       </button>
                     ))}
                   </div>
-                  <button 
+                  <button
                     onClick={() => setShowAddModal(true)}
                     className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer"
                   >
@@ -1732,119 +1761,119 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   )}
                 </div>
                 <div className="overflow-x-auto">
-                <table className="w-full min-w-[980px] text-left font-mono text-xs">
-                  <thead className="bg-[#05080d] text-gray-400 uppercase text-[10px] tracking-widest">
-                    <tr>
-                      <th className="p-6">Fotógrafo</th>
-                      <th className="p-6">Status</th>
-                      <th className="p-6 text-center">Midias</th>
-                      <th className="p-6 text-center">Receita Gerada</th>
-                      <th className="p-6 text-center">Score</th>
-                      <th className="p-6"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-white/10">
-                    {filteredPhotographers.map((p) => (
-                      <tr key={p.id} className="hover:bg-white/[0.03] transition-colors">
-                        <td className="p-6">
-                          <div className="flex items-center gap-4">
-                            <div className="w-12 h-12 bg-white/10 border border-white/15 overflow-hidden flex items-center justify-center shrink-0">
-                              {p.avatar ? (
-                                <img src={p.avatar} alt={p.name} className="w-full h-full object-cover grayscale" />
-                              ) : (
-                                <span className="font-sans font-black text-sm text-white">{p.name.slice(0, 2).toUpperCase()}</span>
-                              )}
-                            </div>
-                            <div className="min-w-0">
-                              <p className="font-sans font-black text-sm uppercase text-white truncate max-w-[280px]">{p.name || 'Sem nome'}</p>
-                              <p className="text-[10px] text-gray-400 lowercase truncate max-w-[280px]">{p.email}</p>
-                              <p className="text-[9px] text-gray-600 uppercase truncate max-w-[280px]">ID {p.id}</p>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-6">
-                          {p.verified ? (
-                            <span className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 text-[10px] font-bold uppercase">
-                              <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                              Ativo
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-2 bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 px-3 py-1 text-[10px] font-bold uppercase">
-                              <span className="w-1.5 h-1.5 rounded-full bg-yellow-300" />
-                              Pendente
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-6 text-center text-white font-sans font-black">{p.stats?.photos || 0}</td>
-                        <td className="p-6 text-center text-white font-sans font-black">{formatCurrency(Number(p.stats?.totalEarnings || 0))}</td>
-                        <td className="p-6 text-center">
-                          <div className="flex items-center justify-center gap-1 text-gray-200">
-                            <CheckCircle2 className="w-4 h-4 text-brutal-accent" />
-                            {p.stats?.rating || 5.0}
-                          </div>
-                        </td>
-                        <td className="p-6 text-right">
-                          <div className="flex items-center justify-end gap-2">
-                            {!p.verified && (
-                              <button 
-                                onClick={() => handleVerifyPhotographer(p.id)}
-                                className="h-9 px-3 bg-green-500 text-white border border-green-500 text-[10px] font-bold uppercase hover:bg-green-400 transition-colors cursor-pointer"
-                              >
-                                Aprovar
-                              </button>
-                            )}
-                            <div className="relative" data-photographer-menu>
-                              <button
-                                type="button"
-                                onClick={() => setOpenMenuPhotographerId((current) => (current === p.id ? null : p.id))}
-                                className="p-2 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                                aria-label="Opcoes do fotografo"
-                              >
-                                <MoreVertical className="w-5 h-5" />
-                              </button>
-
-                              <AnimatePresence>
-                                {openMenuPhotographerId === p.id && (
-                                  <motion.div
-                                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                                    exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                    className="absolute right-0 mt-2 w-56 bg-[#05080d] border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.45)] z-[200] overflow-hidden"
-                                  >
-                                    <button
-                                      type="button"
-                                      onClick={() => openEditPhotographer(p)}
-                                      className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-200 hover:bg-white/10 cursor-pointer"
-                                    >
-                                      Editar
-                                    </button>
-                                    <button
-                                      type="button"
-                                      disabled={isUpdatingPhotographer}
-                                      onClick={() => handleDisablePhotographer(p)}
-                                      className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-400 hover:bg-red-500/10 disabled:text-gray-500 cursor-pointer"
-                                    >
-                                      Excluir / Desativar
-                                    </button>
-                                  </motion.div>
-                                )}
-                              </AnimatePresence>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                    {filteredPhotographers.length === 0 && (
+                  <table className="w-full min-w-245 text-left font-mono text-xs">
+                    <thead className="bg-[#05080d] text-gray-400 uppercase text-[10px] tracking-widest">
                       <tr>
-                        <td colSpan={6} className="px-5 py-14 text-center">
-                          <Users className="w-10 h-10 text-gray-600 mx-auto mb-4" />
-                          <p className="font-sans font-black text-sm uppercase text-white">Nenhum fotografo encontrado</p>
-                          <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Ajuste a busca ou limpe os filtros.</p>
-                        </td>
+                        <th className="p-6">Fotógrafo</th>
+                        <th className="p-6">Status</th>
+                        <th className="p-6 text-center">Midias</th>
+                        <th className="p-6 text-center">Receita Gerada</th>
+                        <th className="p-6 text-center">Score</th>
+                        <th className="p-6"></th>
                       </tr>
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {filteredPhotographers.map((p) => (
+                        <tr key={p.id} className="hover:bg-white/3 transition-colors">
+                          <td className="p-6">
+                            <div className="flex items-center gap-4">
+                              <div className="w-12 h-12 bg-white/10 border border-white/15 overflow-hidden flex items-center justify-center shrink-0">
+                                {p.avatar ? (
+                                  <img src={p.avatar} alt={p.name} className="w-full h-full object-cover grayscale" />
+                                ) : (
+                                  <span className="font-sans font-black text-sm text-white">{p.name.slice(0, 2).toUpperCase()}</span>
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <p className="font-sans font-black text-sm uppercase text-white truncate max-w-70">{p.name || 'Sem nome'}</p>
+                                <p className="text-[10px] text-gray-400 lowercase truncate max-w-70">{p.email}</p>
+                                <p className="text-[9px] text-gray-600 uppercase truncate max-w-70">ID {p.id}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="p-6">
+                            {p.verified ? (
+                              <span className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 text-[10px] font-bold uppercase">
+                                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                                Ativo
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-2 bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 px-3 py-1 text-[10px] font-bold uppercase">
+                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-300" />
+                                Pendente
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-6 text-center text-white font-sans font-black">{p.stats?.photos || 0}</td>
+                          <td className="p-6 text-center text-white font-sans font-black">{formatCurrency(Number(p.stats?.totalEarnings || 0))}</td>
+                          <td className="p-6 text-center">
+                            <div className="flex items-center justify-center gap-1 text-gray-200">
+                              <CheckCircle2 className="w-4 h-4 text-brutal-accent" />
+                              {p.stats?.rating || 5.0}
+                            </div>
+                          </td>
+                          <td className="p-6 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              {!p.verified && (
+                                <button
+                                  onClick={() => handleVerifyPhotographer(p.id)}
+                                  className="h-9 px-3 bg-green-500 text-white border border-green-500 text-[10px] font-bold uppercase hover:bg-green-400 transition-colors cursor-pointer"
+                                >
+                                  Aprovar
+                                </button>
+                              )}
+                              <div className="relative" data-photographer-menu>
+                                <button
+                                  type="button"
+                                  onClick={() => setOpenMenuPhotographerId((current) => (current === p.id ? null : p.id))}
+                                  className="p-2 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                                  aria-label="Opcoes do fotografo"
+                                >
+                                  <MoreVertical className="w-5 h-5" />
+                                </button>
+
+                                <AnimatePresence>
+                                  {openMenuPhotographerId === p.id && (
+                                    <motion.div
+                                      initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                      className="absolute right-0 mt-2 w-56 bg-[#05080d] border border-white/15 shadow-[0_20px_50px_rgba(0,0,0,0.45)] z-200 overflow-hidden"
+                                    >
+                                      <button
+                                        type="button"
+                                        onClick={() => openEditPhotographer(p)}
+                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-200 hover:bg-white/10 cursor-pointer"
+                                      >
+                                        Editar
+                                      </button>
+                                      <button
+                                        type="button"
+                                        disabled={isUpdatingPhotographer}
+                                        onClick={() => handleDisablePhotographer(p)}
+                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-400 hover:bg-red-500/10 disabled:text-gray-500 cursor-pointer"
+                                      >
+                                        Excluir / Desativar
+                                      </button>
+                                    </motion.div>
+                                  )}
+                                </AnimatePresence>
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                      {filteredPhotographers.length === 0 && (
+                        <tr>
+                          <td colSpan={6} className="px-5 py-14 text-center">
+                            <Users className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                            <p className="font-sans font-black text-sm uppercase text-white">Nenhum fotografo encontrado</p>
+                            <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Ajuste a busca ou limpe os filtros.</p>
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             </motion.div>
@@ -1975,8 +2004,20 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Receita paga</p>
-                  <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidOrderTotal)}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{paidOrders.length} pedido(s) pago(s)</p>
+                  <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidRevenueTotal)}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">
+                    {paidSaleItems.length} item(ns) pago(s) em {paidOrders.length} pedido(s)
+                  </p>
+                  {paidRevenueMismatch && (
+                    <p className="font-mono text-[9px] uppercase text-yellow-300 mt-2">
+                      Total salvo nos pedidos: {formatCurrency(paidOrderStoredTotal)}
+                    </p>
+                  )}
+                  {paidOrdersWithoutItems.length > 0 && (
+                    <p className="font-mono text-[9px] uppercase text-red-300 mt-2">
+                      {paidOrdersWithoutItems.length} pedido(s) pago(s) sem item vinculado
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2049,66 +2090,109 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               </div>
 
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-              <div className="bg-[#05080d] text-white border border-white/10 p-5">
-                <div className="flex items-center justify-between gap-4 mb-5">
-                  <div>
-                    <h3 className="font-sans font-black text-base uppercase text-brutal-accent">Log de Pedidos</h3>
-                    <p className="font-mono text-[10px] uppercase text-gray-500">Ultimas transacoes registradas</p>
-                  </div>
-                  <ArrowUpRight className="w-5 h-5 text-gray-500" />
-                </div>
-                <div className="divide-y divide-white/10">
-                  {recentOrders.length > 0 ? recentOrders.map((order) => (
-                    <div key={order.id} className="py-4 first:pt-0 last:pb-0 flex justify-between items-start gap-4 text-xs font-mono">
-                      <div className="min-w-0 flex gap-3">
-                        <span className="text-gray-600 shrink-0">#{order.id.slice(0, 8)}</span>
-                        <div className="min-w-0">
-                          <p className="uppercase text-white truncate">{order.buyerName}</p>
-                          <p className="text-gray-500 text-[10px]">{order.paymentProvider} - {order.status}</p>
-                        </div>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className={order.status === 'paid' ? 'text-green-400' : order.status === 'cancelled' ? 'text-red-300' : 'text-yellow-400'}>
-                          {formatCurrency(Number(order.total))}
-                        </p>
-                        <p className="text-gray-600 text-[9px]">
-                          {new Date(order.createdAt).toLocaleDateString('pt-BR')} - {order.items?.length ?? 0} itens
-                        </p>
-                      </div>
+                <div className="bg-[#05080d] text-white border border-white/10">
+                  <div className="p-5 border-b border-white/10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                    <div>
+                      <h3 className="font-sans font-black text-base uppercase text-brutal-accent">Log de Pedidos</h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">
+                        {showAllOrderLogs ? `Todos os ${periodOrders.length} registros do periodo` : 'Ultimas transacoes registradas'}
+                      </p>
                     </div>
-                  )) : (
-                    <div className="text-xs font-mono text-gray-500 uppercase">Nenhuma transacao registrada.</div>
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-[#05080d] text-white border border-white/10 p-5">
-                <div className="flex items-center justify-between gap-4 mb-5">
-                  <div>
-                    <h3 className="font-sans font-black text-base uppercase text-white">Historico de Saques</h3>
-                    <p className="font-mono text-[10px] uppercase text-gray-500">Pagos e recusados recentemente</p>
-                  </div>
-                  <DollarSign className="w-5 h-5 text-gray-500" />
-                </div>
-                <div className="divide-y divide-white/10">
-                  {processedWithdrawals.length > 0 ? processedWithdrawals.slice(0, 6).map((withdrawal) => {
-                    const photographer = photographerById.get(withdrawal.photographerId);
-                    return (
-                      <div key={withdrawal.id} className="py-4 first:pt-0 last:pb-0 flex justify-between items-start gap-4 text-xs font-mono">
-                        <div className="min-w-0">
-                          <p className="uppercase text-white truncate">{photographer?.name ?? 'Fotografo'}</p>
-                          <p className="text-gray-500 text-[10px]">{withdrawal.status} - {new Date(withdrawal.createdAt).toLocaleDateString('pt-BR')}</p>
-                        </div>
-                        <p className={withdrawal.status === 'paid' ? 'text-green-400' : 'text-red-300'}>
-                          {formatCurrency(Number(withdrawal.amount))}
-                        </p>
+                    <div className="flex items-center gap-2">
+                      <div className="hidden sm:flex items-center gap-2 font-mono text-[9px] uppercase text-gray-500">
+                        <span className="px-2 py-1 border border-green-500/20 text-green-300">{paidOrders.length} pagos</span>
+                        <span className="px-2 py-1 border border-yellow-500/20 text-yellow-300">{pendingOrders.length} pendentes</span>
                       </div>
-                    );
-                  }) : (
-                    <div className="text-xs font-mono text-gray-500 uppercase">Nenhum saque processado.</div>
-                  )}
+                      {periodOrders.length > recentOrders.length && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAllOrderLogs((current) => !current)}
+                          className="inline-flex h-9 items-center gap-2 border border-white/10 bg-white/5 px-3 font-mono text-[10px] uppercase text-gray-300 hover:border-brutal-accent hover:text-white transition-colors cursor-pointer"
+                        >
+                          {showAllOrderLogs ? 'Ver menos' : 'Ver todos'}
+                          <ArrowUpRight className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <div className={`${showAllOrderLogs ? 'max-h-[520px] overflow-y-auto' : ''}`}>
+                    <div className="divide-y divide-white/10">
+                      {visibleOrderLogs.length > 0 ? visibleOrderLogs.map((order) => {
+                        const itemCount = order.items?.length ?? 0;
+                        const itemRevenue = getOrderItemsRevenue(order);
+                        const hasMismatch = Math.abs(itemRevenue - Number(order.total || 0)) > 0.01;
+
+                        return (
+                          <div key={order.id} className="px-5 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs font-mono hover:bg-white/[0.03] transition-colors">
+                            <div className="min-w-0 flex gap-3">
+                              <span className="w-20 shrink-0 text-gray-600">#{order.id.slice(0, 8)}</span>
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="uppercase text-white truncate">{order.buyerName || 'Cliente sem nome'}</p>
+                                  <span className={`px-2 py-0.5 border text-[9px] uppercase ${orderStatusClasses[order.status]}`}>
+                                    {orderStatusLabels[order.status]}
+                                  </span>
+                                  {hasMismatch && (
+                                    <span className="px-2 py-0.5 border border-yellow-500/30 bg-yellow-500/10 text-[9px] uppercase text-yellow-300">
+                                      Divergencia
+                                    </span>
+                                  )}
+                                </div>
+                                <p className="text-gray-500 text-[10px] mt-1">
+                                  {order.paymentProvider} - {new Date(order.createdAt).toLocaleString('pt-BR')} - {itemCount} item(ns)
+                                </p>
+                              </div>
+                            </div>
+                            <div className="text-left sm:text-right shrink-0">
+                              <p className={order.status === 'paid' ? 'text-green-400' : order.status === 'cancelled' ? 'text-red-300' : 'text-yellow-400'}>
+                                {formatCurrency(itemRevenue)}
+                              </p>
+                              {hasMismatch ? (
+                                <p className="text-yellow-300 text-[9px] uppercase">
+                                  Pedido: {formatCurrency(Number(order.total || 0))}
+                                </p>
+                              ) : (
+                                <p className="text-gray-600 text-[9px] uppercase">
+                                  Total conciliado
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }) : (
+                        <div className="p-5 text-xs font-mono text-gray-500 uppercase">Nenhuma transacao registrada.</div>
+                      )}
+                    </div>
+                  </div>
                 </div>
-              </div>
+
+                <div className="bg-[#05080d] text-white border border-white/10 p-5">
+                  <div className="flex items-center justify-between gap-4 mb-5">
+                    <div>
+                      <h3 className="font-sans font-black text-base uppercase text-white">Historico de Saques</h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">Pagos e recusados recentemente</p>
+                    </div>
+                    <DollarSign className="w-5 h-5 text-gray-500" />
+                  </div>
+                  <div className="divide-y divide-white/10">
+                    {processedWithdrawals.length > 0 ? processedWithdrawals.slice(0, 6).map((withdrawal) => {
+                      const photographer = photographerById.get(withdrawal.photographerId);
+                      return (
+                        <div key={withdrawal.id} className="py-4 first:pt-0 last:pb-0 flex justify-between items-start gap-4 text-xs font-mono">
+                          <div className="min-w-0">
+                            <p className="uppercase text-white truncate">{photographer?.name ?? 'Fotografo'}</p>
+                            <p className="text-gray-500 text-[10px]">{withdrawal.status} - {new Date(withdrawal.createdAt).toLocaleDateString('pt-BR')}</p>
+                          </div>
+                          <p className={withdrawal.status === 'paid' ? 'text-green-400' : 'text-red-300'}>
+                            {formatCurrency(Number(withdrawal.amount))}
+                          </p>
+                        </div>
+                      );
+                    }) : (
+                      <div className="text-xs font-mono text-gray-500 uppercase">Nenhum saque processado.</div>
+                    )}
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}
@@ -2208,14 +2292,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         ...current,
                         autoBlockSuspicious: !current.autoBlockSuspicious,
                       }))}
-                      className={`w-14 h-8 relative cursor-pointer border transition-colors shrink-0 ${
-                        settingsForm.autoBlockSuspicious ? 'bg-brutal-accent border-brutal-accent' : 'bg-[#05080d] border-white/20'
-                      }`}
+                      className={`w-14 h-8 relative cursor-pointer border transition-colors shrink-0 ${settingsForm.autoBlockSuspicious ? 'bg-brutal-accent border-brutal-accent' : 'bg-[#05080d] border-white/20'
+                        }`}
                       aria-pressed={settingsForm.autoBlockSuspicious}
                     >
-                      <span className={`absolute top-1 w-6 h-6 bg-white transition-all ${
-                        settingsForm.autoBlockSuspicious ? 'right-1' : 'left-1'
-                      }`} />
+                      <span className={`absolute top-1 w-6 h-6 bg-white transition-all ${settingsForm.autoBlockSuspicious ? 'right-1' : 'left-1'
+                        }`} />
                     </button>
                   </div>
                   <button
@@ -2235,22 +2317,22 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       {/* Add Photographer Modal */}
       <AnimatePresence>
         {showAddModal && (
-          <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 md:p-6">
-            <motion.div 
+          <div className="fixed inset-0 z-150 flex items-center justify-center p-4 md:p-6">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowAddModal(false)}
               className="absolute inset-0 bg-black/80 backdrop-blur-md"
             />
-            <motion.div 
+            <motion.div
               initial={{ scale: 0.96, y: 18 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.96, y: 18 }}
               className="relative w-full max-w-2xl max-h-[92vh] bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.55)] text-white overflow-y-auto"
             >
               <div className="h-1.5 bg-brutal-accent" />
-              <button 
+              <button
                 onClick={() => setShowAddModal(false)}
                 className="absolute top-5 right-5 p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
                 aria-label="Fechar modal"
@@ -2272,11 +2354,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome Completo</label>
                   <div className="relative">
                     <UserIcon className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input 
+                    <input
                       required
-                      type="text" 
+                      type="text"
                       value={newPhotographer.name}
-                      onChange={e => setNewPhotographer({...newPhotographer, name: e.target.value})}
+                      onChange={e => setNewPhotographer({ ...newPhotographer, name: e.target.value })}
                       placeholder="Nome exibido no marketplace"
                       className="w-full h-14 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
                     />
@@ -2287,11 +2369,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Email de Acesso</label>
                   <div className="relative">
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input 
+                    <input
                       required
-                      type="email" 
+                      type="email"
                       value={newPhotographer.email}
-                      onChange={e => setNewPhotographer({...newPhotographer, email: e.target.value})}
+                      onChange={e => setNewPhotographer({ ...newPhotographer, email: e.target.value })}
                       placeholder="fotografo@email.com"
                       className="w-full h-14 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
                     />
@@ -2299,13 +2381,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
 
                 <div className="space-y-2">
-                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Bio / Especialidade</label>
-                   <textarea 
-                     value={newPhotographer.bio}
-                     onChange={e => setNewPhotographer({...newPhotographer, bio: e.target.value})}
-                     placeholder="Ex.: Corridas de rua, ciclismo, trail, cobertura de chegada..."
-                     className="w-full h-28 p-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors resize-none"
-                   />
+                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Bio / Especialidade</label>
+                  <textarea
+                    value={newPhotographer.bio}
+                    onChange={e => setNewPhotographer({ ...newPhotographer, bio: e.target.value })}
+                    placeholder="Ex.: Corridas de rua, ciclismo, trail, cobertura de chegada..."
+                    className="w-full h-28 p-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors resize-none"
+                  />
                 </div>
 
                 <div className="bg-[#080d14] border border-white/10 p-4 flex items-start gap-3">
@@ -2315,7 +2397,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </p>
                 </div>
 
-                <button 
+                <button
                   type="submit"
                   disabled={isSubmitting}
                   className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
@@ -2331,7 +2413,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       {/* Edit Photographer Modal */}
       <AnimatePresence>
         {editingPhotographer && (
-          <div className="fixed inset-0 z-[160] flex items-center justify-center p-4 md:p-6">
+          <div className="fixed inset-0 z-160 flex items-center justify-center p-4 md:p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -2460,13 +2542,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
 function AdminSidebarLink({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`w-full flex items-center gap-4 px-4 py-4 font-mono text-xs uppercase tracking-widest transition-all cursor-pointer ${
-        active 
-          ? 'bg-brutal-accent/80 text-white border border-brutal-accent shadow-[0_0_24px_rgba(255,78,0,0.22)]' 
+      className={`w-full flex items-center gap-4 px-4 py-4 font-mono text-xs uppercase tracking-widest transition-all cursor-pointer ${active
+          ? 'bg-brutal-accent/80 text-white border border-brutal-accent shadow-[0_0_24px_rgba(255,78,0,0.22)]'
           : 'text-gray-400 hover:text-white hover:bg-white/5 border border-transparent'
-      }`}
+        }`}
     >
       <span className={active ? 'text-white' : 'text-gray-500'}>
         {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-5 h-5' })}
@@ -2530,9 +2611,8 @@ function AdminStatCardReal({
   const trendIcon = trendValue > 0 ? '↗' : trendValue < 0 ? '↘' : '→';
 
   return (
-    <div className={`p-5 border border-white/10 bg-gradient-to-br from-[#121923] to-[#0d131c] transition-all hover:-translate-y-1 hover:border-white/20 ${
-      accent ? 'text-white' : 'text-white'
-    }`}>
+    <div className={`p-5 border border-white/10 bg-linear-to-br from-[#121923] to-[#0d131c] transition-all hover:-translate-y-1 hover:border-white/20 ${accent ? 'text-white' : 'text-white'
+      }`}>
       <div className="flex items-center justify-between mb-6">
         <div className={`p-3 rounded-md ${accent ? 'bg-brutal-accent' : 'bg-white/10'}`}>
           {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-6 h-6 text-white' })}

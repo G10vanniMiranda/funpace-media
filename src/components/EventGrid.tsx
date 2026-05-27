@@ -89,7 +89,7 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
   }, [events, query]);
 
   return (
-    <section className="pt-10 pb-8 md:py-20 px-4 md:px-6 max-w-[1400px] mx-auto">
+    <section className="pt-10 pb-8 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
       <div className="mb-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="max-w-3xl">
           <div className="flex items-center gap-3 mb-3">
@@ -123,7 +123,7 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
               onClick={() => onSelectEvent(event.name)}
               className="group bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
             >
-              <div className="relative aspect-[4/3] bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
+              <div className="relative aspect-4/3 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
                 {event.coverUrl ? (
                   <img
                     src={event.coverUrl}
@@ -138,7 +138,7 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
                     <CalendarDays className="w-16 h-16 text-gray-300" />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-gradient-to-t from-brutal-black/80 via-transparent to-transparent" />
+                <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent" />
                 <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest">
                   {formatDate(event.createdAt)}
                 </div>
@@ -161,7 +161,7 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
                     {event.checkpoint}
                   </p>
                 </div>
-                <h3 className="font-display text-xl uppercase leading-tight min-h-[3rem]">
+                <h3 className="font-display text-xl uppercase leading-tight min-h-12">
                   {event.name}
                 </h3>
                 <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">

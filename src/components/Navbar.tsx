@@ -200,13 +200,13 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsMenuOpen(false)}
-              className="fixed inset-0 bg-brutal-black/80 backdrop-blur-sm z-[55] md:hidden"
+              className="fixed inset-0 bg-brutal-black/80 backdrop-blur-sm z-55 md:hidden"
             />
             <motion.div
               initial={{ x: '100%' }}
               animate={{ x: 0 }}
               exit={{ x: '100%' }}
-              className="fixed right-0 top-0 h-full w-[86%] max-w-[360px] bg-brutal-white z-[60] md:hidden brutal-border-l"
+              className="fixed right-0 top-0 h-full w-[86%] max-w-90 bg-brutal-white z-60 md:hidden brutal-border-l"
             >
               <div className="flex h-full flex-col text-brutal-black">
                 <div className="border-b-2 border-brutal-black px-5 py-5">
@@ -257,7 +257,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
                         />
                         <button
                           type="submit"
-                          className="bg-brutal-black text-white w-14 h-12 brutal-border cursor-pointer hover:bg-brutal-accent transition-colors flex-shrink-0 inline-flex items-center justify-center"
+                          className="bg-brutal-black text-white w-14 h-12 brutal-border cursor-pointer hover:bg-brutal-accent transition-colors shrink-0 inline-flex items-center justify-center"
                           aria-label="Buscar fotos"
                         >
                           <Search className="w-5 h-5" />

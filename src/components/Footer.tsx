@@ -3,16 +3,22 @@ import { Instagram, Mail, Twitter } from 'lucide-react';
 export function Footer() {
   return (
     <footer className="border-t-4 border-brutal-black bg-brutal-white pt-12 md:pt-20 pb-10 px-4 md:px-6 mt-12">
-      <div className="max-w-[1400px] mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12 mb-16">
+      <div className="max-w-350 mx-auto grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-12 mb-16">
         <div className="sm:col-span-2">
           <h3 className="font-display text-3xl md:text-4xl mb-4 text-brutal-black">FUNPACE MEDIA</h3>
           <p className="font-mono text-sm text-gray-600 max-w-sm mb-6">
             O marketplace do corredor. Encontre, compre e reviva suas memorias de corrida. Feito para a comunidade, movido pelo ritmo.
           </p>
           <div className="flex gap-4">
-            <button className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer">
+            <a
+              href="https://www.instagram.com/fun__pace/?__pwa=1#"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Instagram da Funpace Media"
+              className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer"
+            >
               <Instagram className="w-5 h-5" />
-            </button>
+            </a>
             <button className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer">
               <Twitter className="w-5 h-5" />
             </button>
@@ -43,7 +49,7 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto pt-8 border-t-2 border-dashed border-gray-300 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div className="max-w-350 mx-auto pt-8 border-t-2 border-dashed border-gray-300 flex flex-col md:flex-row justify-between items-center gap-4">
         <p className="font-mono text-xs uppercase text-gray-500">
           © {new Date().getFullYear()} FUNPACE MEDIA. Todos os direitos reservados.
         </p>

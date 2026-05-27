@@ -1,18 +1,18 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { 
-  LayoutDashboard, 
-  Image as ImageIcon, 
-  DollarSign, 
-  Settings, 
-  LogOut, 
-  Upload, 
+import {
+  LayoutDashboard,
+  Image as ImageIcon,
+  DollarSign,
+  Settings,
+  LogOut,
+  Upload,
   Bell,
   CalendarDays,
   ChevronDown,
-  Plus, 
-  TrendingUp, 
-  Users, 
+  Plus,
+  TrendingUp,
+  Users,
   ChevronRight,
   Search,
   Filter,
@@ -1027,7 +1027,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       if (publishedCount === 0 && failedUploads.length > 0) {
         throw new Error(`Nenhum arquivo foi publicado. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
       }
-      
+
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
       const visibleProducts = updatedProducts.filter((product) => (product.status ?? 'published') !== 'removed');
       setProducts(visibleProducts);
@@ -1087,23 +1087,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         </div>
 
         <nav className="flex-1 p-5 space-y-3">
-          <SidebarLink 
-            icon={<LayoutDashboard />} 
-            label="Dashboard" 
-            active={activeTab === 'overview'} 
-            onClick={() => setActiveTab('overview')} 
+          <SidebarLink
+            icon={<LayoutDashboard />}
+            label="Dashboard"
+            active={activeTab === 'overview'}
+            onClick={() => setActiveTab('overview')}
           />
-          <SidebarLink 
-            icon={<ImageIcon />} 
-            label="Meus Produtos" 
-            active={activeTab === 'products'} 
-            onClick={() => setActiveTab('products')} 
+          <SidebarLink
+            icon={<ImageIcon />}
+            label="Meus Produtos"
+            active={activeTab === 'products'}
+            onClick={() => setActiveTab('products')}
           />
-          <SidebarLink 
-            icon={<DollarSign />} 
-            label="Ganhos" 
-            active={activeTab === 'earnings'} 
-            onClick={() => setActiveTab('earnings')} 
+          <SidebarLink
+            icon={<DollarSign />}
+            label="Ganhos"
+            active={activeTab === 'earnings'}
+            onClick={() => setActiveTab('earnings')}
           />
         </nav>
 
@@ -1119,7 +1119,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               </div>
             </div>
           </div>
-          <button 
+          <button
             onClick={onLogout}
             className="w-full flex items-center justify-center gap-2 py-3 font-mono text-[10px] uppercase font-bold text-gray-400 hover:text-brutal-accent transition-colors cursor-pointer"
           >
@@ -1142,7 +1142,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-[280px]">
+            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-70">
               <div className="flex items-center gap-3 min-w-0">
                 <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
                 <span className="font-sans text-sm text-gray-200 truncate">{periodLabel}</span>
@@ -1221,11 +1221,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     key={key}
                     type="button"
                     onClick={() => setSelectedPeriod(key)}
-                    className={`h-10 px-4 border font-sans text-xs font-bold transition-colors ${
-                      selectedPeriod === key
+                    className={`h-10 px-4 border font-sans text-xs font-bold transition-colors ${selectedPeriod === key
                         ? 'bg-brutal-accent/20 border-brutal-accent text-white'
                         : 'bg-white/5 border-white/10 text-gray-300 hover:border-white/30'
-                    }`}
+                      }`}
                   >
                     {label}
                   </button>
@@ -1252,29 +1251,29 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
               {/* Quick Stats Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
-                <StatCard 
-                  label="Ganhos Totais" 
-                  value={formatCurrency(periodMetrics.totalEarnings)} 
-                  icon={<DollarSign />} 
+                <StatCard
+                  label="Ganhos Totais"
+                  value={formatCurrency(periodMetrics.totalEarnings)}
+                  icon={<DollarSign />}
                   trend={`${periodMetrics.platformFeePercent}% taxa plataforma`}
-                  accent 
+                  accent
                 />
-                <StatCard 
-                  label="Vendas Realizadas" 
-                  value={periodMetrics.salesCount} 
-                  icon={<TrendingUp />} 
+                <StatCard
+                  label="Vendas Realizadas"
+                  value={periodMetrics.salesCount}
+                  icon={<TrendingUp />}
                   trend={`+${periodMetrics.todaySalesCount} hoje`}
                 />
-                <StatCard 
-                  label="Fotos No Ar" 
-                  value={periodMetrics.publishedMediaCount} 
-                  icon={<ImageIcon />} 
+                <StatCard
+                  label="Fotos No Ar"
+                  value={periodMetrics.publishedMediaCount}
+                  icon={<ImageIcon />}
                   trend={`${periodMetrics.photoCount} fotos / ${periodMetrics.videoCount} videos`}
                 />
-                <StatCard 
-                  label="Aguardando Resgate" 
-                  value={formatCurrency(periodMetrics.pendingEarnings)} 
-                  icon={<AlertCircle />} 
+                <StatCard
+                  label="Aguardando Resgate"
+                  value={formatCurrency(periodMetrics.pendingEarnings)}
+                  icon={<AlertCircle />}
                   trend="Liberação em 7 dias"
                   warning
                 />
@@ -1301,7 +1300,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </p>
                       </div>
                     ) : periodSales.slice(0, 5).map((sale) => (
-                      <div key={sale.id} className="p-5 flex items-center gap-4 group hover:bg-white/[0.03] transition-colors">
+                      <div key={sale.id} className="p-5 flex items-center gap-4 group hover:bg-white/3 transition-colors">
                         <div className="w-14 h-14 bg-white/5 border border-white/10 overflow-hidden shrink-0">
                           <SaleThumbnail sale={sale} />
                         </div>
@@ -1414,11 +1413,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               <div className="bg-[#0d131c] border border-white/10 p-4 flex flex-col xl:flex-row gap-4">
                 <div className="flex-1 relative">
                   <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-500 w-5 h-5" />
-                  <input 
-                    type="text" 
+                  <input
+                    type="text"
                     value={productSearch}
                     onChange={(event) => setProductSearch(event.target.value)}
-                    placeholder="Buscar por nome, evento, checkpoint, peito ou ID" 
+                    placeholder="Buscar por nome, evento, checkpoint, peito ou ID"
                     className="w-full h-12 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs outline-none focus:border-brutal-accent transition-colors"
                   />
                 </div>
@@ -1503,80 +1502,78 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 {filteredProducts.map((product) => {
                   const isSelected = selectedProductIds.has(product.id);
                   return (
-                  <div key={product.id} className={`group bg-[#0d131c] border overflow-hidden transition-colors ${
-                    isSelected ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-white/10 hover:border-brutal-accent/70'
-                  }`}>
-                    <div className="aspect-[4/5] relative bg-[#080d14]">
-                      {product.type === 'IMG' ? (
-                        <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
-                      ) : product.thumbnailUrl ? (
-                        <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
-                      ) : (
-                        <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
-                      )}
-                      <div className="absolute inset-x-0 top-0 z-20 p-3 flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={(event) => {
-                              event.stopPropagation();
-                              toggleProductSelection(product.id);
-                            }}
-                            className={`h-8 w-8 border flex items-center justify-center transition-colors ${
-                              isSelected ? 'bg-brutal-accent border-brutal-accent text-white' : 'bg-[#05080d]/90 border-white/15 text-white hover:border-brutal-accent'
-                            }`}
-                            aria-label={isSelected ? 'Desmarcar produto' : 'Selecionar produto'}
-                          >
-                            {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <span className="h-3.5 w-3.5 border border-current" />}
-                          </button>
-                          <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
-                            {product.type}
-                          </span>
-                        </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="bg-brutal-accent text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
-                            {formatCurrency(product.price)}
-                          </span>
-                          {(product.status ?? 'published') !== 'published' && (
-                            <span className="bg-yellow-500/90 text-black px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
-                              {product.status}
+                    <div key={product.id} className={`group bg-[#0d131c] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-white/10 hover:border-brutal-accent/70'
+                      }`}>
+                      <div className="aspect-4/5 relative bg-[#080d14]">
+                        {product.type === 'IMG' ? (
+                          <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
+                        ) : product.thumbnailUrl ? (
+                          <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
+                        ) : (
+                          <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
+                        )}
+                        <div className="absolute inset-x-0 top-0 z-20 p-3 flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                toggleProductSelection(product.id);
+                              }}
+                              className={`h-8 w-8 border flex items-center justify-center transition-colors ${isSelected ? 'bg-brutal-accent border-brutal-accent text-white' : 'bg-[#05080d]/90 border-white/15 text-white hover:border-brutal-accent'
+                                }`}
+                              aria-label={isSelected ? 'Desmarcar produto' : 'Selecionar produto'}
+                            >
+                              {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <span className="h-3.5 w-3.5 border border-current" />}
+                            </button>
+                            <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
+                              {product.type}
                             </span>
-                          )}
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className="bg-brutal-accent text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
+                              {formatCurrency(product.price)}
+                            </span>
+                            {(product.status ?? 'published') !== 'published' && (
+                              <span className="bg-yellow-500/90 text-black px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
+                                {product.status}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <div className="absolute inset-0 z-10 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
+                          <p className="text-white font-sans font-black text-sm uppercase mb-4 text-center px-4">{product.name}</p>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => openEditModal(product)}
+                              className="bg-white text-brutal-black p-2 border border-white hover:bg-brutal-accent hover:text-white hover:border-brutal-accent transition-colors cursor-pointer"
+                              title="Editar produto"
+                            >
+                              <Settings className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleRemoveProduct(product)}
+                              className="bg-white text-brutal-black p-2 border border-white hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
+                              title="Remover produto"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
                       </div>
-                      <div className="absolute inset-0 z-10 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
-                        <p className="text-white font-sans font-black text-sm uppercase mb-4 text-center px-4">{product.name}</p>
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => openEditModal(product)}
-                            className="bg-white text-brutal-black p-2 border border-white hover:bg-brutal-accent hover:text-white hover:border-brutal-accent transition-colors cursor-pointer"
-                            title="Editar produto"
-                          >
-                            <Settings className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleRemoveProduct(product)}
-                            className="bg-white text-brutal-black p-2 border border-white hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
-                            title="Remover produto"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                      <div className="p-4 space-y-3">
+                        <div>
+                          <p className="font-sans font-black text-sm uppercase text-white truncate">{product.name}</p>
+                          <p className="font-mono text-[10px] uppercase text-gray-500 truncate">{product.event || 'Geral'} - {product.checkpoint || 'Ponto principal'}</p>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase">
+                          <span className="text-gray-500">Peito {product.bib || 'N/I'}</span>
+                          <span className={(product.status ?? 'published') === 'draft' ? 'text-yellow-400' : 'text-green-400'}>
+                            {(product.status ?? 'published') === 'draft' ? 'Rascunho' : 'Publicado'}
+                          </span>
                         </div>
                       </div>
                     </div>
-                    <div className="p-4 space-y-3">
-                      <div>
-                        <p className="font-sans font-black text-sm uppercase text-white truncate">{product.name}</p>
-                        <p className="font-mono text-[10px] uppercase text-gray-500 truncate">{product.event || 'Geral'} - {product.checkpoint || 'Ponto principal'}</p>
-                      </div>
-                      <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase">
-                        <span className="text-gray-500">Peito {product.bib || 'N/I'}</span>
-                        <span className={(product.status ?? 'published') === 'draft' ? 'text-yellow-400' : 'text-green-400'}>
-                          {(product.status ?? 'published') === 'draft' ? 'Rascunho' : 'Publicado'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
                   );
                 })}
               </div>
@@ -1653,67 +1650,66 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <DollarSign className="w-5 h-5 text-gray-500" />
                   </div>
                   <div className="p-5 space-y-6">
-                  {periodWithdrawals.length > 0 && (
-                    <div className="space-y-3">
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Solicitacoes de saque</p>
-                      {periodWithdrawals.slice(0, 4).map((withdrawal) => (
-                        <div key={withdrawal.id} className="flex justify-between items-center gap-4 p-3 bg-[#080d14] border border-white/10">
-                          <div className="min-w-0">
-                            <p className="font-sans font-black text-sm uppercase text-white truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
-                            <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
-                              Pix: {withdrawal.pixKey} - {formatSaleDate(withdrawal.createdAt)}
+                    {periodWithdrawals.length > 0 && (
+                      <div className="space-y-3">
+                        <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Solicitacoes de saque</p>
+                        {periodWithdrawals.slice(0, 4).map((withdrawal) => (
+                          <div key={withdrawal.id} className="flex justify-between items-center gap-4 p-3 bg-[#080d14] border border-white/10">
+                            <div className="min-w-0">
+                              <p className="font-sans font-black text-sm uppercase text-white truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
+                              <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
+                                Pix: {withdrawal.pixKey} - {formatSaleDate(withdrawal.createdAt)}
+                              </p>
+                            </div>
+                            <p className={`font-sans font-black text-lg shrink-0 ${withdrawal.status === 'rejected' || withdrawal.status === 'cancelled' ? 'text-red-300' : 'text-brutal-accent'
+                              }`}>
+                              - {formatCurrency(Number(withdrawal.amount))}
                             </p>
                           </div>
-                          <p className={`font-sans font-black text-lg shrink-0 ${
-                            withdrawal.status === 'rejected' || withdrawal.status === 'cancelled' ? 'text-red-300' : 'text-brutal-accent'
-                          }`}>
-                            - {formatCurrency(Number(withdrawal.amount))}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  {periodSales.length === 0 ? (
-                    <div className="py-8 text-center">
-                      <p className="font-sans font-black text-xl uppercase text-white">Nenhuma venda paga ainda</p>
-                      <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
-                        As movimentacoes aparecem quando pagamentos forem confirmados.
-                      </p>
-                    </div>
-                  ) : periodSales.map((sale) => (
-                    <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-white/10 last:border-0">
-                      <div className="min-w-0">
-                        <p className="font-sans font-black text-sm uppercase text-white truncate">Venda Confirmada</p>
-                        <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
-                          Pedido #{sale.orderId.substring(0, 8)} - {sale.event}
+                        ))}
+                      </div>
+                    )}
+                    {periodSales.length === 0 ? (
+                      <div className="py-8 text-center">
+                        <p className="font-sans font-black text-xl uppercase text-white">Nenhuma venda paga ainda</p>
+                        <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
+                          As movimentacoes aparecem quando pagamentos forem confirmados.
                         </p>
                       </div>
-                      <div className="text-right shrink-0">
-                        <p className="font-sans font-black text-lg text-green-400">+ {formatCurrency(sale.netAmount)}</p>
-                        <p className="font-mono text-[10px] text-gray-500 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
+                    ) : periodSales.map((sale) => (
+                      <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-white/10 last:border-0">
+                        <div className="min-w-0">
+                          <p className="font-sans font-black text-sm uppercase text-white truncate">Venda Confirmada</p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
+                            Pedido #{sale.orderId.substring(0, 8)} - {sale.event}
+                          </p>
+                        </div>
+                        <div className="text-right shrink-0">
+                          <p className="font-sans font-black text-lg text-green-400">+ {formatCurrency(sale.netAmount)}</p>
+                          <p className="font-mono text-[10px] text-gray-500 uppercase">{formatSaleDate(sale.orderCreatedAt)}</p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
                   </div>
                 </div>
 
                 <div className="bg-[#0d131c] border border-white/10 p-6 flex flex-col justify-center text-center">
-                   <div className="mx-auto w-14 h-14 bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center mb-5">
-                     <TrendingUp className="w-7 h-7 text-brutal-accent" />
-                   </div>
-                   <h3 className="font-sans font-black text-xl uppercase text-white mb-4">Meta Mensal</h3>
-                   <div className="w-full h-3 bg-[#080d14] border border-white/10 mb-4 overflow-hidden">
-                     <div
-                       className="h-full bg-brutal-accent"
-                       style={{ width: `${monthlyGoalPercent}%` }}
-                     />
-                   </div>
-                   <p className="font-mono text-sm text-gray-400">
-                     Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(periodMetrics.monthlyGoal)}</span>
-                   </p>
-                   <p className="font-mono text-[10px] uppercase text-gray-500 tracking-widest mt-3">
-                     Receita do periodo no mes atual: {formatCurrency(periodMetrics.monthlyEarnings)}
-                   </p>
+                  <div className="mx-auto w-14 h-14 bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center mb-5">
+                    <TrendingUp className="w-7 h-7 text-brutal-accent" />
+                  </div>
+                  <h3 className="font-sans font-black text-xl uppercase text-white mb-4">Meta Mensal</h3>
+                  <div className="w-full h-3 bg-[#080d14] border border-white/10 mb-4 overflow-hidden">
+                    <div
+                      className="h-full bg-brutal-accent"
+                      style={{ width: `${monthlyGoalPercent}%` }}
+                    />
+                  </div>
+                  <p className="font-mono text-sm text-gray-400">
+                    Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(periodMetrics.monthlyGoal)}</span>
+                  </p>
+                  <p className="font-mono text-[10px] uppercase text-gray-500 tracking-widest mt-3">
+                    Receita do periodo no mes atual: {formatCurrency(periodMetrics.monthlyEarnings)}
+                  </p>
                 </div>
               </div>
 
@@ -1772,7 +1768,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       <AnimatePresence>
         {showWithdrawalModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -1849,13 +1845,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       {/* Edit Product Modal */}
       <AnimatePresence>
         {editingProduct && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-6">
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 md:p-6">
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={closeEditModal}
-              className="absolute inset-0 bg-black/85 backdrop-blur-md" 
+              className="absolute inset-0 bg-black/85 backdrop-blur-md"
             />
 
             <motion.div
@@ -1866,7 +1862,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             >
               <div className="grid md:grid-cols-[280px_1fr]">
                 <div className="bg-brutal-black p-6">
-                  <div className="aspect-[3/4] bg-black brutal-border overflow-hidden">
+                  <div className="aspect-3/4 bg-black brutal-border overflow-hidden">
                     {editingProduct.type === 'IMG' ? (
                       <img src={editingProduct.thumbnailUrl || editingProduct.url} alt={editingProduct.name} className="w-full h-full object-cover" />
                     ) : editingProduct.thumbnailUrl ? (
@@ -1987,16 +1983,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       {/* Upload Modal */}
       <AnimatePresence>
         {showUploadModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 md:p-12">
-            <motion.div 
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-6 md:p-12">
+            <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setShowUploadModal(false)}
-              className="absolute inset-0 bg-brutal-black/90 backdrop-blur-sm" 
+              className="absolute inset-0 bg-brutal-black/90 backdrop-blur-sm"
             />
-            
-            <motion.div 
+
+            <motion.div
               initial={{ scale: 0.9, y: 20 }}
               animate={{ scale: 1, y: 0 }}
               exit={{ scale: 0.9, y: 20 }}
@@ -2021,17 +2017,17 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Enviar Capturas</h3>
                   <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Selecione fotos ou videos para publicar no catalogo.</p>
                 </div>
-                
-                <input 
-                  type="file" 
-                  multiple 
+
+                <input
+                  type="file"
+                  multiple
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
                   accept="image/*,video/*"
                 />
 
-                <div 
+                <div
                   onClick={() => fileInputRef.current?.click()}
                   className="aspect-video border border-dashed border-white/20 bg-[#080d14] flex flex-col items-center justify-center group hover:border-brutal-accent hover:bg-brutal-accent/5 transition-colors cursor-pointer mb-6"
                 >
@@ -2096,51 +2092,50 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       </p>
                     </div>
                     <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
-                       {selectedFiles.map((item, idx) => (
-                         <div
-                           key={idx}
-                           onClick={() => setPreviewIndex(idx)}
-                           className={`w-full bg-[#080d14] p-3 border text-left transition-colors cursor-pointer ${
-                             previewIndex === idx ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-white/25'
-                           }`}
-                         >
-                           <div className="grid grid-cols-[64px_1fr] gap-3">
-                             <div className="w-16 h-16 bg-white/5 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
-                                {item.file.type.startsWith('image') ? (
-                                  <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-black text-white">
-                                    <VideoIcon className="w-4 h-4" />
-                                  </div>
-                                )}
-                             </div>
-                             <div className="flex-1 min-w-0 space-y-2">
-                               <div className="flex items-center justify-between gap-3">
-                                 <p className="font-mono text-[9px] uppercase truncate text-gray-500">{item.name}</p>
-                                 <span className="shrink-0 font-mono text-[8px] uppercase text-gray-300 bg-white/5 border border-white/10 px-2 py-1">
-                                   {item.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
-                                 </span>
-                               </div>
-                               <input
+                      {selectedFiles.map((item, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => setPreviewIndex(idx)}
+                          className={`w-full bg-[#080d14] p-3 border text-left transition-colors cursor-pointer ${previewIndex === idx ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-white/25'
+                            }`}
+                        >
+                          <div className="grid grid-cols-[64px_1fr] gap-3">
+                            <div className="w-16 h-16 bg-white/5 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
+                              {item.file.type.startsWith('image') ? (
+                                <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-black text-white">
+                                  <VideoIcon className="w-4 h-4" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <div className="flex items-center justify-between gap-3">
+                                <p className="font-mono text-[9px] uppercase truncate text-gray-500">{item.name}</p>
+                                <span className="shrink-0 font-mono text-[8px] uppercase text-gray-300 bg-white/5 border border-white/10 px-2 py-1">
+                                  {item.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
+                                </span>
+                              </div>
+                              <input
                                 type="text"
                                 value={item.description}
                                 onClick={(event) => event.stopPropagation()}
                                 onChange={(event) => updateSelectedFile(idx, { description: event.target.value })}
                                 placeholder="Descricao desta foto"
                                 className="w-full h-9 px-2 bg-[#05080d] border border-white/10 text-white placeholder:text-gray-600 font-mono text-[10px] uppercase outline-none focus:border-brutal-accent"
-                               />
-                               <div className="grid grid-cols-[1fr_112px] gap-2">
-                                 <input
+                              />
+                              <div className="grid grid-cols-[1fr_112px] gap-2">
+                                <input
                                   type="text"
                                   value={item.bib}
                                   onClick={(event) => event.stopPropagation()}
                                   onChange={(event) => updateSelectedFile(idx, { bib: event.target.value.replace(/[^\w-]/g, '').slice(0, 32) })}
                                   placeholder="N PEITO OPC."
                                   className="w-full h-9 px-2 bg-[#05080d] border border-white/10 text-white placeholder:text-gray-600 font-mono text-[10px] uppercase outline-none focus:border-brutal-accent"
-                                 />
-                                 <div className="grid grid-cols-[30px_1fr] items-center bg-[#05080d] border border-white/10 focus-within:border-brutal-accent">
-                                   <span className="font-mono text-[9px] uppercase text-gray-500 text-center border-r border-white/10">R$</span>
-                                   <input
+                                />
+                                <div className="grid grid-cols-[30px_1fr] items-center bg-[#05080d] border border-white/10 focus-within:border-brutal-accent">
+                                  <span className="font-mono text-[9px] uppercase text-gray-500 text-center border-r border-white/10">R$</span>
+                                  <input
                                     type="number"
                                     min="0"
                                     step="0.01"
@@ -2148,13 +2143,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                     onClick={(event) => event.stopPropagation()}
                                     onChange={(event) => updateSelectedFile(idx, { price: parseFloat(event.target.value) })}
                                     className="w-full h-9 px-2 bg-transparent text-white font-mono text-[10px] text-center outline-none"
-                                   />
-                                 </div>
-                               </div>
-                             </div>
-                           </div>
-                         </div>
-                       ))}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 )}
@@ -2162,96 +2157,96 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
               <div className="lg:w-[53%] p-6 md:p-8 bg-[#080d14] flex flex-col min-h-0">
                 <div className="flex-1 overflow-y-auto pr-2 min-h-0">
-                <div className="mb-6">
-                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Preview antes de publicar</label>
-                  <div className="aspect-video bg-black border border-white/10 overflow-hidden flex items-center justify-center">
-                    {currentPreview ? (
-                      currentPreview.file.type.startsWith('image') ? (
-                        <img
-                          src={currentPreview.previewUrl}
-                          alt={currentPreview.name}
-                          className="w-full h-full object-contain bg-brutal-black"
-                        />
+                  <div className="mb-6">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Preview antes de publicar</label>
+                    <div className="aspect-video bg-black border border-white/10 overflow-hidden flex items-center justify-center">
+                      {currentPreview ? (
+                        currentPreview.file.type.startsWith('image') ? (
+                          <img
+                            src={currentPreview.previewUrl}
+                            alt={currentPreview.name}
+                            className="w-full h-full object-contain bg-brutal-black"
+                          />
+                        ) : (
+                          <video
+                            src={currentPreview.previewUrl}
+                            className="w-full h-full bg-brutal-black"
+                            controls
+                            preload="metadata"
+                          />
+                        )
                       ) : (
-                        <video
-                          src={currentPreview.previewUrl}
-                          className="w-full h-full bg-brutal-black"
-                          controls
-                          preload="metadata"
-                        />
-                      )
-                    ) : (
-                      <div className="text-center px-8">
-                        <ImageIcon className="w-10 h-10 text-white/30 mx-auto mb-4" />
-                        <p className="font-mono text-[10px] uppercase tracking-widest text-white/50">Selecione uma imagem ou video para revisar</p>
+                        <div className="text-center px-8">
+                          <ImageIcon className="w-10 h-10 text-white/30 mx-auto mb-4" />
+                          <p className="font-mono text-[10px] uppercase tracking-widest text-white/50">Selecione uma imagem ou video para revisar</p>
+                        </div>
+                      )}
+                    </div>
+                    {currentPreview && (
+                      <div className="mt-3 flex items-center justify-between gap-4">
+                        <p className="font-mono text-[10px] uppercase truncate text-gray-500">{currentPreview.name}</p>
+                        <span className="shrink-0 font-mono text-[10px] uppercase bg-[#0d131c] border border-white/10 text-gray-300 px-2 py-1">
+                          {currentPreview.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
+                        </span>
                       </div>
                     )}
                   </div>
-                  {currentPreview && (
-                    <div className="mt-3 flex items-center justify-between gap-4">
-                      <p className="font-mono text-[10px] uppercase truncate text-gray-500">{currentPreview.name}</p>
-                      <span className="shrink-0 font-mono text-[10px] uppercase bg-[#0d131c] border border-white/10 text-gray-300 px-2 py-1">
-                        {currentPreview.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
-                      </span>
+                  <div className="space-y-6 pb-6">
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Eventos ativos</label>
+                      <select
+                        value={selectedEventId}
+                        onChange={(event) => handleTodayEventSelect(event.target.value)}
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                      >
+                        <option value="">Selecionar evento cadastrado pelo admin</option>
+                        {availableEvents.map((eventItem) => (
+                          <option key={eventItem.id} value={eventItem.id}>
+                            {eventItem.name} {eventItem.location ? `- ${eventItem.location}` : ''}
+                          </option>
+                        ))}
+                      </select>
+                      {availableEvents.length === 0 && (
+                        <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
+                          Nenhum evento ativo cadastrado. Preencha manualmente ou solicite ao admin.
+                        </p>
+                      )}
                     </div>
-                  )}
-                </div>
-                <div className="space-y-6 pb-6">
-                  <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Eventos ativos</label>
-                    <select
-                      value={selectedEventId}
-                      onChange={(event) => handleTodayEventSelect(event.target.value)}
-                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
-                    >
-                      <option value="">Selecionar evento cadastrado pelo admin</option>
-                      {availableEvents.map((eventItem) => (
-                        <option key={eventItem.id} value={eventItem.id}>
-                          {eventItem.name} {eventItem.location ? `- ${eventItem.location}` : ''}
-                        </option>
-                      ))}
-                    </select>
-                    {availableEvents.length === 0 && (
-                      <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
-                        Nenhum evento ativo cadastrado. Preencha manualmente ou solicite ao admin.
-                      </p>
-                    )}
-                  </div>
 
-                  <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Colecao</label>
-                    <input 
-                      type="text" 
-                      value={eventInput}
-                      onChange={e => setEventInput(e.target.value)}
-                      disabled={availableEvents.length > 0}
-                      placeholder="EX: TREINO DE SABADO, MARATONA SP" 
-                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
-                    />
-                  </div>
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Colecao</label>
+                      <input
+                        type="text"
+                        value={eventInput}
+                        onChange={e => setEventInput(e.target.value)}
+                        disabled={availableEvents.length > 0}
+                        placeholder="EX: TREINO DE SABADO, MARATONA SP"
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
+                      />
+                    </div>
 
-                  <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint / Localizacao</label>
-                    <input 
-                      type="text" 
-                      value={checkpointInput}
-                      onChange={e => setCheckpointInput(e.target.value)}
-                      disabled={availableEvents.length > 0}
-                      placeholder="EX: KM 15, CHEGADA" 
-                      className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
-                    />
-                  </div>
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint / Localizacao</label>
+                      <input
+                        type="text"
+                        value={checkpointInput}
+                        onChange={e => setCheckpointInput(e.target.value)}
+                        disabled={availableEvents.length > 0}
+                        placeholder="EX: KM 15, CHEGADA"
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
+                      />
+                    </div>
 
-                  <div className="bg-[#0d131c] text-white p-5 border border-white/10">
-                    <p className="font-mono text-[10px] uppercase text-gray-400 mb-1">Resumo do Lote</p>
-                    <div className="flex justify-between items-end">
-                      <span className="font-sans font-black text-sm uppercase">Total Estimado</span>
-                      <span className="font-sans font-black text-2xl text-brutal-accent">
-                        {formatCurrency(selectedFiles.reduce((acc, curr) => acc + curr.price, 0))}
-                      </span>
+                    <div className="bg-[#0d131c] text-white p-5 border border-white/10">
+                      <p className="font-mono text-[10px] uppercase text-gray-400 mb-1">Resumo do Lote</p>
+                      <div className="flex justify-between items-end">
+                        <span className="font-sans font-black text-sm uppercase">Total Estimado</span>
+                        <span className="font-sans font-black text-2xl text-brutal-accent">
+                          {formatCurrency(selectedFiles.reduce((acc, curr) => acc + curr.price, 0))}
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
 
                 </div>
 
@@ -2277,7 +2272,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       </p>
                     </div>
                   )}
-                  <button 
+                  <button
                     disabled={!canPublishSelectedFiles}
                     onClick={handleUpload}
                     className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
@@ -2293,7 +2288,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       `Publicar ${selectedFiles.length || ''} Produto${selectedFiles.length === 1 ? '' : 's'}`
                     )}
                   </button>
-                  <button 
+                  <button
                     onClick={() => {
                       clearSelectedFiles();
                       setShowUploadModal(false);
@@ -2314,13 +2309,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
 function SidebarLink({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-3 font-sans text-sm font-bold transition-all cursor-pointer border ${
-        active 
-          ? 'bg-brutal-accent/25 text-brutal-accent border-brutal-accent/60 shadow-[inset_3px_0_0_#ff4d00]' 
+      className={`w-full flex items-center gap-3 px-4 py-3 font-sans text-sm font-bold transition-all cursor-pointer border ${active
+          ? 'bg-brutal-accent/25 text-brutal-accent border-brutal-accent/60 shadow-[inset_3px_0_0_#ff4d00]'
           : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5 hover:border-white/10'
-      }`}
+        }`}
     >
       <span className={active ? 'text-white' : 'text-gray-500'}>
         {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-5 h-5' })}
@@ -2332,7 +2326,7 @@ function SidebarLink({ icon, label, active, onClick }: { icon: React.ReactNode, 
 
 function StatCard({ label, value, icon, trend, accent = false, warning = false }: { label: string, value: string | number, icon: React.ReactNode, trend: string, accent?: boolean, warning?: boolean }) {
   return (
-    <div className="p-5 bg-gradient-to-br from-[#111923] to-[#0b1018] border border-white/10 transition-all hover:border-white/20">
+    <div className="p-5 bg-linear-to-br from-[#111923] to-[#0b1018] border border-white/10 transition-all hover:border-white/20">
       <div className="flex items-start justify-between mb-5">
         <div className={`p-3 rounded ${accent ? 'bg-brutal-accent' : warning ? 'bg-green-600' : 'bg-blue-600'}`}>
           {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: 'w-6 h-6 text-white' })}

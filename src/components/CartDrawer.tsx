@@ -58,9 +58,8 @@ export function CartDrawer({
       )}
 
       <div
-        className={`fixed top-0 right-0 h-full w-full max-w-md bg-brutal-white border-l-4 border-brutal-black z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${
-          isOpen ? 'translate-x-0' : 'translate-x-full'
-        }`}
+        className={`fixed top-0 right-0 h-full w-full max-w-md bg-brutal-white border-l-4 border-brutal-black z-50 transform transition-transform duration-300 ease-in-out flex flex-col ${isOpen ? 'translate-x-0' : 'translate-x-full'
+          }`}
       >
         <div className="p-6 border-b-4 border-brutal-black flex items-center justify-between bg-brutal-white">
           <div>
@@ -81,7 +80,7 @@ export function CartDrawer({
             <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
               <span className="font-display text-6xl mb-4 opacity-20">0</span>
               <p className="font-mono uppercase tracking-widest text-lg">O carrinho esta vazio</p>
-              <p className="font-mono text-sm mt-2 max-w-[200px]">Encontre fotos e videos para adicionar.</p>
+              <p className="font-mono text-sm mt-2 max-w-50">Encontre fotos e videos para adicionar.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">
@@ -120,11 +119,10 @@ export function CartDrawer({
           <button
             onClick={handleCheckoutClick}
             disabled={disableCheckout}
-            className={`w-full h-16 flex items-center justify-center gap-2 font-display text-2xl tracking-widest border-2 border-brutal-black transition-all ${
-              disableCheckout
+            className={`w-full h-16 flex items-center justify-center gap-2 font-display text-2xl tracking-widest border-2 border-brutal-black transition-all ${disableCheckout
                 ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
                 : 'bg-brutal-black text-brutal-white hover:bg-brutal-accent hover:text-white brutal-shadow-hover cursor-pointer'
-            }`}
+              }`}
           >
             <span>{isAuthenticated ? 'FINALIZAR COMPRA' : 'ENTRAR PARA PAGAR'}</span>
             <ArrowRight className="w-6 h-6 mt-1" />
@@ -140,7 +138,7 @@ function ProductThumbnail({ item }: { item: Product }) {
   const previewUrl = getProductPreviewUrl(item);
 
   return (
-    <div className="w-20 h-20 bg-gray-200 border-2 border-brutal-black overflow-hidden flex-shrink-0">
+    <div className="w-20 h-20 bg-gray-200 border-2 border-brutal-black overflow-hidden shrink-0">
       {previewUrl && !failed ? (
         <img
           src={previewUrl}

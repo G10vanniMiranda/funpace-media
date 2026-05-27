@@ -257,14 +257,14 @@ export function CustomerOrdersDrawer({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 bg-brutal-black/70 backdrop-blur-sm z-[80]"
+            className="fixed inset-0 bg-brutal-black/70 backdrop-blur-sm z-80"
           />
           <motion.aside
             initial={{ x: '100%' }}
             animate={{ x: 0 }}
             exit={{ x: '100%' }}
             transition={{ type: 'spring', damping: 26, stiffness: 220 }}
-            className="fixed right-0 top-0 h-full w-full max-w-md bg-brutal-white z-[90] brutal-border-l shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 h-full w-full max-w-md bg-brutal-white z-90 brutal-border-l shadow-2xl flex flex-col"
           >
             <header className="p-6 bg-brutal-black text-white border-b-4 border-brutal-black flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -358,9 +358,8 @@ export function CustomerOrdersDrawer({
                   {visibleOrders.map((order) => (
                     <article
                       key={order.id}
-                      className={`bg-white brutal-border p-4 space-y-4 ${
-                        highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
-                      }`}
+                      className={`bg-white brutal-border p-4 space-y-4 ${highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
@@ -622,11 +621,10 @@ export function CustomerOrdersPage({
 
       <section className="max-w-6xl mx-auto px-4 md:px-6 py-8 space-y-6">
         {paymentStatus && (
-          <div className={`brutal-border p-5 ${
-            paymentStatus === 'paid' ? 'bg-green-50 text-green-800' :
-            paymentStatus === 'pending' ? 'bg-yellow-50 text-yellow-800' :
-            'bg-red-50 text-red-700'
-          }`}>
+          <div className={`brutal-border p-5 ${paymentStatus === 'paid' ? 'bg-green-50 text-green-800' :
+              paymentStatus === 'pending' ? 'bg-yellow-50 text-yellow-800' :
+                'bg-red-50 text-red-700'
+            }`}>
             <p className="font-display text-2xl uppercase">
               {paymentStatus === 'paid' ? 'Pagamento confirmado' : paymentStatus === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
             </p>
@@ -692,9 +690,8 @@ export function CustomerOrdersPage({
               {!isLoading && !error && sortedOrders.map((order) => (
                 <article
                   key={order.id}
-                  className={`bg-white brutal-border brutal-shadow p-4 md:p-5 space-y-4 ${
-                    highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
-                  }`}
+                  className={`bg-white brutal-border brutal-shadow p-4 md:p-5 space-y-4 ${highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
+                    }`}
                 >
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>

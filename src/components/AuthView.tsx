@@ -57,22 +57,22 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
   const googleEnabled = !isMockMode && isGoogleAuthEnabled;
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
-      <motion.div 
+    <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
+      <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
         onClick={onClose}
         className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
       />
-      
-      <motion.div 
+
+      <motion.div
         initial={{ scale: 0.9, y: 20 }}
         animate={{ scale: 1, y: 0 }}
         exit={{ scale: 0.9, y: 20 }}
         className="relative w-full max-w-md bg-brutal-white brutal-border brutal-shadow p-8"
       >
-        <button 
+        <button
           onClick={onClose}
           className="absolute top-4 right-4 p-2 hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer"
         >
@@ -101,7 +101,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                   <label className="font-mono text-[10px] uppercase tracking-widest font-bold">Nome Completo</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input 
+                    <input
                       type="text"
                       required
                       value={name}
@@ -114,7 +114,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
 
                 <div className="space-y-1">
                   <label className="font-mono text-[10px] uppercase tracking-widest font-bold">CPF Opcional</label>
-                  <input 
+                  <input
                     type="text"
                     value={formatCpf(cpf)}
                     onChange={(e) => setCpf(onlyCpfDigits(e.target.value))}
@@ -130,7 +130,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             <label className="font-mono text-[10px] uppercase tracking-widest font-bold">E-mail</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input 
+              <input
                 type="email"
                 required
                 value={email}
@@ -145,7 +145,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             <label className="font-mono text-[10px] uppercase tracking-widest font-bold">Senha</label>
             <div className="relative">
               <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-              <input 
+              <input
                 type="password"
                 required
                 value={password}
@@ -162,7 +162,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             </p>
           )}
 
-          <button 
+          <button
             type="submit"
             disabled={loading}
             className="w-full h-14 bg-brutal-black text-white hover:bg-brutal-accent transition-all flex items-center justify-center gap-2 brutal-shadow-hover cursor-pointer group disabled:opacity-70 disabled:cursor-wait"
@@ -202,7 +202,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
 
         <p className="mt-8 text-center font-mono text-xs uppercase tracking-widest">
           {mode === 'login' ? 'Nao tem uma conta?' : 'Ja possui conta?'}
-          <button 
+          <button
             onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
             className="ml-2 text-brutal-accent font-bold hover:underline cursor-pointer"
           >

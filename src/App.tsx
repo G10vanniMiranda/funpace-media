@@ -1216,11 +1216,11 @@ function AdminRoute() {
       ]);
 
       // Compute photographer stats from real data to avoid relying on stored `photographers.stats` (which may be stale).
-      const activeProducts = allProducts.filter((product) => (product.status ?? 'published') !== 'removed');
       const publishedProducts = allProducts.filter((product) => (product.status ?? 'published') === 'published');
-      const activeProductIds = new Set(activeProducts.map((product) => product.id));
+      const activeProducts = allProducts.filter((product) => (product.status ?? 'published') !== 'removed');
+      const publishedProductIds = new Set(publishedProducts.map((product) => product.id));
       const itemsByPhotographer = new Map<string, { photos: number; videos: number; orders: Set<string>; revenue: number }>();
-      for (const product of activeProducts) {
+      for (const product of publishedProducts) {
         const entry = itemsByPhotographer.get(product.vendedorId) ?? { photos: 0, videos: 0, orders: new Set<string>(), revenue: 0 };
         if (product.type === 'IMG') entry.photos += 1;
         if (product.type === 'VIDEO' || product.type === 'VIEW') entry.videos += 1;
@@ -1229,7 +1229,7 @@ function AdminRoute() {
       for (const order of allOrders) {
         if (order.status !== 'paid') continue;
         for (const item of order.items ?? []) {
-          if (!activeProductIds.has(item.productId)) continue;
+          if (!publishedProductIds.has(item.productId)) continue;
           const entry = itemsByPhotographer.get(item.vendedorId) ?? { photos: 0, videos: 0, orders: new Set<string>(), revenue: 0 };
           entry.orders.add(order.id);
           entry.revenue += Number(item.price || 0);
@@ -1269,11 +1269,11 @@ function AdminRoute() {
         paidOrders: paidOrders.length,
         pendingOrders: pendingOrders.length,
         totalOrders: allOrders.length,
-        totalProducts: activeProducts.length,
+        totalProducts: publishedProducts.length,
         publishedProducts: publishedProducts.length,
         removedProducts: removedProducts.length,
-        photoCount: activeProducts.filter((product) => product.type === 'IMG').length,
-        videoCount: activeProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+        photoCount: publishedProducts.filter((product) => product.type === 'IMG').length,
+        videoCount: publishedProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
       });
     } catch (error) {
       console.error("Error loading admin data:", error);

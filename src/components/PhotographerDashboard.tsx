@@ -361,6 +361,53 @@ function formatUploadErrorMessage(message: string) {
   return message;
 }
 
+function waitForPreviewReady(file: File, previewUrl: string): Promise<void> {
+  if (file.type.startsWith('video')) {
+    return new Promise((resolve) => {
+      const video = document.createElement('video');
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        cleanup();
+        resolve();
+      };
+      const cleanup = () => {
+        video.removeAttribute('src');
+        video.load();
+      };
+      const timeout = window.setTimeout(finish, 12000);
+
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.onloadedmetadata = finish;
+      video.onerror = finish;
+      video.src = previewUrl;
+    });
+  }
+
+  if (file.type.startsWith('image')) {
+    return new Promise((resolve) => {
+      const image = new Image();
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        resolve();
+      };
+      const timeout = window.setTimeout(finish, 12000);
+      image.onload = finish;
+      image.onerror = finish;
+      image.src = previewUrl;
+    });
+  }
+
+  return Promise.resolve();
+}
+
 async function generateMediaThumbnail(file: File): Promise<File | null> {
   return file.type.startsWith('image')
     ? generateImageThumbnail(file)
@@ -376,6 +423,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [productPerformance, setProductPerformance] = useState<PhotographerProductPerformance[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [publishProgress, setPublishProgress] = useState({ done: 0, total: 0 });
+  const [isPreparingFiles, setIsPreparingFiles] = useState(false);
+  const [filePrepareProgress, setFilePrepareProgress] = useState({ done: 0, total: 0 });
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
   const [withdrawalPixKey, setWithdrawalPixKey] = useState(photographer.cpf ?? '');
   const [withdrawalError, setWithdrawalError] = useState('');
@@ -563,6 +614,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     .filter((withdrawal) => withdrawal.status === 'paid')
     .reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
   const monthlyGoalPercent = Math.min(100, Math.round((periodMetrics.monthlyEarnings / periodMetrics.monthlyGoal) * 100));
+  const filePreparePercent = filePrepareProgress.total > 0
+    ? Math.round((filePrepareProgress.done / filePrepareProgress.total) * 100)
+    : 100;
+  const publishPercent = publishProgress.total > 0
+    ? Math.round((publishProgress.done / publishProgress.total) * 100)
+    : 0;
+  const canPublishSelectedFiles = selectedFiles.length > 0 && !isLoading && !isPreparingFiles && !isPublishing;
 
   React.useEffect(() => {
     async function loadPhotographerContent() {
@@ -624,25 +682,39 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const defaultBatchPrice = Number(batchPriceInput);
-      const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
-      const newFiles = Array.from(e.target.files).map((file: File) => ({
-        file,
-        price: resolvedPrice,
-        name: file.name,
-        description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
-        bib: '',
-        previewUrl: URL.createObjectURL(file)
-      }));
-      setSelectedFiles((current) => {
-        if (current.length === 0 && newFiles.length > 0) {
-          setPreviewIndex(0);
-        }
-        return [...current, ...newFiles];
-      });
-      e.target.value = '';
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    e.target.value = '';
+    if (files.length === 0) return;
+
+    const defaultBatchPrice = Number(batchPriceInput);
+    const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
+    const newFiles: UploadItem[] = files.map((file: File) => ({
+      file,
+      price: resolvedPrice,
+      name: file.name,
+      description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
+      bib: '',
+      previewUrl: URL.createObjectURL(file)
+    }));
+
+    setSelectedFiles((current) => {
+      if (current.length === 0 && newFiles.length > 0) {
+        setPreviewIndex(0);
+      }
+      return [...current, ...newFiles];
+    });
+
+    setIsPreparingFiles(true);
+    setFilePrepareProgress({ done: 0, total: newFiles.length });
+
+    try {
+      for (const [index, item] of newFiles.entries()) {
+        await waitForPreviewReady(item.file, item.previewUrl);
+        setFilePrepareProgress({ done: index + 1, total: newFiles.length });
+      }
+    } finally {
+      setIsPreparingFiles(false);
     }
   };
 
@@ -651,6 +723,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setSelectedFiles([]);
     setBatchPriceInput('19.90');
     setPreviewIndex(0);
+    setIsPreparingFiles(false);
+    setFilePrepareProgress({ done: 0, total: 0 });
+    setPublishProgress({ done: 0, total: 0 });
   };
 
   const updateSelectedFile = (index: number, changes: Partial<Pick<UploadItem, 'price' | 'description' | 'bib'>>) => {
@@ -749,7 +824,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     const shouldRemove = window.confirm('Remover este produto? Ele nao aparecera mais no painel nem na vitrine.');
     if (!shouldRemove) return;
 
-    setIsLoading(true);
+    setIsPublishing(true);
+    setPublishProgress({ done: 0, total: selectedFiles.length });
     try {
       await productService.removeProduct(product.id);
       setProducts((current) => current.filter((item) => item.id !== product.id));
@@ -796,7 +872,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         return;
       }
 
-      for (const item of selectedFiles) {
+      let publishedCount = 0;
+      const failedUploads: Array<{ index: number; name: string; message: string }> = [];
+
+      for (const [index, item] of selectedFiles.entries()) {
         try {
           const uploadFile = await prepareImageForUpload(item.file);
           const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile);
@@ -818,13 +897,24 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             storagePath: uploadedFile.path,
             status: 'published'
           });
+          publishedCount += 1;
+          setPublishProgress({ done: index + 1, total: selectedFiles.length });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
           const friendlyMessage = /sess[aã]o expirada/i.test(message)
             ? 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.'
             : message;
-          throw new Error(`Falha ao publicar "${item.name}": ${formatUploadErrorMessage(friendlyMessage)}`);
+          failedUploads.push({
+            index,
+            name: item.name,
+            message: formatUploadErrorMessage(friendlyMessage),
+          });
+          setPublishProgress({ done: index + 1, total: selectedFiles.length });
         }
+      }
+
+      if (publishedCount === 0 && failedUploads.length > 0) {
+        throw new Error(`Nenhum arquivo foi publicado. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
       }
       
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
@@ -834,19 +924,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setDashboardMetrics(dashboard.metrics);
       setRecentSales(dashboard.recentSales);
       setProductPerformance(dashboard.productPerformance);
-      clearSelectedFiles();
-      setPreviewIndex(0);
-      setShowUploadModal(false);
-      alert("Upload realizado com sucesso!");
+      if (failedUploads.length > 0) {
+        const failedIndexes = new Set(failedUploads.map((failure) => failure.index));
+        setSelectedFiles((current) => current.filter((_, index) => failedIndexes.has(index)));
+        setPreviewIndex(0);
+        alert(`Upload parcial: ${publishedCount} publicado(s), ${failedUploads.length} falharam. Os arquivos com falha ficaram selecionados para tentar novamente. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
+      } else {
+        clearSelectedFiles();
+        setPreviewIndex(0);
+        setShowUploadModal(false);
+        alert(`Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s).`);
+      }
     } catch (error) {
       console.error("Erro no upload:", error);
       alert(error instanceof Error ? error.message : "Erro ao realizar upload.");
     } finally {
-      setIsLoading(false);
+      setIsPublishing(false);
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !isPublishing) {
     return (
       <div className="min-h-screen bg-[#080d14] flex flex-col items-center justify-center p-6">
         <Loader2 className="w-12 h-12 text-brutal-accent animate-spin mb-4" />
@@ -1815,6 +1912,27 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     </div>
 
                     <h4 className="font-mono text-[10px] uppercase font-bold text-gray-500">Arquivos Selecionados ({selectedFiles.length})</h4>
+                    <div className="bg-[#080d14] border border-white/10 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                          {isPreparingFiles ? 'Analisando previews' : 'Arquivos prontos'}
+                        </span>
+                        <span className="font-mono text-[10px] uppercase font-bold text-white">
+                          {filePreparePercent}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-[#05080d] border border-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-brutal-accent transition-all duration-300"
+                          style={{ width: `${filePreparePercent}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
+                        {isPreparingFiles
+                          ? `${filePrepareProgress.done} de ${filePrepareProgress.total} arquivo(s) carregados para revisao.`
+                          : `${selectedFiles.length} arquivo(s) carregados. Voce ja pode publicar.`}
+                      </p>
+                    </div>
                     <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
                        {selectedFiles.map((item, idx) => (
                          <div
@@ -1974,12 +2092,42 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
 
                 <div className="pt-5 border-t border-white/10">
+                  {(isPublishing || publishProgress.total > 0) && (
+                    <div className="mb-4 bg-[#0d131c] border border-white/10 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-3">
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                          {isPublishing ? 'Publicando lote' : 'Ultimo envio'}
+                        </span>
+                        <span className="font-mono text-[10px] uppercase font-bold text-white">
+                          {publishPercent}%
+                        </span>
+                      </div>
+                      <div className="h-2 bg-[#05080d] border border-white/10 overflow-hidden">
+                        <div
+                          className="h-full bg-green-500 transition-all duration-300"
+                          style={{ width: `${publishPercent}%` }}
+                        />
+                      </div>
+                      <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
+                        {publishProgress.done} de {publishProgress.total} arquivo(s) processados.
+                      </p>
+                    </div>
+                  )}
                   <button 
-                    disabled={selectedFiles.length === 0 || isLoading}
+                    disabled={!canPublishSelectedFiles}
                     onClick={handleUpload}
                     className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
-                    {isLoading ? <Loader2 className="w-6 h-6 animate-spin mx-auto" /> : `Publicar ${selectedFiles.length || ''} Produto${selectedFiles.length === 1 ? '' : 's'}`}
+                    {isPublishing ? (
+                      <span className="inline-flex items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Publicando {publishPercent}%
+                      </span>
+                    ) : isPreparingFiles ? (
+                      `Analisando ${filePreparePercent}%`
+                    ) : (
+                      `Publicar ${selectedFiles.length || ''} Produto${selectedFiles.length === 1 ? '' : 's'}`
+                    )}
                   </button>
                   <button 
                     onClick={() => {

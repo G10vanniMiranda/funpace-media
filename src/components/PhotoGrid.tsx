@@ -1,5 +1,5 @@
 import { Check, Heart, Plus, Share2, ThumbsUp } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
 
@@ -17,6 +17,9 @@ interface PhotoGridProps {
   onToggleLike?: (photo: Product) => void;
 }
 
+const initialVisiblePhotos = 48;
+const visiblePhotosStep = 48;
+
 export function PhotoGrid({ 
   title, 
   subtitle, 
@@ -32,6 +35,13 @@ export function PhotoGrid({
 }: PhotoGridProps) {
   const isInCart = (id: string) => cartItems.some(item => item.id === id);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [visibleCount, setVisibleCount] = useState(initialVisiblePhotos);
+  const visiblePhotos = useMemo(() => photos.slice(0, visibleCount), [photos, visibleCount]);
+  const remainingPhotos = Math.max(0, photos.length - visiblePhotos.length);
+
+  useEffect(() => {
+    setVisibleCount(initialVisiblePhotos);
+  }, [photos]);
 
   const sharePhoto = async (photo: Product) => {
     const url = createProductShareUrl(photo.id);
@@ -84,12 +94,19 @@ export function PhotoGrid({
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-        {photos.map(photo => (
-          <div key={photo.id} className="group relative">
+        {visiblePhotos.map((photo, index) => (
+          <div
+            key={photo.id}
+            className="group relative"
+            style={{ contentVisibility: 'auto', containIntrinsicSize: '360px 560px' }}
+          >
             <div className="aspect-[3/4] bg-gray-200 brutal-border overflow-hidden relative brutal-shadow transition-transform duration-300">
               <img 
                 src={photo.thumbnailUrl || photo.url} 
                 alt={photo.id} 
+                loading={index < 8 ? 'eager' : 'lazy'}
+                decoding="async"
+                sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" 
               />
               
@@ -204,6 +221,18 @@ export function PhotoGrid({
           </div>
         ))}
       </div>
+
+      {remainingPhotos > 0 && (
+        <div className="mt-10 flex justify-center">
+          <button
+            type="button"
+            onClick={() => setVisibleCount((current) => current + visiblePhotosStep)}
+            className="min-h-12 px-6 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors"
+          >
+            Carregar mais {Math.min(remainingPhotos, visiblePhotosStep)} de {remainingPhotos}
+          </button>
+        </div>
+      )}
     </section>
   );
 }

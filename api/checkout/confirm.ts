@@ -1,4 +1,12 @@
 function setCors(req: any, res: any) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+
   const allowedOrigins = new Set([
     'https://funpace.media',
     'https://www.funpace.media',
@@ -16,10 +24,32 @@ function setCors(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 }
 
+function isTrustedOrigin(req: any) {
+  const allowedOrigins = new Set([
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+  if (origin) return allowedOrigins.has(origin);
+
+  try {
+    const refererOrigin = new URL(String(req.headers.referer || '')).origin.replace(/\/+$/, '');
+    return !refererOrigin || allowedOrigins.has(refererOrigin);
+  } catch {
+    return true;
+  }
+}
+
 function handleOptions(req: any, res: any) {
   setCors(req, res);
   if (req.method === 'OPTIONS') {
     res.status(204).end();
+    return true;
+  }
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase()) && !isTrustedOrigin(req)) {
+    res.status(403).json({ error: 'Origem nao autorizada.' });
     return true;
   }
   return false;

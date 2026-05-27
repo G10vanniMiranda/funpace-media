@@ -1,4 +1,12 @@
 function setCors(req: any, res: any) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+
   const origins = new Set([
     'https://funpace.media',
     'https://www.funpace.media',
@@ -14,6 +22,24 @@ function setCors(req: any, res: any) {
   res.setHeader('Vary', 'Origin');
   res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+function isTrustedOrigin(req: any) {
+  const origins = new Set([
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+  if (origin) return origins.has(origin);
+
+  try {
+    const refererOrigin = new URL(String(req.headers.referer || '')).origin.replace(/\/+$/, '');
+    return !refererOrigin || origins.has(refererOrigin);
+  } catch {
+    return true;
+  }
 }
 
 function getJsonBody(req: any) {
@@ -134,7 +160,15 @@ export default async function handler(req: any, res: any) {
     return res.status(204).end();
   }
 
+  if (!isTrustedOrigin(req)) {
+    return res.status(403).json({ error: 'Origem nao autorizada.' });
+  }
+
   if (req.method === 'GET') {
+    if (process.env.ENABLE_PUBLIC_DIAGNOSTICS !== 'true') {
+      return res.status(404).json({ error: 'Endpoint indisponivel.' });
+    }
+
     return res.status(200).json({
       ok: true,
       env: {

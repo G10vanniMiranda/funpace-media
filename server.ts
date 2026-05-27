@@ -15,11 +15,68 @@ const PORT = Number(process.env.PORT || 3000);
 const { Pool } = pg;
 
 app.disable("x-powered-by");
+app.set("trust proxy", 1);
+
+type RateLimitBucket = {
+  count: number;
+  resetAt: number;
+};
+
+const rateLimitBuckets = new Map<string, RateLimitBucket>();
+
+function getClientIp(req: express.Request) {
+  const forwarded = String(req.header("x-forwarded-for") || "").split(",")[0]?.trim();
+  return forwarded || req.ip || req.socket.remoteAddress || "unknown";
+}
+
+function getSecurityCsp() {
+  const mediaBaseUrl = process.env.MEDIA_PUBLIC_BASE_URL || process.env.VITE_MEDIA_PUBLIC_BASE_URL || "";
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
+  const connectSources = [
+    "'self'",
+    "https://api.checkout.infinitepay.io",
+    "https://checkout.infinitepay.io",
+    "https://*.infinitepay.io",
+    "https://99dev.pro",
+    supabaseUrl,
+    mediaBaseUrl,
+  ].filter(Boolean).join(" ");
+  const imageSources = [
+    "'self'",
+    "data:",
+    "blob:",
+    "https:",
+    mediaBaseUrl,
+  ].filter(Boolean).join(" ");
+
+  return [
+    "default-src 'self'",
+    "base-uri 'self'",
+    "object-src 'none'",
+    "frame-ancestors 'none'",
+    `connect-src ${connectSources}`,
+    `img-src ${imageSources}`,
+    "media-src 'self' blob: data: https:",
+    "font-src 'self' data:",
+    "style-src 'self' 'unsafe-inline'",
+    "script-src 'self'",
+    "form-action 'self' https://*.infinitepay.io",
+    "upgrade-insecure-requests",
+  ].join("; ");
+}
+
 app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Frame-Options", "DENY");
   res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+  res.setHeader("Cross-Origin-Resource-Policy", "same-site");
+  res.setHeader("Origin-Agent-Cluster", "?1");
+  res.setHeader("Content-Security-Policy", getSecurityCsp());
+  if (process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
+  }
   next();
 });
 
@@ -37,6 +94,62 @@ function getAllowedOrigins() {
 
 const allowedOrigins = getAllowedOrigins();
 
+function isAllowedRequestOrigin(value: string) {
+  try {
+    const origin = new URL(value).origin.replace(/\/+$/, "");
+    return allowedOrigins.has(origin);
+  } catch {
+    return false;
+  }
+}
+
+function rejectUntrustedBrowserOrigin(req: express.Request, res: express.Response, next: express.NextFunction) {
+  if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) {
+    next();
+    return;
+  }
+
+  const origin = req.header("origin");
+  const referer = req.header("referer");
+
+  if ((origin && !isAllowedRequestOrigin(origin)) || (!origin && referer && !isAllowedRequestOrigin(referer))) {
+    res.status(403).json({ error: "Origem nao autorizada." });
+    return;
+  }
+
+  next();
+}
+
+function createRateLimiter(options: { windowMs: number; max: number; keyPrefix: string }) {
+  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const now = Date.now();
+    const key = `${options.keyPrefix}:${getClientIp(req)}`;
+    const bucket = rateLimitBuckets.get(key);
+
+    if (!bucket || bucket.resetAt <= now) {
+      rateLimitBuckets.set(key, { count: 1, resetAt: now + options.windowMs });
+      next();
+      return;
+    }
+
+    bucket.count += 1;
+    if (bucket.count > options.max) {
+      res.setHeader("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
+      res.status(429).json({ error: "Muitas tentativas. Aguarde e tente novamente." });
+      return;
+    }
+
+    next();
+  };
+}
+
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, bucket] of rateLimitBuckets.entries()) {
+    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
+  }
+}, 60_000).unref();
+
 app.use(cors({
   origin(origin, callback) {
     const normalizedOrigin = origin?.replace(/\/+$/, "");
@@ -51,9 +164,23 @@ app.use(cors({
 }));
 
 app.use(express.json({
+  limit: process.env.JSON_BODY_LIMIT || "200kb",
   verify: (req, _res, buffer) => {
     (req as express.Request & { rawBody?: Buffer }).rawBody = Buffer.from(buffer);
   },
+}));
+
+app.use(rejectUntrustedBrowserOrigin);
+app.use("/api", createRateLimiter({ keyPrefix: "api", windowMs: 15 * 60 * 1000, max: 900 }));
+app.use(["/api/checkout", "/api/downloads", "/api/photographers"], createRateLimiter({
+  keyPrefix: "sensitive",
+  windowMs: 60 * 1000,
+  max: 60,
+}));
+app.use(["/api/media/upload", "/api/media/sign"], createRateLimiter({
+  keyPrefix: "media",
+  windowMs: 60 * 1000,
+  max: 30,
 }));
 
 function getDbConfig() {
@@ -1285,7 +1412,7 @@ app.post("/api/checkout/confirm", async (req, res) => {
 
 app.post("/api/media/upload", express.raw({
   type: ["image/*", "video/*", "application/octet-stream"],
-  limit: process.env.MEDIA_UPLOAD_LIMIT || "500mb",
+  limit: process.env.MEDIA_UPLOAD_LIMIT || "25mb",
 }), async (req, res) => {
   const authUser = await getAuthenticatedRequestUser(req);
   const storagePath = decodeHeaderValue(req.header("x-storage-path"));

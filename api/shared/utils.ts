@@ -1,10 +1,77 @@
-export function setCors(req: any, res: any) {
-  const allowedOrigins = new Set([
+type RateLimitBucket = {
+  count: number;
+  resetAt: number;
+};
+
+const rateLimitBuckets = new Map<string, RateLimitBucket>();
+
+function getAllowedOrigins() {
+  return new Set([
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
     ...(process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+}
+
+function getRequestOrigin(value: string) {
+  try {
+    return new URL(value).origin.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function isTrustedBrowserOrigin(req: any) {
+  const allowedOrigins = getAllowedOrigins();
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+  const refererOrigin = getRequestOrigin(String(req.headers.referer || ''));
+
+  if (origin) return allowedOrigins.has(origin);
+  if (refererOrigin) return allowedOrigins.has(refererOrigin);
+  return true;
+}
+
+function getClientIp(req: any) {
+  return String(req.headers['x-forwarded-for'] || '').split(',')[0]?.trim() ||
+    String(req.socket?.remoteAddress || req.connection?.remoteAddress || 'unknown');
+}
+
+function rateLimitRequest(req: any, res: any) {
+  const windowMs = 15 * 60 * 1000;
+  const max = Number(process.env.API_RATE_LIMIT_MAX || 450);
+  const now = Date.now();
+  const key = `${getClientIp(req)}:${String(req.url || req.headers.host || 'api')}`;
+  const bucket = rateLimitBuckets.get(key);
+
+  if (!bucket || bucket.resetAt <= now) {
+    rateLimitBuckets.set(key, { count: 1, resetAt: now + windowMs });
+    return false;
+  }
+
+  bucket.count += 1;
+  if (bucket.count <= max) return false;
+
+  res.setHeader('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
+  res.status(429).json({ error: 'Muitas tentativas. Aguarde e tente novamente.' });
+  return true;
+}
+
+function setSecurityHeaders(res: any) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin');
+  res.setHeader('Origin-Agent-Cluster', '?1');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+}
+
+export function setCors(req: any, res: any) {
+  setSecurityHeaders(res);
+  const allowedOrigins = getAllowedOrigins();
   const origin = String(req.headers.origin || '').replace(/\/+$/, '');
 
   if (origin && allowedOrigins.has(origin)) {
@@ -22,6 +89,16 @@ export function handleOptions(req: any, res: any) {
     res.status(204).end();
     return true;
   }
+
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase()) && !isTrustedBrowserOrigin(req)) {
+    res.status(403).json({ error: 'Origem nao autorizada.' });
+    return true;
+  }
+
+  if (rateLimitRequest(req, res)) {
+    return true;
+  }
+
   return false;
 }
 

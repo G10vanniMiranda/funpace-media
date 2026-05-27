@@ -8,6 +8,35 @@ const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
 const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || 'https://99dev.pro/bucket/api').replace(/\/+$/, '');
 const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || '';
+const maxUploadBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 25 * 1024 * 1024);
+
+function setSecurityHeaders(res: any) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  if (process.env.NODE_ENV === 'production') {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
+  }
+}
+
+function isTrustedOrigin(req: any) {
+  const allowedOrigins = new Set([
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+  if (origin) return allowedOrigins.has(origin);
+
+  try {
+    const refererOrigin = new URL(String(req.headers.referer || '')).origin.replace(/\/+$/, '');
+    return !refererOrigin || allowedOrigins.has(refererOrigin);
+  } catch {
+    return true;
+  }
+}
 
 function usesExternalBucket() {
   return mediaStorageProvider === 'external_bucket' || Boolean(process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN);
@@ -61,7 +90,17 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
 function readRequestBuffer(req: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    req.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+    let totalBytes = 0;
+    req.on('data', (chunk: Buffer) => {
+      totalBytes += chunk.length;
+      if (totalBytes > maxUploadBytes) {
+        reject(new Error(`Arquivo excede o limite de ${Math.round(maxUploadBytes / 1024 / 1024)} MB.`));
+        req.destroy();
+        return;
+      }
+
+      chunks.push(Buffer.from(chunk));
+    });
     req.on('end', () => resolve(Buffer.concat(chunks)));
     req.on('error', reject);
   });
@@ -165,6 +204,12 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
 }
 
 export default async function handler(req: any, res: any) {
+  setSecurityHeaders(res);
+
+  if (!isTrustedOrigin(req)) {
+    return res.status(403).json({ error: 'Origem nao autorizada.' });
+  }
+
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }

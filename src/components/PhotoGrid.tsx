@@ -54,9 +54,13 @@ export function PhotoGrid({
       }
     }
 
-    await copyText(url);
-    setCopiedId(photo.id);
-    window.setTimeout(() => setCopiedId((current) => current === photo.id ? null : current), 1800);
+    try {
+      await copyText(url);
+      setCopiedId(photo.id);
+      window.setTimeout(() => setCopiedId((current) => current === photo.id ? null : current), 1800);
+    } catch {
+      window.prompt('Copie o link da midia:', url);
+    }
   };
 
   return (

@@ -768,6 +768,10 @@ function Storefront() {
               cartItems={cart}
               activeView={activeView}
               onViewChange={setActiveView}
+              favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+              likedIds={likedProductIds}
+              onToggleFavorite={handleToggleFavorite}
+              onToggleLike={handleToggleLike}
             />
           ))}
 

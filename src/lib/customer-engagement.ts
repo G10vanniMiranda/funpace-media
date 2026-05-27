@@ -43,8 +43,12 @@ export function createProductShareUrl(productId: string) {
 
 export async function copyText(value: string) {
   if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(value);
-    return;
+    try {
+      await navigator.clipboard.writeText(value);
+      return;
+    } catch {
+      // Some browsers block clipboard outside strict user-activation contexts.
+    }
   }
 
   const input = document.createElement('textarea');
@@ -52,8 +56,14 @@ export async function copyText(value: string) {
   input.setAttribute('readonly', 'true');
   input.style.position = 'fixed';
   input.style.opacity = '0';
+  input.style.pointerEvents = 'none';
   document.body.appendChild(input);
+  input.focus();
   input.select();
-  document.execCommand('copy');
+  const copied = document.execCommand('copy');
   input.remove();
+
+  if (!copied) {
+    throw new Error('Nao foi possivel copiar o link automaticamente.');
+  }
 }

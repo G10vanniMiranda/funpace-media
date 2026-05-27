@@ -1956,9 +1956,13 @@ async function setupViteAndListen() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor rodando em http://localhost:${PORT}`);
   });
+
+  server.requestTimeout = Number(process.env.SERVER_REQUEST_TIMEOUT_MS || 20 * 60 * 1000);
+  server.headersTimeout = Number(process.env.SERVER_HEADERS_TIMEOUT_MS || 21 * 60 * 1000);
+  server.keepAliveTimeout = Number(process.env.SERVER_KEEP_ALIVE_TIMEOUT_MS || 65 * 1000);
 }
 
 if (!process.env.VERCEL) {

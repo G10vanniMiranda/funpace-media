@@ -1,7 +1,8 @@
 import React from 'react';
-import { Play, Pause, ShoppingCart, Check, Expand, Clock, MapPin } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { Play, ShoppingCart, Check, Clock, MapPin, Heart, Share2, ThumbsUp } from 'lucide-react';
+import { motion } from 'motion/react';
 import { Product } from '../types';
+import { copyText, createProductShareUrl } from '../lib/customer-engagement';
 
 interface VideoGridProps {
   videos: Product[];
@@ -9,10 +10,45 @@ interface VideoGridProps {
   cartItems: Product[];
   activeView?: 'photos' | 'videos';
   onViewChange?: (view: 'photos' | 'videos') => void;
+  favoriteIds?: Set<string>;
+  likedIds?: Set<string>;
+  onToggleFavorite?: (video: Product) => void;
+  onToggleLike?: (video: Product) => void;
 }
 
-export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewChange }: VideoGridProps) {
+export function VideoGrid({
+  videos,
+  onAddToCart,
+  cartItems,
+  activeView,
+  onViewChange,
+  favoriteIds = new Set(),
+  likedIds = new Set(),
+  onToggleFavorite,
+  onToggleLike,
+}: VideoGridProps) {
   const isVideoInCart = (id: string) => cartItems.some(item => item.id === id);
+  const [copiedId, setCopiedId] = React.useState<string | null>(null);
+
+  const shareVideo = async (video: Product) => {
+    const url = createProductShareUrl(video.id);
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: video.name, text: `${video.event} - peito ${video.bib}`, url });
+        return;
+      } catch {
+        // Fallback to clipboard when native sharing is cancelled or unavailable.
+      }
+    }
+
+    try {
+      await copyText(url);
+      setCopiedId(video.id);
+      window.setTimeout(() => setCopiedId((current) => current === video.id ? null : current), 1800);
+    } catch {
+      window.prompt('Copie o link da midia:', url);
+    }
+  };
 
   return (
     <section className="max-w-350 mx-auto px-6 py-12 md:py-20">
@@ -76,6 +112,29 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
                 4K UHD
               </div>
 
+              <div className="absolute top-4 right-4 z-10 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => onToggleFavorite?.(video)}
+                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${favoriteIds.has(video.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
+                    }`}
+                  title={favoriteIds.has(video.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
+                  aria-label={favoriteIds.has(video.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
+                >
+                  <Heart className={`w-4 h-4 ${favoriteIds.has(video.id) ? 'fill-current' : ''}`} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onToggleLike?.(video)}
+                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${likedIds.has(video.id) ? 'bg-brutal-black text-white' : 'bg-white text-brutal-black hover:bg-brutal-black hover:text-white'
+                    }`}
+                  title={likedIds.has(video.id) ? 'Remover like' : 'Curtir video'}
+                  aria-label={likedIds.has(video.id) ? 'Remover like' : 'Curtir video'}
+                >
+                  <ThumbsUp className={`w-4 h-4 ${likedIds.has(video.id) ? 'fill-current' : ''}`} />
+                </button>
+              </div>
+
               {/* Play Button Overlay */}
               <div
                 className="absolute inset-0 flex items-center justify-center group/play"
@@ -106,6 +165,15 @@ export function VideoGrid({ videos, onAddToCart, cartItems, activeView, onViewCh
                   <p className="font-display text-2xl text-brutal-accent leading-none">#{video.bib}</p>
                 </div>
               </div>
+
+              <button
+                type="button"
+                onClick={() => shareVideo(video)}
+                className="mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-brutal-accent transition-colors cursor-pointer font-mono text-[10px] uppercase"
+              >
+                <Share2 className="w-4 h-4" />
+                {copiedId === video.id ? 'Link copiado' : 'Compartilhar video'}
+              </button>
 
               <div className="flex items-center justify-between pt-4 border-t border-gray-100">
                 <div className="space-y-1">

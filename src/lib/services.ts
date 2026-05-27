@@ -141,7 +141,8 @@ async function uploadMediaFile(path: string, file: File) {
     });
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error || 'falha de rede');
-    throw new Error(`Nao foi possivel conectar ao servidor de upload (${uploadUrl}). Verifique se VITE_API_URL/API_URL apontam para o backend ativo e se CORS/CSP permitem www.funpace.media. Detalhe: ${detail || 'falha de rede'}`);
+    const fileSizeMb = Math.ceil(file.size / 1024 / 1024);
+    throw new Error(`Nao foi possivel concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. A API respondeu nos testes pequenos, entao em videos grandes verifique o limite do proxy/Nginx (client_max_body_size 300m), timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=300mb. Detalhe: ${detail || 'falha de rede'}`);
   }
 
   const raw = await response.text();

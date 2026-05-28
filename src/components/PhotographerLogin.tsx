@@ -6,6 +6,7 @@ import { photographerService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { loginWithEmail, registerWithEmail } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
+import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 
 interface PhotographerLoginProps {
   onLoginSuccess: (photographer: Photographer) => void;
@@ -17,6 +18,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
+  const [phone, setPhone] = useState('');
   const [cpf, setCpf] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -29,6 +31,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
     email: string;
     name: string;
     bio: string;
+    phone: string;
     cpf: string;
     avatar: string;
   }) {
@@ -83,6 +86,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
     try {
       if (isRegistering) {
+        const phoneDigits = onlyWhatsappDigits(phone);
+        if (phoneDigits.length < 10) {
+          setError('Telefone invalido.');
+          return;
+        }
+
         if (!isValidCpf(cpf)) {
           setError('CPF invalido.');
           return;
@@ -93,6 +102,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             name,
             email,
             bio,
+            phone: phoneDigits,
             cpf: onlyCpfDigits(cpf),
             avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`,
             stats: {
@@ -116,6 +126,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           email,
           name,
           bio,
+          phone: phoneDigits,
           cpf: onlyCpfDigits(cpf),
           avatar: avatarUrl,
         });
@@ -123,7 +134,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         let authUser = null;
         let requiresEmailConfirmation = false;
         try {
-          authUser = await registerWithEmail(email, password, name, onlyCpfDigits(cpf));
+          authUser = await registerWithEmail(email, password, name, onlyCpfDigits(cpf), phoneDigits);
         } catch (registerError: any) {
           const registerMessage = String(registerError?.message || registerError || '');
           if (
@@ -144,6 +155,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             email: authUser.email ?? email,
             name,
             bio,
+            phone: phoneDigits,
             cpf: onlyCpfDigits(cpf),
             avatar: avatarUrl,
           });
@@ -298,6 +310,19 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
                   onChange={(e) => setBio(e.target.value)}
                   placeholder="Conte um pouco sobre seu trabalho..."
                   className="w-full h-24 p-4 bg-gray-50 brutal-border font-mono text-sm focus:bg-white focus:ring-2 focus:ring-brutal-accent outline-none transition-all resize-none"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Telefone</label>
+                <input
+                  type="tel"
+                  required
+                  value={formatWhatsapp(phone)}
+                  onChange={(e) => setPhone(formatWhatsapp(e.target.value))}
+                  placeholder="(00) 90000-0000"
+                  inputMode="tel"
+                  maxLength={16}
+                  className="w-full h-14 px-4 bg-gray-50 brutal-border font-mono text-sm focus:bg-white focus:ring-2 focus:ring-brutal-accent outline-none transition-all"
                 />
               </div>
               <div className="space-y-2">

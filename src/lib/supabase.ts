@@ -24,6 +24,7 @@ export type SupabaseAuthUser = {
     preferred_username?: string;
     avatar_url?: string;
     cpf?: string;
+    phone?: string;
   };
   app_metadata?: {
     role?: string;
@@ -36,6 +37,7 @@ export type AppUser = {
   email: string | null;
   displayName: string | null;
   photoURL: string | null;
+  phone: string | null;
   cpf: string | null;
   emailVerified: boolean;
   role: string | null;
@@ -157,6 +159,7 @@ function toAppUser(user: SupabaseAuthUser | null): AppUser | null {
     // Do not fall back to email here; UI can choose a safe fallback without exposing the full address.
     displayName: metadataName,
     photoURL: user.user_metadata?.avatar_url ?? null,
+    phone: user.user_metadata?.phone ?? null,
     cpf: user.user_metadata?.cpf ?? null,
     emailVerified: true,
     role: user.app_metadata?.role ?? null,
@@ -439,7 +442,7 @@ export const validateGoogleAuth = async () => {
         ? 'Login com Google ainda nao esta habilitado no Supabase. Ative o provider Google em Authentication > Providers.'
         : redirectMismatch
           ? `Google OAuth precisa autorizar a URL de callback: ${payload?.redirectUri || 'confira o redirect URI no Google Cloud.'}`
-        : payload?.error || 'Nao foi possivel validar o login com Google.',
+          : payload?.error || 'Nao foi possivel validar o login com Google.',
     );
   }
 
@@ -592,7 +595,7 @@ export const updateCurrentUserPassword = async (password: string) => {
   return toAppUser(user);
 };
 
-export const updateCurrentUserProfile = async (input: { name?: string; avatarUrl?: string; cpf?: string | null }) => {
+export const updateCurrentUserProfile = async (input: { name?: string; avatarUrl?: string; phone?: string | null; cpf?: string | null }) => {
   assertSupabaseConfig();
 
   const token = await getCurrentAccessToken();
@@ -613,6 +616,7 @@ export const updateCurrentUserProfile = async (input: { name?: string; avatarUrl
         name: input.name,
         full_name: input.name,
         avatar_url: input.avatarUrl,
+        phone: input.phone ?? current?.phone ?? null,
         cpf: input.cpf ?? current?.cpf ?? null,
       },
     }),
@@ -653,13 +657,13 @@ export const loginWithEmail = async (email: string, password: string) => {
   return toAppUser(session.user);
 };
 
-export const registerWithEmail = async (email: string, password: string, name: string, cpf?: string) => {
+export const registerWithEmail = async (email: string, password: string, name: string, cpf?: string, phone?: string | null) => {
   const response = await supabaseFetch<SupabaseSignupResponse>('/auth/v1/signup', {
     method: 'POST',
     body: JSON.stringify({
       email,
       password,
-      data: { name, cpf: cpf || null },
+      data: { name, cpf: cpf || null, phone: phone || null },
     }),
   });
 

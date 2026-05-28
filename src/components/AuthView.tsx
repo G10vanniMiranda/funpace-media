@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { Mail, Lock, User, ArrowRight, X, Loader2 } from 'lucide-react';
 import { loginWithEmail, registerWithEmail, loginWithGoogle, requestPasswordReset } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
+import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 import { motion, AnimatePresence } from 'motion/react';
 import { isGoogleAuthEnabled, isMockMode } from '../lib/config';
 
@@ -17,6 +18,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [cpf, setCpf] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -33,8 +35,10 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
         await loginWithEmail(email, password);
       } else {
         if (!name.trim()) throw new Error('Por favor, informe seu nome.');
+        const phoneDigits = onlyWhatsappDigits(phone);
+        if (phoneDigits.length < 10) throw new Error('Por favor, informe um telefone valido.');
         if (cpf && !isValidCpf(cpf)) throw new Error('CPF invalido.');
-        await registerWithEmail(email, password, name, onlyCpfDigits(cpf));
+        await registerWithEmail(email, password, name, onlyCpfDigits(cpf), phoneDigits);
       }
       onSuccess();
     } catch (err: any) {
@@ -133,6 +137,19 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                   </div>
                 </div>
 
+                <div className="space-y-1">
+                  <label className="font-mono text-[10px] uppercase tracking-widest font-bold">Telefone</label>
+                  <input
+                    type="tel"
+                    value={formatWhatsapp(phone)}
+                    onChange={(e) => setPhone(formatWhatsapp(e.target.value))}
+                    className="w-full h-14 px-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm"
+                    placeholder="(00) 90000-0000"
+                    inputMode="tel"
+                    maxLength={16}
+                    required
+                  />
+                </div>
                 <div className="space-y-1">
                   <label className="font-mono text-[10px] uppercase tracking-widest font-bold">CPF Opcional</label>
                   <input

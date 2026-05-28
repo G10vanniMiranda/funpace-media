@@ -546,6 +546,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [selectedPeriod, setSelectedPeriod] = useState<PhotographerPeriodKey>('week');
   const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
+  const [showPeriodMenu, setShowPeriodMenu] = useState(false);
+  const periodMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<ProductEditForm>({
@@ -558,6 +560,21 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const currentPreview = selectedFiles[previewIndex];
+
+  React.useEffect(() => {
+    if (!showPeriodMenu) return undefined;
+
+    function handleClickOutside(event: MouseEvent) {
+      if (!periodMenuRef.current) return;
+      if (event.target instanceof Node && !periodMenuRef.current.contains(event.target)) {
+        setShowPeriodMenu(false);
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showPeriodMenu]);
+
   const filteredProducts = React.useMemo(() => {
     const normalizedSearch = productSearch.trim().toLowerCase();
 
@@ -1397,12 +1414,69 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
-            <div className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-70">
-              <div className="flex items-center gap-3 min-w-0">
-                <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
-                <span className="font-sans text-sm text-gray-200 truncate">{periodLabel}</span>
-              </div>
-              <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+            <div className="relative" ref={periodMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShowPeriodMenu((current) => !current)}
+                className="h-12 px-4 bg-[#0d131c] border border-white/15 flex items-center justify-between sm:justify-start gap-4 min-w-0 sm:min-w-70"
+                aria-label="Abrir seletor de periodo"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <CalendarDays className="w-4 h-4 text-gray-400 shrink-0" />
+                  <span className="font-sans text-sm text-gray-200 truncate">{periodLabel}</span>
+                </div>
+                <ChevronDown className="w-4 h-4 text-gray-500 shrink-0" />
+              </button>
+
+              <AnimatePresence>
+                {showPeriodMenu && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    className="absolute right-0 mt-3 w-[min(24rem,100vw)] max-w-full rounded-xl border border-white/10 bg-[#0d131c] p-4 shadow-2xl shadow-black/50 z-20"
+                  >
+                    <div className="flex flex-wrap gap-2">
+                      {PHOTOGRAPHER_PERIOD_OPTIONS.map(({ key, label }) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => {
+                            setSelectedPeriod(key);
+                            if (key !== 'custom') {
+                              setShowPeriodMenu(false);
+                            }
+                          }}
+                          className={`h-10 px-4 border font-sans text-xs font-bold transition-colors ${selectedPeriod === key
+                            ? 'bg-brutal-accent/20 border-brutal-accent text-white'
+                            : 'bg-white/5 border-white/10 text-gray-300 hover:border-white/30'
+                            }`}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                    {selectedPeriod === 'custom' && (
+                      <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <input
+                          type="date"
+                          value={customPeriodStart}
+                          onChange={(event) => setCustomPeriodStart(event.target.value)}
+                          className="h-10 px-3 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs outline-none focus:border-brutal-accent"
+                          aria-label="Data inicial"
+                        />
+                        <input
+                          type="date"
+                          value={customPeriodEnd}
+                          onChange={(event) => setCustomPeriodEnd(event.target.value)}
+                          className="h-10 px-3 bg-[#080d14] border border-white/15 text-gray-200 font-mono text-xs outline-none focus:border-brutal-accent"
+                          aria-label="Data final"
+                        />
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
             <div className="relative">
               <button

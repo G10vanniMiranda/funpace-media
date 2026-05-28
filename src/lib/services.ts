@@ -954,6 +954,8 @@ export const photographerDashboardService = {
     }
 
     const orderIds = Array.from(new Set(saleItems.map((item) => item.orderId).filter(Boolean)));
+    // Photographers can fetch their own sales via order_items, but orders are row-level secured too.
+    // The database policy must allow a vendor to read orders linked to their own order_items.
     const orderParams = new URLSearchParams({
       select: 'id,status,createdAt,updatedAt',
       id: postgrestIn(orderIds),

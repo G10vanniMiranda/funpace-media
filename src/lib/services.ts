@@ -92,6 +92,14 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+function quotePostgrestString(value: string) {
+  return `"${String(value).replace(/"/g, '\\"')}"`;
+}
+
+function postgrestIn(values: string[]) {
+  return `in.(${values.map(quotePostgrestString).join(',')})`;
+}
+
 function mediaPathKey(value?: string | null) {
   return value || '';
 }
@@ -252,7 +260,7 @@ async function attachOrderItems(orders: SupabaseRow<Order>[], useAuth: boolean):
   const orderIds = orders.map((order) => order.id);
   const params = new URLSearchParams({
     select: '*',
-    orderId: `in.(${orderIds.join(',')})`,
+    orderId: postgrestIn(orderIds),
     order: 'createdAt.asc',
   });
   const items = await supabaseRest.get<SupabaseRow<OrderItem>[]>(`/rest/v1/order_items?${params.toString()}`, useAuth);
@@ -948,7 +956,7 @@ export const photographerDashboardService = {
     const orderIds = Array.from(new Set(saleItems.map((item) => item.orderId).filter(Boolean)));
     const orderParams = new URLSearchParams({
       select: 'id,status,createdAt,updatedAt',
-      id: `in.(${orderIds.join(',')})`,
+      id: postgrestIn(orderIds),
     });
     const relatedOrders = await supabaseRest.get<SupabaseRow<Pick<Order, 'id' | 'status' | 'createdAt' | 'updatedAt'>>[]>(
       `/rest/v1/orders?${orderParams.toString()}`,

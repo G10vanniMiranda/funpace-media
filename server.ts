@@ -182,10 +182,15 @@ app.use(["/api/checkout", "/api/downloads", "/api/photographers"], createRateLim
   windowMs: 60 * 1000,
   max: 60,
 }));
-app.use(["/api/media/upload", "/api/media/sign"], createRateLimiter({
-  keyPrefix: "media",
+app.use(["/api/media/upload"], createRateLimiter({
+  keyPrefix: "media-upload",
   windowMs: 60 * 1000,
-  max: 30,
+  max: 300,
+}));
+app.use(["/api/media/sign"], createRateLimiter({
+  keyPrefix: "media-sign",
+  windowMs: 60 * 1000,
+  max: 60,
 }));
 app.use(["/api/products"], createRateLimiter({
   keyPrefix: "product-engagement",

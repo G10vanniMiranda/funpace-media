@@ -88,6 +88,10 @@ function createPublicMediaUrl(rawPathOrUrl?: string | null) {
   return value;
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
+
 function mediaPathKey(value?: string | null) {
   return value || '';
 }
@@ -145,31 +149,69 @@ async function uploadMediaFile(path: string, file: File) {
     throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
   }
 
-  let response: Response;
   const uploadUrl = apiUrl('/api/media/upload');
-  try {
-    response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': file.type || 'application/octet-stream',
-        'X-File-Name': encodeURIComponent(file.name),
-        'X-Storage-Path': encodeURIComponent(path),
-      },
-      body: file,
-    });
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error || 'falha de rede');
-    const fileSizeMb = Math.ceil(file.size / 1024 / 1024);
-    const limitMb = Math.round(clientUploadLimitBytes / 1024 / 1024);
-    const likelyProxyDrop = /failed to fetch|networkerror|load failed/i.test(detail);
-    const diagnostic = likelyProxyDrop
-      ? `O navegador nao recebeu resposta HTTP da API. Isso costuma acontecer quando o proxy/Nginx ativo encerra o upload antes do backend, por limite de corpo ou timeout. Confira o server block ativo de api.funpace.media com client_max_body_size ${limitMb}m, proxy_read_timeout/proxy_send_timeout altos, proxy_request_buffering off e reinicie/reload do Nginx e do backend.`
-      : `Verifique o limite do proxy/Nginx, timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=${limitMb}mb.`;
-    throw new Error(`Nao foi possivel concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. ${diagnostic} Detalhe: ${detail || 'falha de rede'}`);
-  }
+  const maxRetries = 3;
+  let attempt = 0;
 
-  const raw = await response.text();
+  while (true) {
+    attempt += 1;
+    let response: Response;
+    try {
+      response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': file.type || 'application/octet-stream',
+          'X-File-Name': encodeURIComponent(file.name),
+          'X-Storage-Path': encodeURIComponent(path),
+        },
+        body: file,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error || 'falha de rede');
+      const fileSizeMb = Math.ceil(file.size / 1024 / 1024);
+      const limitMb = Math.round(clientUploadLimitBytes / 1024 / 1024);
+      const likelyProxyDrop = /failed to fetch|networkerror|load failed/i.test(detail);
+      const diagnostic = likelyProxyDrop
+        ? `O navegador nao recebeu resposta HTTP da API. Isso costuma acontecer quando o proxy/Nginx ativo encerra o upload antes do backend, por limite de corpo ou timeout. Confira o server block ativo de api.funpace.media com client_max_body_size ${limitMb}m, proxy_read_timeout/proxy_send_timeout altos, proxy_request_buffering off e reinicie/reload do Nginx e do backend.`
+        : `Verifique o limite do proxy/Nginx, timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=${limitMb}mb.`;
+      throw new Error(`Nao foi possivel concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. ${diagnostic} Detalhe: ${detail || 'falha de rede'}`);
+    }
+
+    const raw = await response.text();
+    let payload: any = {};
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = { error: raw };
+    }
+
+    if (!response.ok) {
+      const status = response.status;
+      const retryAfterSeconds = Number(response.headers.get('Retry-After') || '5');
+      const shouldRetry = [429, 502, 503, 504].includes(status) && attempt <= maxRetries;
+
+      if (shouldRetry) {
+        const delayMs = Math.max(1000, retryAfterSeconds * 1000);
+        console.warn(`Tentativa ${attempt}/${maxRetries} de upload rate-limited. Repetindo em ${delayMs} ms.`);
+        await wait(delayMs + Math.floor(Math.random() * 500));
+        continue;
+      }
+
+      const message = String(payload?.error || payload?.message || raw || `Falha no upload. HTTP ${status}`)
+        .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+        .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      throw new Error(message || `Falha no upload. HTTP ${status}`);
+    }
+
+    return {
+      path: String(payload.path || payload.publicUrl || path),
+      publicUrl: String(payload.publicUrl || payload.url || payload.path || ''),
+    };
+  }
   let payload: any = {};
   try {
     payload = raw ? JSON.parse(raw) : {};

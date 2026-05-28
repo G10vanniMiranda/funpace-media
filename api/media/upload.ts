@@ -20,6 +20,25 @@ function setSecurityHeaders(res: any) {
   }
 }
 
+function setCorsHeaders(req: any, res: any) {
+  const allowedOrigins = new Set([
+    'https://funpace.media',
+    'https://www.funpace.media',
+    process.env.FRONTEND_URL,
+    ...(process.env.CORS_ORIGINS || '').split(','),
+  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
+  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
+
+  if (origin && allowedOrigins.has(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  }
+
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-File-Name, X-Storage-Path');
+  res.setHeader('Access-Control-Max-Age', '86400');
+}
+
 function isTrustedOrigin(req: any) {
   const allowedOrigins = new Set([
     'https://funpace.media',
@@ -205,6 +224,11 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
 
 export default async function handler(req: any, res: any) {
   setSecurityHeaders(res);
+  setCorsHeaders(req, res);
+
+  if (req.method === 'OPTIONS') {
+    return res.status(204).end();
+  }
 
   if (!isTrustedOrigin(req)) {
     return res.status(403).json({ error: 'Origem nao autorizada.' });

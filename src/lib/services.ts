@@ -21,6 +21,8 @@ const selectAll = 'select=*';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
 const localEventsStorageKey = 'funpace:local-events:v1';
+const defaultUploadLimitBytes = 300 * 1024 * 1024;
+const clientUploadLimitBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadLimitBytes);
 
 function apiUrl(path: string) {
   const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
@@ -142,7 +144,12 @@ async function uploadMediaFile(path: string, file: File) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error || 'falha de rede');
     const fileSizeMb = Math.ceil(file.size / 1024 / 1024);
-    throw new Error(`Nao foi possivel concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. A API respondeu nos testes pequenos, entao em videos grandes verifique o limite do proxy/Nginx (client_max_body_size 300m), timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=300mb. Detalhe: ${detail || 'falha de rede'}`);
+    const limitMb = Math.round(clientUploadLimitBytes / 1024 / 1024);
+    const likelyProxyDrop = /failed to fetch|networkerror|load failed/i.test(detail);
+    const diagnostic = likelyProxyDrop
+      ? `O navegador nao recebeu resposta HTTP da API. Isso costuma acontecer quando o proxy/Nginx ativo encerra o upload antes do backend, por limite de corpo ou timeout. Confira o server block ativo de api.funpace.media com client_max_body_size ${limitMb}m, proxy_read_timeout/proxy_send_timeout altos, proxy_request_buffering off e reinicie/reload do Nginx e do backend.`
+      : `Verifique o limite do proxy/Nginx, timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=${limitMb}mb.`;
+    throw new Error(`Nao foi possivel concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. ${diagnostic} Detalhe: ${detail || 'falha de rede'}`);
   }
 
   const raw = await response.text();

@@ -1939,6 +1939,36 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
   res.status(200).send("OK");
 });
 
+app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) {
+    next(error);
+    return;
+  }
+
+  const message = String(error?.message || "");
+  const status = Number(error?.status || error?.statusCode || 500);
+  const isUploadBodyError = req.path === "/api/media/upload" &&
+    (status === 413 || /request entity too large|payload too large|entity too large|too large/i.test(message));
+
+  if (isUploadBodyError) {
+    const limit = process.env.MEDIA_UPLOAD_LIMIT || "300mb";
+    res.status(413).json({
+      error: `Arquivo maior que o limite aceito pelo backend (${limit}). Ajuste MEDIA_UPLOAD_LIMIT e o client_max_body_size do proxy/Nginx ativo ou envie um arquivo menor.`,
+    });
+    return;
+  }
+
+  if (req.path.startsWith("/api/")) {
+    console.error("Erro nao tratado na API:", error);
+    res.status(status >= 400 && status < 600 ? status : 500).json({
+      error: "Erro interno da API.",
+    });
+    return;
+  }
+
+  next(error);
+});
+
 async function setupViteAndListen() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

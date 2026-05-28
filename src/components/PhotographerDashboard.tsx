@@ -578,6 +578,44 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       return matchesSearch && matchesType && matchesStatus;
     });
   }, [products, productSearch, productTypeFilter, productStatusFilter]);
+
+  const groupedFilteredProducts = React.useMemo(() => {
+    const groups = new Map<string, Product[]>();
+    const eventOrder = new Map<string, number>();
+
+    availableEvents.forEach((eventItem, index) => {
+      eventOrder.set(eventItem.name, index);
+    });
+
+    for (const product of filteredProducts) {
+      const eventName = product.event?.trim() || 'Geral';
+      const group = groups.get(eventName) ?? [];
+      group.push(product);
+      groups.set(eventName, group);
+    }
+
+    return Array.from(groups.entries())
+      .sort(([eventA], [eventB]) => {
+        const orderA = eventOrder.has(eventA) ? eventOrder.get(eventA)! : Number.MAX_SAFE_INTEGER;
+        const orderB = eventOrder.has(eventB) ? eventOrder.get(eventB)! : Number.MAX_SAFE_INTEGER;
+
+        if (orderA !== orderB) return orderA - orderB;
+        if (eventA === 'Geral') return 1;
+        if (eventB === 'Geral') return -1;
+        return eventA.localeCompare(eventB, 'pt-BR', { sensitivity: 'base' });
+      })
+      .map(([eventName, products]) => ({
+        eventName,
+        products: products.sort((left, right) => {
+          const leftDate = Date.parse(left.createdAt || '');
+          const rightDate = Date.parse(right.createdAt || '');
+          if (Number.isFinite(leftDate) && Number.isFinite(rightDate)) {
+            return rightDate - leftDate;
+          }
+          return String(left.name || '').localeCompare(String(right.name || ''), 'pt-BR', { sensitivity: 'base' });
+        }),
+      }));
+  }, [filteredProducts, availableEvents]);
   const selectedProducts = React.useMemo(
     () => products.filter((product) => selectedProductIds.has(product.id) && (product.status ?? 'published') !== 'removed'),
     [products, selectedProductIds],
@@ -589,12 +627,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       .filter((eventItem) => eventItem.status !== 'closed')
       .slice(0, 3)
       .map((eventItem) => ({
-      id: eventItem.id,
-      title: eventItem.name,
-      date: eventItem.date ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${eventItem.date}T12:00:00`)) : 'Sem data',
-      time: eventItem.location || eventItem.checkpoint || 'Evento ativo',
-      isPublished: eventItem.isPublished !== false,
-    }));
+        id: eventItem.id,
+        title: eventItem.name,
+        date: eventItem.date ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${eventItem.date}T12:00:00`)) : 'Sem data',
+        time: eventItem.location || eventItem.checkpoint || 'Evento ativo',
+        isPublished: eventItem.isPublished !== false,
+      }));
   }, [availableEvents]);
   const publishableEvents = React.useMemo(() => (
     availableEvents.filter((eventItem) => eventItem.status !== 'closed' && eventItem.isPublished !== false)
@@ -1425,8 +1463,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     type="button"
                     onClick={() => setSelectedPeriod(key)}
                     className={`h-10 px-4 border font-sans text-xs font-bold transition-colors ${selectedPeriod === key
-                        ? 'bg-brutal-accent/20 border-brutal-accent text-white'
-                        : 'bg-white/5 border-white/10 text-gray-300 hover:border-white/30'
+                      ? 'bg-brutal-accent/20 border-brutal-accent text-white'
+                      : 'bg-white/5 border-white/10 text-gray-300 hover:border-white/30'
                       }`}
                   >
                     {label}
@@ -1919,91 +1957,117 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
-                {filteredProducts.map((product) => {
-                  const isSelected = selectedProductIds.has(product.id);
-                  return (
-                    <div key={product.id} className={`group bg-[#0d131c] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-white/10 hover:border-brutal-accent/70'
-                      }`}>
-                      <div className="aspect-4/5 relative bg-[#080d14]">
-                        {product.type === 'IMG' ? (
-                          <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
-                        ) : product.thumbnailUrl ? (
-                          <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
-                        ) : (
-                          <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
-                        )}
-                        <div className="absolute inset-x-0 top-0 z-20 p-3 flex items-start justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <button
-                              type="button"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                toggleProductSelection(product.id);
-                              }}
-                              className={`h-8 w-8 border flex items-center justify-center transition-colors ${isSelected ? 'bg-brutal-accent border-brutal-accent text-white' : 'bg-[#05080d]/90 border-white/15 text-white hover:border-brutal-accent'
-                                }`}
-                              aria-label={isSelected ? 'Desmarcar produto' : 'Selecionar produto'}
-                            >
-                              {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <span className="h-3.5 w-3.5 border border-current" />}
-                            </button>
-                            <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
-                              {product.type}
-                            </span>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="bg-brutal-accent text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
-                              {formatCurrency(product.price)}
-                            </span>
-                            {(product.status ?? 'published') !== 'published' && (
-                              <span className="bg-yellow-500/90 text-black px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
-                                {product.status}
-                              </span>
-                            )}
-                          </div>
+              {groupedFilteredProducts.length > 0 ? (
+                <div className="space-y-8">
+                  {groupedFilteredProducts.map(({ eventName, products: groupProducts }) => (
+                    <div key={eventName} className="space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 p-4 bg-[#0b1016] border border-white/10">
+                        <div>
+                          <p className="font-sans font-black text-sm uppercase text-white truncate">{eventName}</p>
+                          <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">{groupProducts.length} produto(s) neste evento</p>
                         </div>
-                        <div className="absolute inset-0 z-10 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
-                          <p className="text-white font-sans font-black text-sm uppercase mb-4 text-center px-4">{product.name}</p>
-                          <div className="flex gap-2">
-                            <button
-                              onClick={() => openEditModal(product)}
-                              className="bg-white text-brutal-black p-2 border border-white hover:bg-brutal-accent hover:text-white hover:border-brutal-accent transition-colors cursor-pointer"
-                              title="Editar produto"
-                            >
-                              <Settings className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => handleRemoveProduct(product)}
-                              className="bg-white text-brutal-black p-2 border border-white hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
-                              title="Remover produto"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
+                        <div className="text-right">
+                          {eventName !== 'Geral' && availableEvents.find((eventItem) => eventItem.name === eventName) && (
+                            <p className="font-mono text-[10px] uppercase text-gray-400">
+                              {availableEvents.find((eventItem) => eventItem.name === eventName)?.date || ''}
+                            </p>
+                          )}
                         </div>
                       </div>
-                      <div className="p-4 space-y-3">
-                        <div>
-                          <p className="font-sans font-black text-sm uppercase text-white truncate">{product.name}</p>
-                          <p className="font-mono text-[10px] uppercase text-gray-500 truncate">{product.event || 'Geral'} - {product.checkpoint || 'Ponto principal'}</p>
-                        </div>
-                        <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase">
-                          <span className="text-gray-500">Peito {product.bib || 'N/I'}</span>
-                          <span className={(product.status ?? 'published') === 'published' ? 'text-green-400' : 'text-yellow-400'}>
-                            {product.status ?? 'published'}
-                          </span>
-                        </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">
+                        {groupProducts.map((product) => {
+                          const isSelected = selectedProductIds.has(product.id);
+                          return (
+                            <div key={product.id} className={`group bg-[#0d131c] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-white/10 hover:border-brutal-accent/70'
+                              }`}>
+                              <div className="aspect-4/5 relative bg-[#080d14]">
+                                {product.type === 'IMG' ? (
+                                  <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
+                                ) : product.thumbnailUrl ? (
+                                  <img src={product.thumbnailUrl} alt={product.name} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" />
+                                ) : (
+                                  <video src={product.url} poster={product.thumbnailUrl} className="w-full h-full object-cover transition-all duration-500 group-hover:scale-[1.03]" muted preload="metadata" />
+                                )}
+                                <div className="absolute inset-x-0 top-0 z-20 p-3 flex items-start justify-between gap-2">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        toggleProductSelection(product.id);
+                                      }}
+                                      className={`h-8 w-8 border flex items-center justify-center transition-colors ${isSelected ? 'bg-brutal-accent border-brutal-accent text-white' : 'bg-[#05080d]/90 border-white/15 text-white hover:border-brutal-accent'
+                                        }`}
+                                      aria-label={isSelected ? 'Desmarcar produto' : 'Selecionar produto'}
+                                    >
+                                      {isSelected ? <CheckCircle2 className="w-4 h-4" /> : <span className="h-3.5 w-3.5 border border-current" />}
+                                    </button>
+                                    <span className="bg-[#05080d]/90 text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest border border-white/10">
+                                      {product.type}
+                                    </span>
+                                  </div>
+                                  <div className="flex flex-col items-end gap-1">
+                                    <span className="bg-brutal-accent text-white px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
+                                      {formatCurrency(product.price)}
+                                    </span>
+                                    {(product.status ?? 'published') !== 'published' && (
+                                      <span className="bg-yellow-500/90 text-black px-2 py-1 font-mono text-[8px] uppercase tracking-widest">
+                                        {product.status}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="absolute inset-0 z-10 bg-black/65 opacity-0 group-hover:opacity-100 flex flex-col items-center justify-center transition-all">
+                                  <p className="text-white font-sans font-black text-sm uppercase mb-4 text-center px-4">{product.name}</p>
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => openEditModal(product)}
+                                      className="bg-white text-brutal-black p-2 border border-white hover:bg-brutal-accent hover:text-white hover:border-brutal-accent transition-colors cursor-pointer"
+                                      title="Editar produto"
+                                    >
+                                      <Settings className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRemoveProduct(product)}
+                                      className="bg-white text-brutal-black p-2 border border-white hover:bg-red-600 hover:text-white hover:border-red-600 transition-colors cursor-pointer"
+                                      title="Remover produto"
+                                    >
+                                      <Trash2 className="w-4 h-4" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="p-4 space-y-3">
+                                <div>
+                                  <p className="font-sans font-black text-sm uppercase text-white truncate">{product.name}</p>
+                                  <p className="font-mono text-[10px] uppercase text-gray-500 truncate">{product.event || 'Geral'} - {product.checkpoint || 'Ponto principal'}</p>
+                                </div>
+                                <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase">
+                                  <span className="text-gray-500">Peito {product.bib || 'N/I'}</span>
+                                  <span className={(product.status ?? 'published') === 'published' ? 'text-green-400' : 'text-yellow-400'}>
+                                    {product.status ?? 'published'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-              {filteredProducts.length === 0 && (
+                  ))}
+                </div>
+              ) : (
                 <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
                   <Search className="w-10 h-10 text-gray-600 mx-auto mb-4" />
                   <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhum produto encontrado</h3>
                   <p className="font-mono text-xs uppercase text-gray-500">Ajuste os filtros ou limpe a busca para ver todo o catalogo.</p>
                 </div>
+              )}
+              <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
+                <Search className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhum produto encontrado</h3>
+                <p className="font-mono text-xs uppercase text-gray-500">Ajuste os filtros ou limpe a busca para ver todo o catalogo.</p>
+              </div>
               )}
             </motion.div>
           )}
@@ -2786,8 +2850,8 @@ function SidebarLink({ icon, label, active, onClick }: { icon: React.ReactNode, 
     <button
       onClick={onClick}
       className={`w-full flex items-center gap-3 px-4 py-3 font-sans text-sm font-bold transition-all cursor-pointer border ${active
-          ? 'bg-brutal-accent/25 text-brutal-accent border-brutal-accent/60 shadow-[inset_3px_0_0_#ff4d00]'
-          : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5 hover:border-white/10'
+        ? 'bg-brutal-accent/25 text-brutal-accent border-brutal-accent/60 shadow-[inset_3px_0_0_#ff4d00]'
+        : 'text-gray-400 border-transparent hover:text-white hover:bg-white/5 hover:border-white/10'
         }`}
     >
       <span className={active ? 'text-white' : 'text-gray-500'}>

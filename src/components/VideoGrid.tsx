@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, ShoppingCart, Check, Clock, MapPin, Heart, Share2, ThumbsUp } from 'lucide-react';
+import { Play, ShoppingCart, Check, Clock, MapPin, Heart, Share2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
@@ -12,8 +12,8 @@ interface VideoGridProps {
   onViewChange?: (view: 'photos' | 'videos') => void;
   favoriteIds?: Set<string>;
   likedIds?: Set<string>;
+  heartCounts?: Record<string, number>;
   onToggleFavorite?: (video: Product) => void;
-  onToggleLike?: (video: Product) => void;
 }
 
 export function VideoGrid({
@@ -24,8 +24,8 @@ export function VideoGrid({
   onViewChange,
   favoriteIds = new Set(),
   likedIds = new Set(),
+  heartCounts = {},
   onToggleFavorite,
-  onToggleLike,
 }: VideoGridProps) {
   const isVideoInCart = (id: string) => cartItems.some(item => item.id === id);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
@@ -34,7 +34,8 @@ export function VideoGrid({
     const url = createProductShareUrl(video.id);
     if (navigator.share) {
       try {
-        await navigator.share({ title: video.name, text: `${video.event} - peito ${video.bib}`, url });
+        const shareText = [video.event, video.bib ? `peito ${video.bib}` : ''].filter(Boolean).join(' - ');
+        await navigator.share({ title: video.name, text: shareText, url });
         return;
       } catch {
         // Fallback to clipboard when native sharing is cancelled or unavailable.
@@ -116,22 +117,17 @@ export function VideoGrid({
                 <button
                   type="button"
                   onClick={() => onToggleFavorite?.(video)}
-                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${favoriteIds.has(video.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
+                  className={`h-10 min-w-10 px-3 brutal-border flex items-center justify-center gap-1 transition-colors cursor-pointer ${favoriteIds.has(video.id) || likedIds.has(video.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
                     }`}
                   title={favoriteIds.has(video.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                   aria-label={favoriteIds.has(video.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                 >
-                  <Heart className={`w-4 h-4 ${favoriteIds.has(video.id) ? 'fill-current' : ''}`} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onToggleLike?.(video)}
-                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${likedIds.has(video.id) ? 'bg-brutal-black text-white' : 'bg-white text-brutal-black hover:bg-brutal-black hover:text-white'
-                    }`}
-                  title={likedIds.has(video.id) ? 'Remover like' : 'Curtir video'}
-                  aria-label={likedIds.has(video.id) ? 'Remover like' : 'Curtir video'}
-                >
-                  <ThumbsUp className={`w-4 h-4 ${likedIds.has(video.id) ? 'fill-current' : ''}`} />
+                  <Heart className={`w-4 h-4 ${favoriteIds.has(video.id) || likedIds.has(video.id) ? 'fill-current' : ''}`} />
+                  {Number(heartCounts[video.id] || video.favoriteCount || 0) > 0 && (
+                    <span className="font-mono text-[10px] font-bold leading-none">
+                      {Number(heartCounts[video.id] || video.favoriteCount || 0)}
+                    </span>
+                  )}
                 </button>
               </div>
 
@@ -160,10 +156,12 @@ export function VideoGrid({
                     <p className="font-mono text-[10px] uppercase tracking-widest">{video.checkpoint}</p>
                   </div>
                 </div>
+                {video.bib && (
                 <div className="text-right">
                   <p className="font-mono text-[10px] uppercase text-gray-400 mb-1">Nº PEITO</p>
                   <p className="font-display text-2xl text-brutal-accent leading-none">#{video.bib}</p>
                 </div>
+                )}
               </div>
 
               <button

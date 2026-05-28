@@ -130,6 +130,13 @@ create table if not exists public.download_events (
   "createdAt" timestamptz not null default now()
 );
 
+create table if not exists public.product_likes (
+  "productId" uuid not null references public.products(id) on delete cascade,
+  "visitorId" text not null check (char_length("visitorId") between 1 and 80),
+  "createdAt" timestamptz not null default now(),
+  primary key ("productId", "visitorId")
+);
+
 create table if not exists public.withdrawal_requests (
   id uuid primary key default gen_random_uuid(),
   "photographerId" text not null references public.photographers(id) on delete cascade,
@@ -170,6 +177,7 @@ create index if not exists payment_events_provider_event_id_idx on public.paymen
 create index if not exists download_events_vendedor_id_idx on public.download_events ("vendedorId");
 create index if not exists download_events_order_item_id_idx on public.download_events ("orderItemId");
 create index if not exists download_events_created_at_idx on public.download_events ("createdAt" desc);
+create index if not exists product_likes_product_id_idx on public.product_likes ("productId");
 create index if not exists withdrawal_requests_photographer_id_idx on public.withdrawal_requests ("photographerId");
 create index if not exists withdrawal_requests_status_idx on public.withdrawal_requests (status);
 create index if not exists withdrawal_requests_created_at_idx on public.withdrawal_requests ("createdAt" desc);
@@ -234,6 +242,7 @@ alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.payment_events enable row level security;
 alter table public.download_events enable row level security;
+alter table public.product_likes enable row level security;
 alter table public.withdrawal_requests enable row level security;
 alter table public.platform_settings enable row level security;
 
@@ -333,6 +342,13 @@ create policy "products_delete_owner_or_admin"
 on public.products
 for delete
 using ("vendedorId" = auth.uid()::text or public.is_admin());
+
+drop policy if exists "product_likes_service_role_all" on public.product_likes;
+create policy "product_likes_service_role_all"
+on public.product_likes
+for all
+using (auth.role() = 'service_role')
+with check (auth.role() = 'service_role');
 
 drop policy if exists "events_select_authenticated" on public.events;
 create policy "events_select_authenticated"

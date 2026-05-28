@@ -29,7 +29,7 @@ import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
 import { productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
 import { logout } from './lib/supabase';
-import { loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds } from './lib/customer-engagement';
+import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, Video, X, XCircle } from 'lucide-react';
 
@@ -105,6 +105,7 @@ function Storefront() {
   const [cart, setCart] = useState<Product[]>(() => loadStoredCart());
   const [favoriteProducts, setFavoriteProducts] = useState<Product[]>(() => loadFavoriteProducts());
   const [likedProductIds, setLikedProductIds] = useState<Set<string>>(() => loadLikedProductIds());
+  const [heartCounts, setHeartCounts] = useState<Record<string, number>>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -155,6 +156,19 @@ function Storefront() {
     }
     loadData();
   }, []);
+
+  React.useEffect(() => {
+    const ids = [...photos, ...videos].map((item) => item.id);
+    if (ids.length === 0) return;
+
+    fetchProductEngagementCounts(ids).then((counts) => {
+      if (Object.keys(counts).length > 0) {
+        setHeartCounts((current) => ({ ...current, ...counts }));
+      }
+    }).catch(() => {
+      // Engagement counters are non-critical for browsing and checkout.
+    });
+  }, [photos, videos]);
 
   React.useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -323,24 +337,42 @@ function Storefront() {
   };
 
   const handleToggleFavorite = (item: Product) => {
+    const shouldLike = !likedProductIds.has(item.id);
+
     setFavoriteProducts((current) => {
       const exists = current.some((favorite) => favorite.id === item.id);
       const next = exists ? current.filter((favorite) => favorite.id !== item.id) : [item, ...current];
       saveFavoriteProducts(next);
       return next;
     });
-  };
 
-  const handleToggleLike = (item: Product) => {
     setLikedProductIds((current) => {
       const next = new Set(current);
-      if (next.has(item.id)) {
-        next.delete(item.id);
-      } else {
-        next.add(item.id);
-      }
+      if (shouldLike) next.add(item.id);
+      else next.delete(item.id);
       saveLikedProductIds(next);
       return next;
+    });
+
+    setHeartCounts((current) => ({
+      ...current,
+      [item.id]: Math.max(0, Number(current[item.id] || item.favoriteCount || 0) + (shouldLike ? 1 : -1)),
+    }));
+
+    setProductHeart(item.id, shouldLike).then((count) => {
+      setHeartCounts((current) => ({ ...current, [item.id]: count }));
+    }).catch(() => {
+      setHeartCounts((current) => ({
+        ...current,
+        [item.id]: Math.max(0, Number(current[item.id] || 0) + (shouldLike ? -1 : 1)),
+      }));
+      setLikedProductIds((current) => {
+        const next = new Set(current);
+        if (shouldLike) next.delete(item.id);
+        else next.add(item.id);
+        saveLikedProductIds(next);
+        return next;
+      });
     });
   };
 
@@ -758,8 +790,8 @@ function Storefront() {
               onViewChange={setActiveView}
               favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
               likedIds={likedProductIds}
+              heartCounts={heartCounts}
               onToggleFavorite={handleToggleFavorite}
-              onToggleLike={handleToggleLike}
             />
           ) : (
             <VideoGrid
@@ -770,8 +802,8 @@ function Storefront() {
               onViewChange={setActiveView}
               favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
               likedIds={likedProductIds}
+              heartCounts={heartCounts}
               onToggleFavorite={handleToggleFavorite}
-              onToggleLike={handleToggleLike}
             />
           ))}
 

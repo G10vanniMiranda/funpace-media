@@ -35,6 +35,7 @@ export interface Product {
   storagePath?: string;
   status?: 'draft' | 'published' | 'removed';
   createdAt?: string;
+  favoriteCount?: number;
 }
 
 export interface Buyer {

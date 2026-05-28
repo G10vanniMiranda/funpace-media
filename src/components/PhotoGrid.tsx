@@ -1,4 +1,4 @@
-import { Check, Heart, Plus, Share2, ThumbsUp } from 'lucide-react';
+import { Check, Heart, Plus, Share2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
@@ -13,8 +13,8 @@ interface PhotoGridProps {
   onViewChange?: (view: 'photos' | 'videos') => void;
   favoriteIds?: Set<string>;
   likedIds?: Set<string>;
+  heartCounts?: Record<string, number>;
   onToggleFavorite?: (photo: Product) => void;
-  onToggleLike?: (photo: Product) => void;
 }
 
 const initialVisiblePhotos = 48;
@@ -30,8 +30,8 @@ export function PhotoGrid({
   onViewChange,
   favoriteIds = new Set(),
   likedIds = new Set(),
+  heartCounts = {},
   onToggleFavorite,
-  onToggleLike,
 }: PhotoGridProps) {
   const isInCart = (id: string) => cartItems.some(item => item.id === id);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -47,7 +47,8 @@ export function PhotoGrid({
     const url = createProductShareUrl(photo.id);
     if (navigator.share) {
       try {
-        await navigator.share({ title: photo.name, text: `${photo.event} - peito ${photo.bib}`, url });
+        const shareText = [photo.event, photo.bib ? `peito ${photo.bib}` : ''].filter(Boolean).join(' - ');
+        await navigator.share({ title: photo.name, text: shareText, url });
         return;
       } catch {
         // Fallback to clipboard when native sharing is cancelled or unavailable.
@@ -123,9 +124,11 @@ export function PhotoGrid({
 
               {/* Badges */}
               <div className="absolute top-4 left-4 flex gap-2">
-                <span className="bg-brutal-white text-brutal-black px-2 py-1 font-mono text-xs font-bold brutal-border">
-                  PEITO {photo.bib}
-                </span>
+                {photo.bib && (
+                  <span className="bg-brutal-white text-brutal-black px-2 py-1 font-mono text-xs font-bold brutal-border">
+                    PEITO {photo.bib}
+                  </span>
+                )}
                 <span className="bg-brutal-accent text-brutal-white px-2 py-1 font-mono text-xs font-bold brutal-border">
                   R$ {photo.price.toFixed(2).replace('.', ',')}
                 </span>
@@ -136,22 +139,17 @@ export function PhotoGrid({
                 <button
                   type="button"
                   onClick={() => onToggleFavorite?.(photo)}
-                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${favoriteIds.has(photo.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
+                  className={`h-10 min-w-10 px-3 brutal-border flex items-center justify-center gap-1 transition-colors cursor-pointer ${favoriteIds.has(photo.id) || likedIds.has(photo.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
                     }`}
                   title={favoriteIds.has(photo.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                   aria-label={favoriteIds.has(photo.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                 >
-                  <Heart className={`w-4 h-4 ${favoriteIds.has(photo.id) ? 'fill-current' : ''}`} />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onToggleLike?.(photo)}
-                  className={`h-10 w-10 brutal-border flex items-center justify-center transition-colors cursor-pointer ${likedIds.has(photo.id) ? 'bg-brutal-black text-white' : 'bg-white text-brutal-black hover:bg-brutal-black hover:text-white'
-                    }`}
-                  title={likedIds.has(photo.id) ? 'Remover like' : 'Curtir imagem'}
-                  aria-label={likedIds.has(photo.id) ? 'Remover like' : 'Curtir imagem'}
-                >
-                  <ThumbsUp className={`w-4 h-4 ${likedIds.has(photo.id) ? 'fill-current' : ''}`} />
+                  <Heart className={`w-4 h-4 ${favoriteIds.has(photo.id) || likedIds.has(photo.id) ? 'fill-current' : ''}`} />
+                  {Number(heartCounts[photo.id] || photo.favoriteCount || 0) > 0 && (
+                    <span className="font-mono text-[10px] font-bold leading-none">
+                      {Number(heartCounts[photo.id] || photo.favoriteCount || 0)}
+                    </span>
+                  )}
                 </button>
               </div>
 

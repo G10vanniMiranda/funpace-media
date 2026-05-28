@@ -59,8 +59,8 @@ function getSecurityCsp() {
     `connect-src ${connectSources}`,
     `img-src ${imageSources}`,
     "media-src 'self' blob: data: https:",
-    "font-src 'self' data:",
-    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
     "script-src 'self'",
     "form-action 'self' https://*.infinitepay.io",
     "upgrade-insecure-requests",
@@ -183,6 +183,11 @@ app.use(["/api/media/upload", "/api/media/sign"], createRateLimiter({
   keyPrefix: "media",
   windowMs: 60 * 1000,
   max: 30,
+}));
+app.use(["/api/products"], createRateLimiter({
+  keyPrefix: "product-engagement",
+  windowMs: 60 * 1000,
+  max: 120,
 }));
 
 function getDbConfig() {
@@ -471,6 +476,10 @@ async function getExternalBucketStorageStats() {
 function isUuid(value: unknown) {
   return typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function normalizeVisitorId(value: unknown) {
+  return String(value || "").replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 80);
 }
 
 function getWebhookSecret() {
@@ -1448,6 +1457,80 @@ app.post("/api/media/upload", express.raw({
   } catch (error: any) {
     console.error("Erro ao enviar midia:", error);
     return res.status(500).json({ error: error?.message || "Nao foi possivel enviar a midia." });
+  }
+});
+
+app.get("/api/products/engagement", async (req, res) => {
+  const ids = String(req.query.ids || "")
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+
+  if (ids.length === 0 || !ids.every(isUuid)) {
+    return res.status(400).json({ error: "IDs de midia invalidos." });
+  }
+
+  try {
+    const { data, error } = await getSupabaseAdmin()
+      .from("product_likes")
+      .select("productId")
+      .in("productId", ids);
+
+    if (error) throw error;
+
+    const counts: Record<string, number> = {};
+    for (const id of ids) counts[id] = 0;
+    for (const row of data ?? []) {
+      const productId = String((row as any).productId || "");
+      if (productId) counts[productId] = (counts[productId] || 0) + 1;
+    }
+
+    return res.json({ counts });
+  } catch (error: any) {
+    if (/product_likes|does not exist|schema cache/i.test(String(error?.message || ""))) {
+      return res.json({ counts: {} });
+    }
+
+    console.error("Erro ao consultar engajamento:", error);
+    return res.status(500).json({ error: "Nao foi possivel consultar curtidas." });
+  }
+});
+
+app.post("/api/products/:productId/favorite", async (req, res) => {
+  const productId = String(req.params.productId || "");
+  const visitorId = normalizeVisitorId(req.body?.visitorId);
+  const liked = Boolean(req.body?.liked);
+
+  if (!isUuid(productId) || !visitorId) {
+    return res.status(400).json({ error: "Curtida invalida." });
+  }
+
+  try {
+    if (liked) {
+      const { error } = await getSupabaseAdmin()
+        .from("product_likes")
+        .upsert({ productId, visitorId }, { onConflict: "productId,visitorId" });
+      if (error) throw error;
+    } else {
+      const { error } = await getSupabaseAdmin()
+        .from("product_likes")
+        .delete()
+        .eq("productId", productId)
+        .eq("visitorId", visitorId);
+      if (error) throw error;
+    }
+
+    const { count, error: countError } = await getSupabaseAdmin()
+      .from("product_likes")
+      .select("productId", { count: "exact", head: true })
+      .eq("productId", productId);
+
+    if (countError) throw countError;
+    return res.json({ productId, liked, count: count ?? 0 });
+  } catch (error: any) {
+    console.error("Erro ao atualizar curtida:", error);
+    return res.status(500).json({ error: "Nao foi possivel atualizar a curtida." });
   }
 });
 

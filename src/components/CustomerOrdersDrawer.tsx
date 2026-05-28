@@ -239,7 +239,7 @@ export function CustomerOrdersDrawer({
       }
     } catch (error) {
       console.error('Erro ao baixar pedido:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o pedido.');
+      alert(error instanceof Error ? error.message : 'Não foi possivel baixar o pedido.');
     }
   };
 
@@ -249,7 +249,7 @@ export function CustomerOrdersDrawer({
       await downloadFile(signedUrl, filenameFromItem(item as any));
     } catch (error) {
       console.error('Erro ao baixar arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o arquivo.');
+      alert(error instanceof Error ? error.message : 'Não foi possivel baixar o arquivo.');
     }
   };
 
@@ -259,7 +259,7 @@ export function CustomerOrdersDrawer({
       window.location.href = signedUrl;
     } catch (error) {
       console.error('Erro ao abrir arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel abrir o arquivo.');
+      alert(error instanceof Error ? error.message : 'Não foi possivel abrir o arquivo.');
     }
   };
 
@@ -277,7 +277,7 @@ export function CustomerOrdersDrawer({
     const url = createProductShareUrl(item.productId);
     if (navigator.share) {
       try {
-        await navigator.share({ title: item.name, text: `${item.event} - peito ${item.bib}`, url });
+        await navigator.share({ title: item.name, text: [item.event, item.bib ? `peito ${item.bib}` : ''].filter(Boolean).join(' - '), url });
         return;
       } catch {
         // Fallback to clipboard.
@@ -351,7 +351,7 @@ export function CustomerOrdersDrawer({
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-display text-sm uppercase truncate">{item.name}</p>
-                          <p className="font-mono text-[9px] text-gray-400 uppercase truncate">Peito {item.bib || 'N/I'} - R$ {Number(item.price).toFixed(2)}</p>
+                          <p className="font-mono text-[9px] text-gray-400 uppercase truncate">{[item.bib ? `Peito ${item.bib}` : '', `R$ ${Number(item.price).toFixed(2)}`].filter(Boolean).join(' - ')}</p>
                         </div>
                         <button
                           type="button"
@@ -474,7 +474,7 @@ export function CustomerOrdersDrawer({
                             <div className="flex-1 min-w-0">
                               <p className="font-display text-sm uppercase truncate">{item.name}</p>
                               <p className="font-mono text-[9px] text-gray-400 uppercase truncate">
-                                {item.type} - Peito {item.bib || 'N/I'} - {item.event}
+                                {[item.type, item.bib ? `Peito ${item.bib}` : '', item.event].filter(Boolean).join(' - ')}
                               </p>
                             </div>
                             <div className="text-right flex flex-col items-end gap-2">
@@ -576,7 +576,7 @@ function CustomerMetricCard({
           {icon}
         </div>
       </div>
-      <p className="mt-4 font-display text-[clamp(1.65rem,4vw,2.35rem)] uppercase leading-none tracking-normal break-words">
+      <p className="mt-4 font-display text-[clamp(1.65rem,4vw,2.35rem)] uppercase leading-none tracking-normal wrap-break-word">
         {value}
       </p>
     </div>
@@ -608,7 +608,7 @@ function FavoritePanelItem({
           <div className="min-w-0">
             <p className="font-display text-lg uppercase truncate">{product.name}</p>
             <p className="font-mono text-[10px] uppercase text-slate-400 truncate">
-              Peito {product.bib || 'N/I'} - {product.event || 'Evento'}
+              {[product.bib ? `Peito ${product.bib}` : '', product.event || 'Evento'].filter(Boolean).join(' - ')}
             </p>
           </div>
           <p className="font-display text-lg shrink-0">{formatCurrency(Number(product.price))}</p>
@@ -687,7 +687,7 @@ export function CustomerOrdersPage({
     const url = createProductShareUrl(item.productId);
     if (navigator.share) {
       try {
-        await navigator.share({ title: item.name, text: `${item.event} - peito ${item.bib}`, url });
+        await navigator.share({ title: item.name, text: [item.event, item.bib ? `peito ${item.bib}` : ''].filter(Boolean).join(' - '), url });
         return;
       } catch {
         // Fallback to clipboard.
@@ -768,7 +768,7 @@ export function CustomerOrdersPage({
               </p>
             </div>
 
-            <div className="w-full lg:w-[360px] border border-white/10 bg-white/5 p-4">
+            <div className="w-full lg:w-90 border border-white/10 bg-white/5 p-4">
               <div className="flex items-center gap-3">
                 <div className="h-12 w-12 border border-white/15 bg-brutal-accent text-white flex items-center justify-center">
                   <UserCircle className="w-6 h-6" />
@@ -796,8 +796,8 @@ export function CustomerOrdersPage({
       <section className="max-w-7xl mx-auto px-4 md:px-6 py-6 md:py-8 space-y-6">
         {paymentStatus && (
           <div className={`border p-5 ${paymentStatus === 'paid' ? 'border-green-300 bg-green-50 text-green-800' :
-              paymentStatus === 'pending' ? 'bg-yellow-50 text-yellow-800' :
-                'bg-red-50 text-red-700'
+            paymentStatus === 'pending' ? 'bg-yellow-50 text-yellow-800' :
+              'bg-red-50 text-red-700'
             }`}>
             <p className="font-display text-2xl uppercase">
               {paymentStatus === 'paid' ? 'Pagamento confirmado' : paymentStatus === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
@@ -847,258 +847,258 @@ export function CustomerOrdersPage({
             </div>
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-            <div className="space-y-4">
-              <div className="bg-white border border-slate-200 shadow-sm">
-                <div className="border-b border-slate-200 p-4">
-                  <div className="grid gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400" />
-                      <input
-                        value={query}
-                        onChange={(event) => setQuery(event.target.value)}
-                        placeholder="BUSCAR POR PEDIDO, EVENTO, PEITO OU ARQUIVO"
-                        className="h-12 w-full border border-slate-200 bg-slate-50 pl-10 pr-4 font-mono text-xs uppercase outline-none focus:border-brutal-accent focus:bg-white"
-                      />
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { key: 'all', label: 'Todos', count: sortedOrders.length },
-                        { key: 'paid', label: 'Pagos', count: paidOrders.length },
-                        { key: 'pending', label: 'Pendentes', count: pendingOrders.length },
-                        { key: 'favorites', label: 'Favoritos', count: favoriteProducts.length },
-                      ].map((tab) => (
-                        <button
-                          key={tab.key}
-                          type="button"
-                          onClick={() => setActiveFilter(tab.key as CustomerPanelFilter)}
-                          className={`min-h-10 px-3 border font-mono text-[10px] uppercase transition-colors cursor-pointer ${activeFilter === tab.key
+              <div className="space-y-4">
+                <div className="bg-white border border-slate-200 shadow-sm">
+                  <div className="border-b border-slate-200 p-4">
+                    <div className="grid gap-3 xl:grid-cols-[1fr_auto] xl:items-center">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 w-4 h-4 -translate-y-1/2 text-slate-400" />
+                        <input
+                          value={query}
+                          onChange={(event) => setQuery(event.target.value)}
+                          placeholder="BUSCAR POR PEDIDO, EVENTO, PEITO OU ARQUIVO"
+                          className="h-12 w-full border border-slate-200 bg-slate-50 pl-10 pr-4 font-mono text-xs uppercase outline-none focus:border-brutal-accent focus:bg-white"
+                        />
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          { key: 'all', label: 'Todos', count: sortedOrders.length },
+                          { key: 'paid', label: 'Pagos', count: paidOrders.length },
+                          { key: 'pending', label: 'Pendentes', count: pendingOrders.length },
+                          { key: 'favorites', label: 'Favoritos', count: favoriteProducts.length },
+                        ].map((tab) => (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => setActiveFilter(tab.key as CustomerPanelFilter)}
+                            className={`min-h-10 px-3 border font-mono text-[10px] uppercase transition-colors cursor-pointer ${activeFilter === tab.key
                               ? 'border-brutal-black bg-brutal-black text-white'
                               : 'border-slate-200 bg-white text-slate-600 hover:border-brutal-accent hover:text-brutal-accent'
-                            }`}
+                              }`}
+                          >
+                            {tab.label} {tab.count}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {isLoading && (
+                  <div className="bg-white border border-slate-200 p-10 text-center">
+                    <Loader2 className="w-10 h-10 animate-spin text-brutal-accent mx-auto mb-4" />
+                    <p className="font-mono text-xs uppercase text-gray-500">Carregando compras...</p>
+                  </div>
+                )}
+
+                {!isLoading && error && (
+                  <div className="p-4 bg-red-50 brutal-border-thin text-red-700 font-mono text-xs uppercase">
+                    {error}
+                  </div>
+                )}
+
+                {!isLoading && !error && !showFavoritesOnly && filteredOrders.length === 0 && (
+                  <div className="bg-white border border-slate-200 p-10 text-center">
+                    <ReceiptText className="w-14 h-14 text-gray-300 mx-auto mb-4" />
+                    <h2 className="font-display text-2xl uppercase">{sortedOrders.length === 0 ? 'Nenhuma compra' : 'Nada encontrado'}</h2>
+                    <p className="mt-2 font-mono text-xs uppercase text-gray-500">{sortedOrders.length === 0 ? 'Seus pedidos aparecerao aqui depois do checkout.' : 'Ajuste os filtros ou limpe a busca para ver mais resultados.'}</p>
+                  </div>
+                )}
+
+                {!isLoading && !error && showFavoritesOnly && (
+                  <div className="grid gap-3 md:grid-cols-2">
+                    {visibleFavorites.length === 0 ? (
+                      <div className="md:col-span-2 bg-white border border-slate-200 p-10 text-center">
+                        <Heart className="w-14 h-14 text-gray-300 mx-auto mb-4" />
+                        <h2 className="font-display text-2xl uppercase">Nenhum favorito</h2>
+                        <p className="mt-2 font-mono text-xs uppercase text-gray-500">Salve fotos e videos na vitrine para acessar rapido por aqui.</p>
+                      </div>
+                    ) : visibleFavorites.map((item) => (
+                      <FavoritePanelItem key={item.id} product={item} onAddToCart={onAddToCart} onToggleFavorite={onToggleFavorite} />
+                    ))}
+                  </div>
+                )}
+
+                {!isLoading && !error && !showFavoritesOnly && filteredOrders.map((order) => (
+                  <article
+                    key={order.id}
+                    className={`bg-white border border-slate-200 shadow-sm p-4 md:p-5 space-y-4 ${highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
+                      }`}
+                  >
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="font-display text-2xl uppercase">Pedido #{order.id.slice(0, 8)}</p>
+                        <p className="font-mono text-[10px] text-gray-400 uppercase">
+                          {new Date(order.createdAt).toLocaleString('pt-BR')}
+                        </p>
+                      </div>
+                      <span className={`w-fit px-2 py-1 border font-mono text-[9px] uppercase ${statusClasses[order.status]}`}>
+                        {statusLabels[order.status]}
+                      </span>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
+                      <div>
+                        <p className="font-mono text-[10px] text-gray-400 uppercase">Total</p>
+                        <p className="font-display text-4xl">{formatCurrency(Number(order.total))}</p>
+                      </div>
+                      <div className="flex flex-wrap gap-2 sm:justify-end">
+                        {order.status === 'pending' && order.checkoutUrl && (
+                          <a href={order.checkoutUrl} className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors">
+                            Pagar novamente
+                            <ExternalLink className="w-3 h-3" />
+                          </a>
+                        )}
+                        {order.status === 'paid' && (
+                          <>
+                            <button type="button" onClick={() => copyReceipt(order)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-3 py-2 border border-slate-200 font-mono text-[10px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                              Recibo
+                              <Copy className="w-3 h-3" />
+                            </button>
+                            <button type="button" onClick={() => downloadPaidOrder(order)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
+                              Baixar tudo
+                              <Download className="w-3 h-3" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="border-t-2 border-gray-100 pt-4 space-y-3">
+                      {(order.items ?? []).map((item) => (
+                        <div key={item.id} className="grid grid-cols-[56px_1fr] gap-3 bg-slate-50 border border-slate-200 p-3 md:grid-cols-[64px_1fr_auto] md:items-center">
+                          <div className="w-14 h-14 md:w-16 md:h-16 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
+                            {item.thumbnailUrl || item.type === 'IMG' ? (
+                              <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
+                            ) : (
+                              <Video className="w-5 h-5" />
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-display text-base uppercase truncate">{item.name}</p>
+                            <p className="font-mono text-[9px] text-gray-400 uppercase truncate">
+                              {[item.type, item.bib ? `Peito ${item.bib}` : '', item.event].filter(Boolean).join(' - ')}
+                            </p>
+                            <p className="font-display text-lg mt-1">{formatCurrency(Number(item.price))}</p>
+                          </div>
+                          <div className="col-span-2 flex flex-wrap gap-2 md:col-span-1 md:justify-end">
+                            {order.status === 'paid' && item.url && (
+                              <>
+                                <button type="button" onClick={() => openPaidItem(order, item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                                  Abrir
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                                <button type="button" onClick={() => downloadPaidItem(order, item)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 border border-brutal-black font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
+                                  Baixar
+                                  <Download className="w-3 h-3" />
+                                </button>
+                              </>
+                            )}
+                            <button type="button" onClick={() => shareItem(item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                              Compartilhar vitrine
+                              <Share2 className="w-3 h-3" />
+                            </button>
+                            <button type="button" onClick={() => onToggleFavorite?.(productFromOrderItem(item))} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
+                              Favoritar
+                              <Heart className="w-3 h-3" />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+
+              <aside className="space-y-4">
+                <div className="bg-white border border-slate-200 shadow-sm p-4">
+                  <h2 className="font-display text-xl uppercase">Central do cliente</h2>
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-start gap-3 border border-slate-200 bg-slate-50 p-3">
+                      <ShieldCheck className="mt-0.5 w-4 h-4 text-green-600" />
+                      <p className="font-mono text-[10px] uppercase leading-relaxed text-slate-500">Downloads passam por autorizacao do pedido pago antes de abrir o arquivo.</p>
+                    </div>
+                    <div className="flex items-start gap-3 border border-slate-200 bg-slate-50 p-3">
+                      <CalendarDays className="mt-0.5 w-4 h-4 text-brutal-accent" />
+                      <p className="font-mono text-[10px] uppercase leading-relaxed text-slate-500">Pedidos recentes aparecem primeiro e podem ser filtrados por status.</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={loadOrders}
+                    className="mt-4 w-full min-h-11 bg-brutal-black text-white border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    Atualizar status
+                  </button>
+                </div>
+
+                {pendingOrders.length > 0 && (
+                  <div className="bg-white border border-slate-200 shadow-sm p-4">
+                    <h2 className="font-display text-xl uppercase">Pendencias</h2>
+                    <div className="mt-3 space-y-2">
+                      {pendingOrders.slice(0, 3).map((order) => (
+                        <div key={order.id} className="border border-yellow-200 bg-yellow-50 p-3">
+                          <p className="font-display text-sm uppercase">Pedido #{order.id.slice(0, 8)}</p>
+                          <p className="font-mono text-[9px] uppercase text-yellow-700">{formatCurrency(Number(order.total))}</p>
+                          {order.checkoutUrl && (
+                            <a href={order.checkoutUrl} className="mt-2 inline-flex items-center gap-2 bg-brutal-black px-2 py-1 text-white font-mono text-[9px] uppercase">
+                              Pagar
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {paidItems.length > 0 && (
+                  <div className="bg-white border border-slate-200 shadow-sm p-4">
+                    <h2 className="font-display text-xl uppercase">Downloads recentes</h2>
+                    <div className="mt-3 space-y-2">
+                      {paidItems.slice(0, 5).map(({ order, item }) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => downloadPaidItem(order, item)}
+                          className="w-full text-left border border-slate-200 bg-slate-50 p-3 hover:border-brutal-accent transition-colors cursor-pointer"
                         >
-                          {tab.label} {tab.count}
+                          <p className="font-display text-sm uppercase truncate">{item.name}</p>
+                          <p className="font-mono text-[9px] uppercase text-slate-400 truncate">#{order.id.slice(0, 8)} - {item.event}</p>
                         </button>
                       ))}
                     </div>
                   </div>
-                </div>
-              </div>
+                )}
 
-              {isLoading && (
-                <div className="bg-white border border-slate-200 p-10 text-center">
-                  <Loader2 className="w-10 h-10 animate-spin text-brutal-accent mx-auto mb-4" />
-                  <p className="font-mono text-xs uppercase text-gray-500">Carregando compras...</p>
-                </div>
-              )}
-
-              {!isLoading && error && (
-                <div className="p-4 bg-red-50 brutal-border-thin text-red-700 font-mono text-xs uppercase">
-                  {error}
-                </div>
-              )}
-
-              {!isLoading && !error && !showFavoritesOnly && filteredOrders.length === 0 && (
-                <div className="bg-white border border-slate-200 p-10 text-center">
-                  <ReceiptText className="w-14 h-14 text-gray-300 mx-auto mb-4" />
-                  <h2 className="font-display text-2xl uppercase">{sortedOrders.length === 0 ? 'Nenhuma compra' : 'Nada encontrado'}</h2>
-                  <p className="mt-2 font-mono text-xs uppercase text-gray-500">{sortedOrders.length === 0 ? 'Seus pedidos aparecerao aqui depois do checkout.' : 'Ajuste os filtros ou limpe a busca para ver mais resultados.'}</p>
-                </div>
-              )}
-
-              {!isLoading && !error && showFavoritesOnly && (
-                <div className="grid gap-3 md:grid-cols-2">
-                  {visibleFavorites.length === 0 ? (
-                    <div className="md:col-span-2 bg-white border border-slate-200 p-10 text-center">
-                      <Heart className="w-14 h-14 text-gray-300 mx-auto mb-4" />
-                      <h2 className="font-display text-2xl uppercase">Nenhum favorito</h2>
-                      <p className="mt-2 font-mono text-xs uppercase text-gray-500">Salve fotos e videos na vitrine para acessar rapido por aqui.</p>
+                {favoriteProducts.length > 0 && (
+                  <div className="bg-white border border-slate-200 shadow-sm p-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <Heart className="w-4 h-4 text-brutal-accent fill-current" />
+                      <h2 className="font-display text-xl uppercase">Favoritos</h2>
                     </div>
-                  ) : visibleFavorites.map((item) => (
-                    <FavoritePanelItem key={item.id} product={item} onAddToCart={onAddToCart} onToggleFavorite={onToggleFavorite} />
-                  ))}
-                </div>
-              )}
-
-              {!isLoading && !error && !showFavoritesOnly && filteredOrders.map((order) => (
-                <article
-                  key={order.id}
-                  className={`bg-white border border-slate-200 shadow-sm p-4 md:p-5 space-y-4 ${highlightedOrderId === order.id ? 'ring-4 ring-brutal-accent' : ''
-                    }`}
-                >
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                    <div>
-                      <p className="font-display text-2xl uppercase">Pedido #{order.id.slice(0, 8)}</p>
-                      <p className="font-mono text-[10px] text-gray-400 uppercase">
-                        {new Date(order.createdAt).toLocaleString('pt-BR')}
-                      </p>
-                    </div>
-                    <span className={`w-fit px-2 py-1 border font-mono text-[9px] uppercase ${statusClasses[order.status]}`}>
-                      {statusLabels[order.status]}
-                    </span>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-end">
-                    <div>
-                      <p className="font-mono text-[10px] text-gray-400 uppercase">Total</p>
-                      <p className="font-display text-4xl">{formatCurrency(Number(order.total))}</p>
-                    </div>
-                    <div className="flex flex-wrap gap-2 sm:justify-end">
-                      {order.status === 'pending' && order.checkoutUrl && (
-                        <a href={order.checkoutUrl} className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors">
-                          Pagar novamente
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                      {order.status === 'paid' && (
-                        <>
-                          <button type="button" onClick={() => copyReceipt(order)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-3 py-2 border border-slate-200 font-mono text-[10px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
-                            Recibo
-                            <Copy className="w-3 h-3" />
-                          </button>
-                          <button type="button" onClick={() => downloadPaidOrder(order)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-3 py-2 border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
-                            Baixar tudo
-                            <Download className="w-3 h-3" />
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="border-t-2 border-gray-100 pt-4 space-y-3">
-                    {(order.items ?? []).map((item) => (
-                      <div key={item.id} className="grid grid-cols-[56px_1fr] gap-3 bg-slate-50 border border-slate-200 p-3 md:grid-cols-[64px_1fr_auto] md:items-center">
-                        <div className="w-14 h-14 md:w-16 md:h-16 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
-                          {item.thumbnailUrl || item.type === 'IMG' ? (
+                    {favoriteProducts.slice(0, 6).map((item) => (
+                      <div key={item.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2">
+                        <div className="w-10 h-10 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
+                          {item.thumbnailUrl || item.url ? (
                             <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
                           ) : (
-                            <Video className="w-5 h-5" />
+                            <ImageIcon className="w-4 h-4" />
                           )}
                         </div>
-                        <div className="min-w-0">
-                          <p className="font-display text-base uppercase truncate">{item.name}</p>
-                          <p className="font-mono text-[9px] text-gray-400 uppercase truncate">
-                            {item.type} - Peito {item.bib || 'N/I'} - {item.event}
-                          </p>
-                          <p className="font-display text-lg mt-1">{formatCurrency(Number(item.price))}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-display text-xs uppercase truncate">{item.name}</p>
+                          <p className="font-mono text-[8px] text-gray-400 uppercase truncate">{formatCurrency(Number(item.price))}</p>
                         </div>
-                        <div className="col-span-2 flex flex-wrap gap-2 md:col-span-1 md:justify-end">
-                          {order.status === 'paid' && item.url && (
-                            <>
-                              <button type="button" onClick={() => openPaidItem(order, item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
-                                Abrir
-                                <ExternalLink className="w-3 h-3" />
-                              </button>
-                              <button type="button" onClick={() => downloadPaidItem(order, item)} className="inline-flex items-center gap-2 bg-brutal-black text-white px-2 py-1 border border-brutal-black font-mono text-[9px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer">
-                                Baixar
-                                <Download className="w-3 h-3" />
-                              </button>
-                            </>
-                          )}
-                          <button type="button" onClick={() => shareItem(item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
-                            Compartilhar vitrine
-                            <Share2 className="w-3 h-3" />
-                          </button>
-                          <button type="button" onClick={() => onToggleFavorite?.(productFromOrderItem(item))} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
-                            Favoritar
-                            <Heart className="w-3 h-3" />
-                          </button>
-                        </div>
+                        <button type="button" onClick={() => onAddToCart?.(item)} className="h-8 w-8 bg-brutal-black text-white border border-brutal-black inline-flex items-center justify-center hover:bg-brutal-accent transition-colors cursor-pointer" aria-label="Adicionar favorito ao carrinho">
+                          <Plus className="w-3 h-3" />
+                        </button>
                       </div>
                     ))}
                   </div>
-                </article>
-              ))}
-            </div>
-
-            <aside className="space-y-4">
-              <div className="bg-white border border-slate-200 shadow-sm p-4">
-                <h2 className="font-display text-xl uppercase">Central do cliente</h2>
-                <div className="mt-4 space-y-3">
-                  <div className="flex items-start gap-3 border border-slate-200 bg-slate-50 p-3">
-                    <ShieldCheck className="mt-0.5 w-4 h-4 text-green-600" />
-                    <p className="font-mono text-[10px] uppercase leading-relaxed text-slate-500">Downloads passam por autorizacao do pedido pago antes de abrir o arquivo.</p>
-                  </div>
-                  <div className="flex items-start gap-3 border border-slate-200 bg-slate-50 p-3">
-                    <CalendarDays className="mt-0.5 w-4 h-4 text-brutal-accent" />
-                    <p className="font-mono text-[10px] uppercase leading-relaxed text-slate-500">Pedidos recentes aparecem primeiro e podem ser filtrados por status.</p>
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  onClick={loadOrders}
-                  className="mt-4 w-full min-h-11 bg-brutal-black text-white border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
-                >
-                  <RefreshCw className="w-3 h-3" />
-                  Atualizar status
-                </button>
-              </div>
-
-              {pendingOrders.length > 0 && (
-                <div className="bg-white border border-slate-200 shadow-sm p-4">
-                  <h2 className="font-display text-xl uppercase">Pendencias</h2>
-                  <div className="mt-3 space-y-2">
-                    {pendingOrders.slice(0, 3).map((order) => (
-                      <div key={order.id} className="border border-yellow-200 bg-yellow-50 p-3">
-                        <p className="font-display text-sm uppercase">Pedido #{order.id.slice(0, 8)}</p>
-                        <p className="font-mono text-[9px] uppercase text-yellow-700">{formatCurrency(Number(order.total))}</p>
-                        {order.checkoutUrl && (
-                          <a href={order.checkoutUrl} className="mt-2 inline-flex items-center gap-2 bg-brutal-black px-2 py-1 text-white font-mono text-[9px] uppercase">
-                            Pagar
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {paidItems.length > 0 && (
-                <div className="bg-white border border-slate-200 shadow-sm p-4">
-                  <h2 className="font-display text-xl uppercase">Downloads recentes</h2>
-                  <div className="mt-3 space-y-2">
-                    {paidItems.slice(0, 5).map(({ order, item }) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => downloadPaidItem(order, item)}
-                        className="w-full text-left border border-slate-200 bg-slate-50 p-3 hover:border-brutal-accent transition-colors cursor-pointer"
-                      >
-                        <p className="font-display text-sm uppercase truncate">{item.name}</p>
-                        <p className="font-mono text-[9px] uppercase text-slate-400 truncate">#{order.id.slice(0, 8)} - {item.event}</p>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-
-              {favoriteProducts.length > 0 && (
-                <div className="bg-white border border-slate-200 shadow-sm p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Heart className="w-4 h-4 text-brutal-accent fill-current" />
-                    <h2 className="font-display text-xl uppercase">Favoritos</h2>
-                  </div>
-                  {favoriteProducts.slice(0, 6).map((item) => (
-                    <div key={item.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2">
-                      <div className="w-10 h-10 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
-                        {item.thumbnailUrl || item.url ? (
-                          <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                        ) : (
-                          <ImageIcon className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-display text-xs uppercase truncate">{item.name}</p>
-                        <p className="font-mono text-[8px] text-gray-400 uppercase truncate">{formatCurrency(Number(item.price))}</p>
-                      </div>
-                      <button type="button" onClick={() => onAddToCart?.(item)} className="h-8 w-8 bg-brutal-black text-white border border-brutal-black inline-flex items-center justify-center hover:bg-brutal-accent transition-colors cursor-pointer" aria-label="Adicionar favorito ao carrinho">
-                        <Plus className="w-3 h-3" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </aside>
+                )}
+              </aside>
             </div>
           </div>
         )}

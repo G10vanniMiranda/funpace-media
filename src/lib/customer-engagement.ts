@@ -2,6 +2,13 @@ import { Product } from '../types';
 
 export const favoriteProductsStorageKey = 'funpace:favorites:v1';
 export const likedProductsStorageKey = 'funpace:likes:v1';
+const engagementVisitorStorageKey = 'funpace:engagement-visitor:v1';
+
+function apiUrl(path: string) {
+  const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+  if (!baseUrl) return path;
+  return `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`;
+}
 
 export function loadFavoriteProducts(): Product[] {
   try {
@@ -31,6 +38,46 @@ export function loadLikedProductIds(): Set<string> {
 
 export function saveLikedProductIds(ids: Set<string>) {
   localStorage.setItem(likedProductsStorageKey, JSON.stringify(Array.from(ids)));
+}
+
+export function getEngagementVisitorId() {
+  try {
+    const existing = localStorage.getItem(engagementVisitorStorageKey);
+    if (existing && existing.length <= 80) return existing;
+
+    const id = crypto.randomUUID();
+    localStorage.setItem(engagementVisitorStorageKey, id);
+    return id;
+  } catch {
+    return 'anonymous';
+  }
+}
+
+export async function fetchProductEngagementCounts(productIds: string[]) {
+  const ids = Array.from(new Set(productIds.filter(Boolean))).slice(0, 200);
+  if (ids.length === 0) return {};
+
+  const params = new URLSearchParams({ ids: ids.join(',') });
+  const response = await fetch(apiUrl(`/api/products/engagement?${params.toString()}`));
+  if (!response.ok) return {};
+
+  const payload = await response.json().catch(() => ({}));
+  return (payload?.counts && typeof payload.counts === 'object') ? payload.counts as Record<string, number> : {};
+}
+
+export async function setProductHeart(productId: string, liked: boolean) {
+  const response = await fetch(apiUrl(`/api/products/${encodeURIComponent(productId)}/favorite`), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      liked,
+      visitorId: getEngagementVisitorId(),
+    }),
+  });
+
+  if (!response.ok) throw new Error('Nao foi possivel atualizar a curtida.');
+  const payload = await response.json().catch(() => ({}));
+  return Number(payload?.count || 0);
 }
 
 export function createProductSharePath(productId: string) {

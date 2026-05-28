@@ -18,14 +18,14 @@ export function Hero({
     <section className="relative overflow-hidden bg-brutal-white border-b-4 border-brutal-black">
       <div className="absolute top-0 w-full overflow-hidden bg-brutal-accent text-brutal-black py-2 border-b-2 border-brutal-black z-0 flex whitespace-nowrap">
         <div className="animate-marquee flex items-center">
-          {Array(15).fill('ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO - ULTRAPASSE - ').map((text, i) => (
+          {Array(15).fill('ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO ').map((text, i) => (
             <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
               {text}
             </span>
           ))}
         </div>
         <div className="animate-marquee flex items-center">
-          {Array(15).fill('ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO - ULTRAPASSE - ').map((text, i) => (
+          {Array(15).fill('ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO ').map((text, i) => (
             <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
               {text}
             </span>
@@ -44,7 +44,7 @@ export function Hero({
         </h1>
 
         <p className="max-w-xl font-mono text-sm md:text-lg mb-12 text-gray-700">
-          Fotografia profissional de corrida. Encontre o evento e acesse suas fotos em uma cobertura organizada.
+          Encontre o evento e acesse suas fotos em uma cobertura organizada.
         </p>
 
         <div className="w-full max-w-2xl bg-brutal-white p-4 md:p-6 brutal-border brutal-shadow flex flex-col gap-4">

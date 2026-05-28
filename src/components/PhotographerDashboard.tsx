@@ -2063,12 +2063,6 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <p className="font-mono text-xs uppercase text-gray-500">Ajuste os filtros ou limpe a busca para ver todo o catalogo.</p>
                 </div>
               )}
-              <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
-                <Search className="w-10 h-10 text-gray-600 mx-auto mb-4" />
-                <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhum produto encontrado</h3>
-                <p className="font-mono text-xs uppercase text-gray-500">Ajuste os filtros ou limpe a busca para ver todo o catalogo.</p>
-              </div>
-              )}
             </motion.div>
           )}
 

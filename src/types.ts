@@ -5,6 +5,7 @@ export interface Photographer {
   bio: string;
   avatar: string;
   phone?: string;
+  instagram?: string;
   cpf?: string;
   verified: boolean;
   role?: 'photographer';

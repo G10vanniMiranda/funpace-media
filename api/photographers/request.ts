@@ -58,6 +58,15 @@ function onlyPhoneDigits(value: string | null | undefined) {
   return withoutCountry.slice(0, 11);
 }
 
+function onlyInstagramHandle(value: string | null | undefined) {
+  return String(value ?? '').trim().replace(/^@+/, '').toLowerCase();
+}
+
+function isValidInstagramHandle(value: string | null | undefined) {
+  const handle = onlyInstagramHandle(value);
+  return handle.length >= 1 && handle.length <= 30 && /^[a-z0-9._]+$/.test(handle);
+}
+
 function isValidCpf(value: string | null | undefined) {
   const cpf = onlyCpfDigits(value);
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -120,6 +129,7 @@ function photographerPayload(input: {
   id?: string;
   name: string;
   email: string;
+  instagram: string;
   bio: string;
   phone: string;
   avatar: string;
@@ -128,6 +138,7 @@ function photographerPayload(input: {
   return {
     ...(input.id ? { id: input.id } : {}),
     name: input.name,
+    instagram: input.instagram,
     email: input.email,
     bio: input.bio,
     phone: input.phone,
@@ -148,6 +159,7 @@ function photographerPayload(input: {
 function photographerUpdatePayload(input: {
   name: string;
   email: string;
+  instagram: string;
   bio: string;
   phone: string;
   avatar: string;
@@ -155,6 +167,7 @@ function photographerUpdatePayload(input: {
 }) {
   return {
     name: input.name,
+    instagram: input.instagram,
     email: input.email,
     bio: input.bio,
     phone: input.phone,
@@ -197,7 +210,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     step = 'parse_body';
-    const { userId, email, name, bio, cpf, phone, avatar } = getJsonBody(req);
+    const { userId, email, name, instagram, bio, cpf, phone, avatar } = getJsonBody(req);
 
     step = 'validacao';
     if (typeof email !== 'string' || !email.includes('@') || email.length > 256) {
@@ -216,6 +229,11 @@ export default async function handler(req: any, res: any) {
     const cpfDigits = onlyCpfDigits(typeof cpf === 'string' ? cpf : '');
     if (!cpfDigits || !isValidCpf(cpfDigits)) {
       return res.status(400).json({ error: 'CPF valido e obrigatorio para cadastro de fotografo.' });
+    }
+
+    const instagramHandle = onlyInstagramHandle(typeof instagram === 'string' ? instagram : '');
+    if (!isValidInstagramHandle(instagramHandle)) {
+      return res.status(400).json({ error: 'Instagram valido e obrigatorio para cadastro de fotografo.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -243,6 +261,7 @@ export default async function handler(req: any, res: any) {
         body: JSON.stringify(photographerUpdatePayload({
           name: name.trim(),
           email: normalizedEmail,
+          instagram: `@${instagramHandle}`,
           bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
           phone: phoneDigits,
           avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',
@@ -258,6 +277,7 @@ export default async function handler(req: any, res: any) {
             id: resolvedId,
             name: name.trim(),
             email: normalizedEmail,
+            instagram: `@${instagramHandle}`,
             bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
             phone: phoneDigits,
             avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',
@@ -275,6 +295,7 @@ export default async function handler(req: any, res: any) {
           body: JSON.stringify(photographerUpdatePayload({
             name: name.trim(),
             email: normalizedEmail,
+            instagram: `@${instagramHandle}`,
             bio: typeof bio === 'string' ? bio.slice(0, 1000) : '',
             phone: phoneDigits,
             avatar: typeof avatar === 'string' ? avatar.slice(0, 2048) : '',

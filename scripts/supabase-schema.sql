@@ -68,6 +68,7 @@ create table if not exists public.photographers (
   bio text not null default '' check (char_length(bio) <= 1000),
   avatar text not null default '',
   phone text,
+  instagram text check (instagram is null or char_length(instagram) <= 30),
   cpf text,
   verified boolean not null default false,
   role text not null default 'photographer' check (role in ('photographer')),
@@ -90,6 +91,7 @@ alter table public.photographers add column if not exists role text not null def
 alter table public.photographers add column if not exists "commissionPercent" numeric(5, 2);
 alter table public.photographers add column if not exists "blockedAt" timestamptz;
 alter table public.photographers add column if not exists "lastLoginAt" timestamptz;
+alter table public.photographers add column if not exists instagram text check (instagram is null or char_length(instagram) <= 30);
 
 create table if not exists public.customers (
   id text primary key,

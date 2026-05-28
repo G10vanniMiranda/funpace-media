@@ -22,6 +22,7 @@ export type SupabaseAuthUser = {
     full_name?: string;
     display_name?: string;
     preferred_username?: string;
+    instagram?: string;
     avatar_url?: string;
     cpf?: string;
     phone?: string;
@@ -657,13 +658,13 @@ export const loginWithEmail = async (email: string, password: string) => {
   return toAppUser(session.user);
 };
 
-export const registerWithEmail = async (email: string, password: string, name: string, cpf?: string, phone?: string | null) => {
+export const registerWithEmail = async (email: string, password: string, name: string, cpf?: string, phone?: string | null, instagram?: string | null) => {
   const response = await supabaseFetch<SupabaseSignupResponse>('/auth/v1/signup', {
     method: 'POST',
     body: JSON.stringify({
       email,
       password,
-      data: { name, cpf: cpf || null, phone: phone || null },
+      data: { name, cpf: cpf || null, phone: phone || null, instagram: instagram || null, preferred_username: instagram || null },
     }),
   });
 

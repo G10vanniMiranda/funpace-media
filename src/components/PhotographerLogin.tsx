@@ -17,6 +17,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
   const [isRegistering, setIsRegistering] = useState(false);
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
+  const [instagram, setInstagram] = useState('');
   const [bio, setBio] = useState('');
   const [phone, setPhone] = useState('');
   const [cpf, setCpf] = useState('');
@@ -26,10 +27,14 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
+  const normalizeInstagramHandle = (value: string) => String(value || '').trim().replace(/^@+/, '').toLowerCase();
+  const isValidInstagramHandle = (value: string) => /^[a-z0-9._]{1,30}$/.test(normalizeInstagramHandle(value));
+
   async function requestPendingPhotographer(input: {
     userId?: string | null;
     email: string;
     name: string;
+    instagram: string;
     bio: string;
     phone: string;
     cpf: string;
@@ -97,10 +102,19 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           return;
         }
 
+        const instagramHandle = normalizeInstagramHandle(instagram);
+        if (!isValidInstagramHandle(instagramHandle)) {
+          setError('Instagram inválido. Use apenas letras, números, pontos e underline.');
+          return;
+        }
+
+        const formattedInstagram = `@${instagramHandle}`;
+
         if (isMockMode) {
           await photographerService.addPhotographer({
             name,
             email,
+            instagram: formattedInstagram,
             bio,
             phone: phoneDigits,
             cpf: onlyCpfDigits(cpf),
@@ -125,6 +139,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           userId: null,
           email,
           name,
+          instagram: formattedInstagram,
           bio,
           phone: phoneDigits,
           cpf: onlyCpfDigits(cpf),
@@ -134,7 +149,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         let authUser = null;
         let requiresEmailConfirmation = false;
         try {
-          authUser = await registerWithEmail(email, password, name, onlyCpfDigits(cpf), phoneDigits);
+          authUser = await registerWithEmail(email, password, name, onlyCpfDigits(cpf), phoneDigits, formattedInstagram);
         } catch (registerError: any) {
           const registerMessage = String(registerError?.message || registerError || '');
           if (
@@ -154,6 +169,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             userId: authUser.id,
             email: authUser.email ?? email,
             name,
+            instagram: formattedInstagram,
             bio,
             phone: phoneDigits,
             cpf: onlyCpfDigits(cpf),
@@ -299,6 +315,17 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Seu Nome"
+                  className="w-full h-14 px-4 bg-gray-50 brutal-border font-mono text-sm focus:bg-white focus:ring-2 focus:ring-brutal-accent outline-none transition-all"
+                />
+              </div>
+              <div className="space-y-2">
+                <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Instagram (@login)</label>
+                <input
+                  type="text"
+                  required
+                  value={instagram}
+                  onChange={(e) => setInstagram(e.target.value)}
+                  placeholder="@seunome"
                   className="w-full h-14 px-4 bg-gray-50 brutal-border font-mono text-sm focus:bg-white focus:ring-2 focus:ring-brutal-accent outline-none transition-all"
                 />
               </div>

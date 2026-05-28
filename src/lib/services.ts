@@ -1237,7 +1237,7 @@ export const photographerService = {
 
   async updatePhotographerAdmin(
     id: string,
-    changes: Partial<Pick<Photographer, 'name' | 'bio' | 'avatar' | 'phone' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
+    changes: Partial<Pick<Photographer, 'name' | 'bio' | 'avatar' | 'phone' | 'instagram' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
   ): Promise<Photographer> {
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);

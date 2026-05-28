@@ -208,14 +208,14 @@ function getDbConfig() {
   return process.env.DATABASE_URL
     ? { connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } }
     : {
-        host: process.env.DB_HOST || process.env.PGHOST || process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
-        port: Number(process.env.DB_PORT || 5432),
-        database: process.env.DATABASE || process.env.PGDATABASE || "postgres",
-        user: process.env.DB_USER || process.env.PGUSER || process.env.POSTGRES_USER || "postgres",
-        password: dbPassword,
-        ssl: { rejectUnauthorized: false },
-        connectionTimeoutMillis: 15000,
-      };
+      host: process.env.DB_HOST || process.env.PGHOST || process.env.HOST || (supabaseRef ? `db.${supabaseRef}.supabase.co` : undefined),
+      port: Number(process.env.DB_PORT || 5432),
+      database: process.env.DATABASE || process.env.PGDATABASE || "postgres",
+      user: process.env.DB_USER || process.env.PGUSER || process.env.POSTGRES_USER || "postgres",
+      password: dbPassword,
+      ssl: { rejectUnauthorized: false },
+      connectionTimeoutMillis: 15000,
+    };
 }
 
 const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || "supabase";
@@ -584,12 +584,12 @@ function getWebhookEventId(payload: any, orderId: string, status: string) {
   return String(
     payload?.id ||
     payload?.event_id ||
-      payload?.eventId ||
-      payload?.transaction_nsu ||
-      payload?.transaction_id ||
-      payload?.transactionId ||
-      payload?.invoice_slug ||
-      `${orderId || "unknown"}:${status || "unknown"}`,
+    payload?.eventId ||
+    payload?.transaction_nsu ||
+    payload?.transaction_id ||
+    payload?.transactionId ||
+    payload?.invoice_slug ||
+    `${orderId || "unknown"}:${status || "unknown"}`,
   );
 }
 
@@ -1461,8 +1461,8 @@ app.post("/api/media/upload", express.raw({
     const uploaded = usesExternalBucket()
       ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
       : (() => {
-          throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.");
-        })();
+        throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.");
+      })();
 
     return res.json({
       path: uploaded.publicUrl || uploaded.path,
@@ -1558,8 +1558,8 @@ app.get("/api/media/storage-stats", async (req, res) => {
     const stats = usesExternalBucket()
       ? await getExternalBucketStorageStats()
       : (() => {
-          throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para consultar storage.");
-        })();
+        throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para consultar storage.");
+      })();
 
     return res.json(stats);
   } catch (error: any) {
@@ -1801,7 +1801,7 @@ app.post("/api/photographers/request", async (req, res) => {
   let pool: pg.Pool | null = null;
 
   try {
-    const { userId, email, name, bio, cpf, avatar } = req.body ?? {};
+    const { userId, email, name, instagram, bio, cpf, avatar } = req.body ?? {};
 
     if (typeof email !== "string" || !email.includes("@") || email.length > 256) {
       return res.status(400).json({ error: "Email invalido." });
@@ -1809,6 +1809,13 @@ app.post("/api/photographers/request", async (req, res) => {
 
     if (typeof name !== "string" || name.trim().length < 1 || name.trim().length > 100) {
       return res.status(400).json({ error: "Nome invalido." });
+    }
+
+    const normalizedInstagram = typeof instagram === "string"
+      ? String(instagram).trim().replace(/^@+/, "").toLowerCase()
+      : "";
+    if (!normalizedInstagram || normalizedInstagram.length > 30 || !/^[a-z0-9._]+$/.test(normalizedInstagram)) {
+      return res.status(400).json({ error: "Instagram valido e obrigatorio para cadastro de fotografo." });
     }
 
     const cpfDigits = onlyCpfDigits(typeof cpf === "string" ? cpf : "");
@@ -1826,12 +1833,14 @@ app.post("/api/photographers/request", async (req, res) => {
 
     const safeBio = typeof bio === "string" ? bio.slice(0, 1000) : "";
     const safeAvatar = typeof avatar === "string" ? avatar.slice(0, 2048) : "";
+    const safeInstagram = `@${normalizedInstagram}`;
 
     await pool.query(
       `
         insert into public.photographers (
           id,
           name,
+          instagram,
           email,
           bio,
           avatar,
@@ -1844,6 +1853,7 @@ app.post("/api/photographers/request", async (req, res) => {
         values (
           $1,
           $2,
+          $3,
           $3,
           $4,
           $5,
@@ -1862,6 +1872,7 @@ app.post("/api/photographers/request", async (req, res) => {
         )
         on conflict (id) do update set
           name = excluded.name,
+          instagram = excluded.instagram,
           email = excluded.email,
           bio = excluded.bio,
           avatar = excluded.avatar,
@@ -1869,7 +1880,7 @@ app.post("/api/photographers/request", async (req, res) => {
           verified = false,
           "updatedAt" = now()
       `,
-      [resolvedId, name.trim(), normalizedEmail, safeBio, safeAvatar, cpfDigits],
+      [resolvedId, name.trim(), safeInstagram, normalizedEmail, safeBio, safeAvatar, cpfDigits],
     );
 
     await pool.query("commit");
@@ -1983,11 +1994,11 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
   const orderId = getWebhookOrderId(payload);
   const transactionNsu = String(
     payload?.transaction_nsu ||
-      payload?.transactionNSU ||
-      payload?.transaction_id ||
-      payload?.transactionId ||
-      payload?.id ||
-      "",
+    payload?.transactionNSU ||
+    payload?.transaction_id ||
+    payload?.transactionId ||
+    payload?.id ||
+    "",
   );
   const slug = String(payload?.invoice_slug || payload?.invoiceSlug || payload?.slug || "");
 

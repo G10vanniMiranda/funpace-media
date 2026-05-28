@@ -2171,6 +2171,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-4">
                     Vendas pagas liberadas, descontando saques pendentes e pagos.
                   </p>
+                  {dashboardMetrics.availableBalance <= 0 && dashboardMetrics.pendingEarnings > 0 && (
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-yellow-400 mt-2">
+                      {formatCurrency(dashboardMetrics.pendingEarnings)} aguardando liberação em 7 dias
+                    </p>
+                  )}
                 </div>
                 <div className="w-full xl:w-[320px] bg-[#080d14] border border-white/10 p-4">
                   <button

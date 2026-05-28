@@ -607,11 +607,25 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       .map(([eventName, products]) => ({
         eventName,
         products: products.sort((left, right) => {
-          const leftDate = Date.parse(left.createdAt || '');
-          const rightDate = Date.parse(right.createdAt || '');
-          if (Number.isFinite(leftDate) && Number.isFinite(rightDate)) {
-            return rightDate - leftDate;
+          const parseBibNumber = (value?: string) => {
+            if (!value) return NaN;
+            const match = value.match(/\d+/);
+            return match ? Number(match[0]) : NaN;
+          };
+
+          const leftBib = parseBibNumber(left.bib);
+          const rightBib = parseBibNumber(right.bib);
+          const leftHasBib = Number.isFinite(leftBib);
+          const rightHasBib = Number.isFinite(rightBib);
+
+          if (leftHasBib && rightHasBib) {
+            if (leftBib !== rightBib) return leftBib - rightBib;
+          } else if (leftHasBib) {
+            return -1;
+          } else if (rightHasBib) {
+            return 1;
           }
+
           return String(left.name || '').localeCompare(String(right.name || ''), 'pt-BR', { sensitivity: 'base' });
         }),
       }));

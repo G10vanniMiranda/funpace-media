@@ -1,15 +1,17 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, CreditCard, Image as ImageIcon, Landmark, Loader2, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, CreditCard, ExternalLink, Image as ImageIcon, Loader2, QrCode, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
+import { ProtectedMedia } from './ProtectedMedia';
+import { CheckoutPaymentMethod, CreateCheckoutResult } from '../lib/services';
 
 interface CheckoutPageProps {
   cartItems: Product[];
   onRemoveItem: (id: string) => void;
-  onCheckout: (buyer: Buyer) => Promise<void>;
+  onCheckout: (buyer: Buyer, paymentMethod: CheckoutPaymentMethod) => Promise<CreateCheckoutResult>;
   onLoginRequested: () => void;
 }
 
@@ -51,7 +53,9 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const [email, setEmail] = useState(user?.email ?? '');
   const [phone, setPhone] = useState('');
   const [cpf, setCpf] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submittingMethod, setSubmittingMethod] = useState<CheckoutPaymentMethod | null>(null);
+  const [checkoutResult, setCheckoutResult] = useState<CreateCheckoutResult | null>(null);
+  const [copiedPix, setCopiedPix] = useState(false);
 
   useEffect(() => {
     setFullName(user?.displayName || titleCaseFromEmail(user?.email));
@@ -65,9 +69,10 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
     /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
     phoneDigits.length >= 10 &&
     isValidCpf(cpf);
+  const isSubmitting = Boolean(submittingMethod);
   const canPay = cartItems.length > 0 && Boolean(user) && contactValid && meetsMinimumTotal && !isSubmitting;
 
-  const handlePay = async () => {
+  const handlePay = async (paymentMethod: CheckoutPaymentMethod) => {
     if (!user) {
       onLoginRequested();
       return;
@@ -75,17 +80,31 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
 
     if (!contactValid) return;
 
-    setIsSubmitting(true);
+    setSubmittingMethod(paymentMethod);
+    setCheckoutResult(null);
     try {
-      await onCheckout({
+      const result = await onCheckout({
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
         phone: phoneDigits,
         cpf,
-      });
+      }, paymentMethod);
+
+      setCheckoutResult(result);
+      if (paymentMethod !== 'pix' || !result.pix?.qrCode) {
+        window.location.href = result.paymentUrl;
+      }
     } finally {
-      setIsSubmitting(false);
+      setSubmittingMethod(null);
     }
+  };
+
+  const copyPixCode = async () => {
+    const code = checkoutResult?.pix?.qrCode;
+    if (!code) return;
+    await navigator.clipboard.writeText(code);
+    setCopiedPix(true);
+    window.setTimeout(() => setCopiedPix(false), 1800);
   };
 
   return (
@@ -156,11 +175,70 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
               <h2 className="font-display text-2xl uppercase">Pagamento</h2>
               <span className="font-mono text-[10px] uppercase text-gray-400">Etapa 2 de 2</span>
             </div>
-            <div className="grid grid-cols-3 gap-3">
-              <PaymentBadge icon={<Smartphone className="w-5 h-5" />} label="Pix" />
-              <PaymentBadge icon={<CreditCard className="w-5 h-5" />} label="Credito" />
-              <PaymentBadge icon={<Landmark className="w-5 h-5" />} label="Debito" />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <PaymentAction
+                icon={<Smartphone className="w-5 h-5" />}
+                title="Pagar com PIX"
+                detail="Confirmacao automatica via InfinitePay"
+                disabled={!canPay}
+                loading={submittingMethod === 'pix'}
+                onClick={() => handlePay('pix')}
+              />
+              <PaymentAction
+                icon={<CreditCard className="w-5 h-5" />}
+                title="Pagar com cartao"
+                detail="Credito, e debito se disponivel no checkout"
+                disabled={!canPay}
+                loading={submittingMethod === 'credit_card'}
+                onClick={() => handlePay('credit_card')}
+              />
             </div>
+            {checkoutResult?.paymentMethod === 'pix' && (
+              <div className="bg-white brutal-border p-4 space-y-3">
+                <div className="flex items-start gap-3">
+                  <QrCode className="w-5 h-5 text-brutal-accent shrink-0" />
+                  <div>
+                    <p className="font-display text-xl uppercase">PIX aguardando pagamento</p>
+                    <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
+                      Quando a InfinitePay confirmar o pagamento, os downloads serao liberados automaticamente.
+                    </p>
+                  </div>
+                </div>
+                {checkoutResult.pix?.qrCodeImage && (
+                  <img src={checkoutResult.pix.qrCodeImage} alt="QR Code PIX" className="mx-auto h-48 w-48 object-contain brutal-border-thin bg-white p-2" />
+                )}
+                {checkoutResult.pix?.qrCode ? (
+                  <>
+                    <textarea
+                      readOnly
+                      value={checkoutResult.pix.qrCode}
+                      className="h-24 w-full resize-none brutal-border-thin bg-gray-50 p-3 font-mono text-[10px] uppercase outline-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={copyPixCode}
+                      className="min-h-11 w-full bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
+                    >
+                      <Copy className="w-4 h-4" />
+                      {copiedPix ? 'Codigo copiado' : 'Copiar codigo PIX'}
+                    </button>
+                  </>
+                ) : (
+                  <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
+                    Este retorno da InfinitePay nao trouxe QR Code direto. Abra o ambiente seguro para concluir com PIX.
+                  </p>
+                )}
+                {checkoutResult.paymentUrl && (
+                  <a
+                    href={checkoutResult.paymentUrl}
+                    className="min-h-11 w-full bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors inline-flex items-center justify-center gap-2"
+                  >
+                    Abrir checkout seguro
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
+                )}
+              </div>
+            )}
             <div className="bg-gray-50 brutal-border-thin p-4 flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
               <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
@@ -209,6 +287,10 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
               <span>R$ {total.toFixed(2).replace('.', ',')}</span>
             </div>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
+              <span>Descontos</span>
+              <span>R$ 0,00</span>
+            </div>
+            <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Entrega</span>
               <span>Digital</span>
             </div>
@@ -219,7 +301,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
           </div>
 
           <button
-            onClick={handlePay}
+            onClick={() => handlePay('checkout')}
             disabled={!canPay}
             className={`w-full h-16 flex items-center justify-center gap-2 font-display text-xl tracking-widest border-2 border-brutal-black transition-all ${
               canPay
@@ -251,10 +333,12 @@ function ProductThumbnail({ item }: { item: Product }) {
   return (
     <div className="w-16 h-16 brutal-border-thin overflow-hidden bg-gray-100 shrink-0">
       {previewUrl && !failed ? (
-        <img
+        <ProtectedMedia
           src={previewUrl}
           alt={item.name}
-          className="w-full h-full object-cover"
+          type={item.type}
+          watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+          imgClassName="w-full h-full object-cover"
           onError={() => setFailed(true)}
         />
       ) : (
@@ -299,11 +383,31 @@ function CheckoutInput({
   );
 }
 
-function PaymentBadge({ icon, label }: { icon: React.ReactNode; label: string }) {
+function PaymentAction({
+  icon,
+  title,
+  detail,
+  disabled,
+  loading,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  detail: string;
+  disabled: boolean;
+  loading: boolean;
+  onClick: () => void;
+}) {
   return (
-    <div className="h-16 brutal-border-thin bg-gray-50 flex flex-col items-center justify-center gap-1">
-      <span className="text-brutal-accent">{icon}</span>
-      <span className="font-mono text-[10px] uppercase font-bold tracking-tight text-gray-600">{label}</span>
-    </div>
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`min-h-24 brutal-border-thin p-4 text-left transition-colors ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50 cursor-pointer'}`}
+    >
+      <span className="mb-3 inline-flex text-brutal-accent">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : icon}</span>
+      <span className="block font-display text-lg uppercase">{title}</span>
+      <span className="mt-1 block font-mono text-[10px] uppercase leading-relaxed text-gray-500">{detail}</span>
+    </button>
   );
 }

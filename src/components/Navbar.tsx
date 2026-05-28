@@ -1,4 +1,4 @@
-import { ShoppingCart, User, Search, Camera, LogOut, X, Menu, Image as ImageIcon, ReceiptText } from 'lucide-react';
+import { ShoppingCart, User, Search, Camera, LogOut, X, Menu, Image as ImageIcon, LayoutDashboard } from 'lucide-react';
 import React, { useState, FormEvent, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
@@ -13,6 +13,7 @@ interface NavbarProps {
   onSelfieSearch: (file: File) => void;
   onOpenDashboard: () => void;
   onOpenOrders: () => void;
+  onOpenAccount?: () => void;
 }
 
 function titleCaseFromEmail(email: string) {
@@ -27,7 +28,7 @@ function titleCaseFromEmail(email: string) {
     .join(' ');
 }
 
-export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, onSearch, onSelfieSearch, onOpenDashboard, onOpenOrders }: NavbarProps) {
+export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, onSearch, onSelfieSearch, onOpenDashboard, onOpenOrders, onOpenAccount }: NavbarProps) {
   const { user } = useAuth();
   const [isSearching, setIsSearching] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -132,11 +133,11 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
               <span className="hidden lg:inline font-mono text-xs uppercase tracking-widest">{userLabel}</span>
             </div>
             <button
-              onClick={onOpenOrders}
+              onClick={onOpenAccount || onOpenOrders}
               className="flex items-center gap-2 hover:text-brutal-accent font-mono text-sm uppercase transition-colors cursor-pointer"
             >
-              <ReceiptText className="w-4 h-4" />
-              <span>Compras</span>
+              <LayoutDashboard className="w-4 h-4" />
+              <span>Conta</span>
             </button>
             <button
               onClick={() => logout()}
@@ -305,13 +306,13 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
 
                           <button
                             onClick={() => {
-                              onOpenOrders();
+                              (onOpenAccount || onOpenOrders)();
                               setIsMenuOpen(false);
                             }}
                             className="w-full min-h-12 brutal-border flex items-center justify-center gap-2 font-mono text-sm uppercase hover:bg-gray-50 transition-colors cursor-pointer px-4"
                           >
-                            <ReceiptText className="w-4 h-4" />
-                            Minhas Compras
+                            <LayoutDashboard className="w-4 h-4" />
+                            Minha Conta
                           </button>
                           <button
                             onClick={() => {

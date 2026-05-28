@@ -105,7 +105,7 @@ export function Contato() {
                   icon: MessageCircle,
                   title: 'Compradores',
                   text: 'Informe o email da compra e o pedido, se tiver.',
-                  action: 'Minhas Compras',
+                  action: 'Minha Conta',
                 },
                 {
                   icon: UserRound,

@@ -1,6 +1,7 @@
 import { ArrowRight, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { Product } from '../types';
+import { ProtectedMedia } from './ProtectedMedia';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -140,10 +141,12 @@ function ProductThumbnail({ item }: { item: Product }) {
   return (
     <div className="w-20 h-20 bg-gray-200 border-2 border-brutal-black overflow-hidden shrink-0">
       {previewUrl && !failed ? (
-        <img
+        <ProtectedMedia
           src={previewUrl}
           alt={item.name}
-          className="w-full h-full object-cover"
+          type={item.type}
+          watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+          imgClassName="w-full h-full object-cover"
           onError={() => setFailed(true)}
         />
       ) : (

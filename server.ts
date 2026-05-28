@@ -7,6 +7,9 @@ import pg from "pg";
 import cors from "cors";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
+import { getActivePaymentProvider } from "./api/payments/paymentProvider";
+import { fulfillPaidOrder, recordPayment } from "./api/shared/checkoutFulfillment";
+import type { PaymentMethod } from "./api/payments/providers/types";
 
 dotenv.config();
 
@@ -303,6 +306,17 @@ async function getAuthenticatedRequestUser(req: express.Request): Promise<{ id: 
   return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
 }
 
+async function isVerifiedPhotographerUser(userId: string) {
+  const { data, error } = await getSupabaseAdmin()
+    .from("photographers")
+    .select("id,verified")
+    .eq("id", userId)
+    .eq("verified", true)
+    .maybeSingle();
+
+  return !error && Boolean(data?.id);
+}
+
 async function getAuthenticatedAdminUser(req: express.Request): Promise<{ id: string; email: string | null } | null> {
   const token = getBearerToken(req);
   if (!token) return null;
@@ -311,7 +325,7 @@ async function getAuthenticatedAdminUser(req: express.Request): Promise<{ id: st
   if (error || !data.user?.id) return null;
 
   const role = String(data.user.app_metadata?.role || "");
-  if (role !== "admin") return null;
+  if (role !== "admin" && role !== "super_admin") return null;
 
   return {
     id: data.user.id,
@@ -581,8 +595,9 @@ function getWebhookEventId(payload: any, orderId: string, status: string) {
 
 function mapNonPaidPaymentStatus(status: unknown) {
   const normalized = String(status || "").toLowerCase();
-  if (["failed", "rejected", "denied", "expired"].includes(normalized)) return "failed";
-  if (["cancelled", "canceled", "voided"].includes(normalized)) return "cancelled";
+  if (["rejected", "denied", "refused"].includes(normalized)) return "refused";
+  if (["failed", "expired"].includes(normalized)) return "failed";
+  if (["cancelled", "canceled", "voided"].includes(normalized)) return "canceled";
   if (["refunded", "chargeback"].includes(normalized)) return "refunded";
   return "pending";
 }
@@ -1120,6 +1135,9 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
   try {
     const { items, successUrl, buyer } = req.body;
+    const paymentMethod: PaymentMethod = req.body?.paymentMethod === "pix" || req.body?.paymentMethod === "credit_card"
+      ? req.body.paymentMethod
+      : "checkout";
     const authUser = await getAuthenticatedRequestUser(req);
 
     if (!authUser?.id) {
@@ -1193,8 +1211,11 @@ app.post("/api/checkout/create-session", async (req, res) => {
         buyerPhone,
         buyerCpf,
         total,
+        subtotal: total,
+        discountTotal: 0,
         status: "pending",
-        paymentProvider: "infinitepay",
+        paymentMethod,
+        paymentProvider: process.env.PAYMENT_PROVIDER || "infinitepay",
       })
       .select("id")
       .single();
@@ -1224,88 +1245,67 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     if (orderItemsError) throw orderItemsError;
 
-    const handle = process.env.INFINITEPAY_HANDLE;
-
-    if (!handle) {
-      return res.status(500).json({ error: "INFINITEPAY_HANDLE nao configurado." });
-    }
-
     const successRedirectUrl = buildSafeCheckoutSuccessUrl(req, successUrl, orderId);
-
-    const phoneDigits = typeof buyer.phone === "string" ? String(buyer.phone).replace(/\D/g, "") : "";
-    const phoneE164 = phoneDigits.length >= 10 ? `+55${phoneDigits}` : "";
-
-    // InfinitePay Checkout API (official) - create a proper checkout link with items in cents.
-    const checkoutPayload: any = {
-      handle,
-      order_nsu: orderId,
-      redirect_url: successRedirectUrl,
-      webhook_url: getInfinitePayWebhookUrl(req),
-      items: products.map((product: any) => ({
-        quantity: 1,
-        price: Math.round(Number(product.price) * 100),
-        description: `Download digital - ${String(product.name || "Foto").slice(0, 100)}`,
-      })),
-    };
-
-    // Customer is optional, but if sent, InfinitePay may require phone_number. Only include when we have it.
-    if (phoneE164) {
-      checkoutPayload.customer = {
-        name: String(buyer.fullName || "").slice(0, 120),
-        email: String(buyer.email || "").slice(0, 256),
-        phone_number: phoneE164,
-      };
-    }
-
-    const checkoutResponse = await fetch(getInfinitePayCheckoutEndpoint(), {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(checkoutPayload),
-    });
-
-    if (!checkoutResponse.ok) {
-      const message = await checkoutResponse.text();
-      await getSupabaseAdmin()
-        .from("orders")
-        .update({ status: "failed" })
-        .eq("id", orderId);
-      return res.status(502).json({ error: message || "Falha ao gerar link na InfinitePay." });
-    }
-
-    const checkoutData: any = await checkoutResponse.json().catch(() => ({}));
-    const checkoutUrlWithOrder =
-      checkoutData?.url ||
-      checkoutData?.link ||
-      checkoutData?.checkout_url ||
-      checkoutData?.payment_url ||
-      "";
-
-    if (!checkoutUrlWithOrder) {
-      await getSupabaseAdmin()
-        .from("orders")
-        .update({ status: "failed" })
-        .eq("id", orderId);
-      return res.status(502).json({ error: "Resposta invalida da InfinitePay ao criar link." });
-    }
-
+    const provider = getActivePaymentProvider();
+    let paymentResult;
     try {
-      assertInfinitePayCheckoutUrl(checkoutUrlWithOrder);
+      paymentResult = await provider.createCheckout({
+        orderId,
+        buyer: {
+          fullName: buyerName,
+          email: buyerEmail,
+          phone: buyerPhone,
+          cpf: buyerCpf,
+        },
+        items: products.map((product: any) => ({
+          id: product.id,
+          name: product.name,
+          price: Number(product.price),
+        })),
+        paymentMethod,
+        successUrl: successRedirectUrl,
+        webhookUrl: `${getRequestOrigin(req)}/api/webhooks/${provider.name}`,
+      });
     } catch (error: any) {
       await getSupabaseAdmin()
         .from("orders")
         .update({ status: "failed" })
         .eq("id", orderId);
-      return res.status(502).json({ error: error?.message || "URL de checkout invalida." });
+      return res.status(502).json({ error: error?.message || `Falha ao gerar checkout com ${provider.name}.` });
     }
+
+    await recordPayment({
+      orderId,
+      provider: paymentResult.provider,
+      providerPaymentId: paymentResult.providerPaymentId || orderId,
+      method: paymentResult.method,
+      status: paymentResult.status,
+      rawResponse: paymentResult.rawResponse,
+    });
 
     const { error: checkoutUrlError } = await getSupabaseAdmin()
       .from("orders")
-      .update({ checkoutUrl: checkoutUrlWithOrder })
+      .update({
+        checkoutUrl: paymentResult.checkoutUrl,
+        paymentExternalId: paymentResult.providerPaymentId,
+        paymentProvider: paymentResult.provider,
+      })
       .eq("id", orderId);
 
     if (checkoutUrlError) throw checkoutUrlError;
 
-    res.json({ url: checkoutUrlWithOrder, orderId, total });
+    res.json({
+      url: paymentResult.checkoutUrl,
+      paymentUrl: paymentResult.checkoutUrl,
+      orderId,
+      total,
+      subtotal: total,
+      discountTotal: 0,
+      paymentMethod,
+      provider: paymentResult.provider,
+      status: paymentResult.status,
+      pix: paymentResult.pix || null,
+    });
   } catch (error: any) {
     console.error("Erro ao criar checkout:", error);
     res.status(500).json({ error: error.message });
@@ -1410,10 +1410,20 @@ app.post("/api/checkout/confirm", async (req, res) => {
         set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
         where id = $2
           and "paymentProvider" = 'infinitepay'
-          and status in ('pending', 'failed', 'cancelled')
+          and status in ('pending', 'failed', 'cancelled', 'canceled', 'refused')
       `,
       [transactionNsu, orderId],
     );
+
+    await recordPayment({
+      orderId,
+      provider: "infinitepay",
+      providerPaymentId: transactionNsu || orderId,
+      method: "checkout",
+      status: "paid",
+      rawResponse: { source: "checkout-confirm", transactionNsu, slug },
+    });
+    await fulfillPaidOrder(orderId);
 
     return res.json({ paid: true, confirmedBy: "payment_check" });
   } finally {
@@ -1433,6 +1443,10 @@ app.post("/api/media/upload", express.raw({
 
   if (!authUser?.id) {
     return res.status(401).json({ error: "Entre novamente no painel para enviar arquivos." });
+  }
+
+  if (!(await isVerifiedPhotographerUser(authUser.id))) {
+    return res.status(403).json({ error: "Apenas fotografos aprovados podem enviar midias." });
   }
 
   if (!storagePath || storagePath.includes("..") || storagePath.startsWith("/") || !storagePath.startsWith(`${authUser.id}/`)) {
@@ -1706,6 +1720,33 @@ app.post("/api/downloads/authorize", async (req, res) => {
       return res.status(403).json({ error: "Este pedido nao pertence ao usuario logado." });
     }
 
+    const { data: accessRows } = await getSupabaseAdmin()
+      .from("download_access")
+      .select("*")
+      .eq("orderId", orderId)
+      .eq("photoId", (item as any).productId)
+      .eq("isActive", true)
+      .limit(1);
+    const access = accessRows?.[0];
+    if (access?.expiresAt && new Date(access.expiresAt).getTime() <= Date.now()) {
+      return res.status(403).json({ error: "O acesso temporario deste download expirou. Entre em contato com o suporte." });
+    }
+
+    if (!access) {
+      const expiresAt = new Date(Date.now() + Number(process.env.DOWNLOAD_ACCESS_DAYS || 30) * 24 * 60 * 60 * 1000).toISOString();
+      await getSupabaseAdmin()
+        .from("download_access")
+        .upsert({
+          orderId,
+          photoId: (item as any).productId,
+          orderItemId: (item as any).id,
+          userId: order.userId || null,
+          customerEmail: order.buyerEmail,
+          isActive: true,
+          expiresAt,
+        }, { onConflict: "orderId,photoId" });
+    }
+
     const { data: products, error: productError } = await getSupabaseAdmin()
       .from("products")
       .select("*")
@@ -1737,6 +1778,14 @@ app.post("/api/downloads/authorize", async (req, res) => {
     if (eventError) {
       console.error("Erro ao registrar evento de download:", eventError);
     }
+
+    await getSupabaseAdmin()
+      .from("downloads")
+      .insert({
+        orderId: (item as any).orderId,
+        photoId: (item as any).productId,
+        userId: order.userId,
+      });
 
     const signedUrl = await createSignedMediaUrl((item as any).url || (product as any)?.storagePath || "", 300);
     return res.json({ url: signedUrl });
@@ -1999,11 +2048,20 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
           set status = 'paid', "paymentExternalId" = coalesce($1, "paymentExternalId")
           where id = $2
             and "paymentProvider" = 'infinitepay'
-            and status in ('pending', 'failed', 'cancelled')
+          and status in ('pending', 'failed', 'cancelled', 'canceled', 'refused')
         `,
         [paymentExternalId, orderId],
       );
-    } else if (["failed", "cancelled", "refunded"].includes(status)) {
+      await recordPayment({
+        orderId,
+        provider: "infinitepay",
+        providerPaymentId: paymentExternalId || eventId,
+        method: "checkout",
+        status: "paid",
+        rawResponse: { ...payload, payment_check: paymentCheck },
+      });
+      await fulfillPaidOrder(orderId);
+    } else if (["failed", "cancelled", "canceled", "refused", "refunded"].includes(status)) {
       await pool.query(
         `
           update public.orders
@@ -2014,6 +2072,14 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
         `,
         [status, paymentExternalId, orderId],
       );
+      await recordPayment({
+        orderId,
+        provider: "infinitepay",
+        providerPaymentId: paymentExternalId || eventId,
+        method: "checkout",
+        status: status as any,
+        rawResponse: { ...payload, payment_check: paymentCheck },
+      });
     }
   } finally {
     await pool.end();

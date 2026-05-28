@@ -196,6 +196,35 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Este pedido nao pertence ao usuario logado.' });
     }
 
+    const accessRows = await supabaseRequest<any[]>(
+      `/rest/v1/download_access?select=*&orderId=eq.${encodeURIComponent(orderId)}&photoId=eq.${encodeURIComponent(item.productId)}&isActive=eq.true&limit=1`,
+    ).catch(() => []);
+    const access = accessRows[0];
+    const isExpired = access?.expiresAt ? new Date(access.expiresAt).getTime() <= Date.now() : false;
+
+    if (access && isExpired) {
+      return res.status(403).json({ error: 'O acesso temporario deste download expirou. Entre em contato com o suporte.' });
+    }
+
+    if (!access) {
+      const expiresAt = new Date(Date.now() + Number(process.env.DOWNLOAD_ACCESS_DAYS || 30) * 24 * 60 * 60 * 1000).toISOString();
+      await supabaseRequest('/rest/v1/download_access?on_conflict=orderId,photoId', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          orderId,
+          photoId: item.productId,
+          orderItemId: item.id,
+          userId: order.userId || null,
+          customerEmail: order.buyerEmail,
+          isActive: true,
+          expiresAt,
+        }),
+      }).catch((error) => {
+        console.error('Nao foi possivel criar acesso de download:', error);
+      });
+    }
+
     const products = await supabaseRequest<any[]>(
       `/rest/v1/products?select=*&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
     );
@@ -216,6 +245,18 @@ export default async function handler(req: any, res: any) {
       }),
     }).catch((error) => {
       console.error('Nao foi possivel registrar evento de download:', error);
+    });
+
+    await supabaseRequest('/rest/v1/downloads', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({
+        orderId: item.orderId,
+        photoId: item.productId,
+        userId: order.userId,
+      }),
+    }).catch((error) => {
+      console.error('Nao foi possivel registrar download do cliente:', error);
     });
 
     const url = await createSignedMediaUrl(item.url || product?.storagePath || '');

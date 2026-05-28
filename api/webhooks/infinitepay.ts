@@ -1,11 +1,13 @@
 import {
-  getInfinitePayPaymentCheckEndpoint,
   getJsonBody,
   handleOptions,
   isUuid,
   setCors,
   supabaseRequest,
 } from '../shared/utils';
+import { createHmac, timingSafeEqual } from 'crypto';
+import { infinitePayProvider } from '../payments/providers/infinitepay';
+import { fulfillPaidOrder, recordPayment } from '../shared/checkoutFulfillment';
 
 function normalizeKey(value: string) {
   return value.replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -44,8 +46,9 @@ function mapNonPaidPaymentStatus(payload: any) {
     'type',
   ]).toLowerCase();
 
-  if (['failed', 'rejected', 'denied', 'expired'].includes(rawStatus)) return 'failed';
-  if (['cancelled', 'canceled', 'voided'].includes(rawStatus)) return 'cancelled';
+  if (['rejected', 'denied', 'refused'].includes(rawStatus)) return 'refused';
+  if (['failed', 'expired'].includes(rawStatus)) return 'failed';
+  if (['cancelled', 'canceled', 'voided'].includes(rawStatus)) return 'canceled';
   if (['refunded', 'chargeback'].includes(rawStatus)) return 'refunded';
   return 'pending';
 }
@@ -63,39 +66,6 @@ function getWebhookEventId(payload: any, orderId: string, status: string, transa
     'invoiceSlug',
     'slug',
   ]) || `${orderId}:${transactionNsu || status}`;
-}
-
-async function checkInfinitePayPayment(input: {
-  handle: string;
-  orderId: string;
-  transactionNsu: string;
-  slug: string;
-}) {
-  const response = await fetch(getInfinitePayPaymentCheckEndpoint(), {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      handle: input.handle,
-      order_nsu: input.orderId,
-      transaction_nsu: input.transactionNsu,
-      slug: input.slug,
-    }),
-  });
-
-  const raw = await response.text();
-  let payload: any = {};
-
-  try {
-    payload = raw ? JSON.parse(raw) : {};
-  } catch {
-    payload = { message: raw };
-  }
-
-  if (!response.ok) {
-    throw new Error(payload?.message || payload?.error || raw || `InfinitePay HTTP ${response.status}`);
-  }
-
-  return payload;
 }
 
 async function recordPaymentEvent(input: {
@@ -121,13 +91,47 @@ async function recordPaymentEvent(input: {
   }
 }
 
+function getWebhookSignature(req: any) {
+  return String(req.headers?.['x-infinitepay-signature'] || req.headers?.['x-webhook-signature'] || req.headers?.['x-signature'] || '');
+}
+
+function getWebhookToken(req: any) {
+  return String(req.headers?.['x-infinitepay-token'] || req.headers?.['x-webhook-token'] || req.query?.token || '');
+}
+
+function isValidWebhookSignature(req: any, payload: any) {
+  const secret = process.env.INFINITEPAY_WEBHOOK_SECRET || process.env.INFINITEPAY_WEBHOOK_TOKEN || '';
+  if (!secret) return true;
+
+  const token = getWebhookToken(req);
+  if (token && token === secret) return true;
+
+  const signature = getWebhookSignature(req).replace(/^sha256=/i, '').trim();
+  if (!signature) return false;
+
+  const raw = typeof req.body === 'string' ? req.body : JSON.stringify(payload);
+  const digest = createHmac('sha256', secret).update(raw).digest('hex');
+  try {
+    return timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
+  } catch {
+    return false;
+  }
+}
+
+function normalizePaymentMethod(value: string) {
+  const normalized = value.toLowerCase();
+  if (normalized.includes('pix')) return 'pix';
+  if (normalized.includes('card') || normalized.includes('credit') || normalized.includes('credito')) return 'credit_card';
+  return 'checkout';
+}
+
 async function updateOrderStatus(input: {
   orderId: string;
   status: string;
   transactionNsu: string;
 }) {
   if (input.status === 'paid') {
-    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled)`, {
+    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled,canceled,refused)`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({
@@ -138,7 +142,7 @@ async function updateOrderStatus(input: {
     return;
   }
 
-  if (['failed', 'cancelled', 'refunded'].includes(input.status)) {
+  if (['failed', 'cancelled', 'canceled', 'refused', 'refunded'].includes(input.status)) {
     await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=neq.paid`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
@@ -159,6 +163,10 @@ export default async function handler(req: any, res: any) {
   }
 
   const payload = getJsonBody(req);
+  if (!isValidWebhookSignature(req, payload)) {
+    return res.status(401).json({ error: 'Assinatura do webhook invalida.' });
+  }
+
   const orderId = getPayloadValue(payload, [
     'order_nsu',
     'orderNSU',
@@ -187,11 +195,6 @@ export default async function handler(req: any, res: any) {
     return res.status(400).json({ error: 'Pedido invalido no webhook.' });
   }
 
-  const handle = process.env.INFINITEPAY_HANDLE;
-  if (!handle) {
-    return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
-  }
-
   if (!transactionNsu || !slug) {
     await recordPaymentEvent({
       eventId: getWebhookEventId(payload, orderId, 'pending', transactionNsu),
@@ -213,8 +216,11 @@ export default async function handler(req: any, res: any) {
   }
 
   let paymentCheck: any = {};
+  let status = mapNonPaidPaymentStatus(payload);
   try {
-    paymentCheck = await checkInfinitePayPayment({ handle, orderId, transactionNsu, slug });
+    const checked = await infinitePayProvider.checkPayment({ orderId, transactionNsu, slug });
+    paymentCheck = checked.rawResponse;
+    status = checked.status;
   } catch (error: any) {
     await recordPaymentEvent({
       eventId: getWebhookEventId(payload, orderId, 'pending', transactionNsu),
@@ -226,7 +232,6 @@ export default async function handler(req: any, res: any) {
     return res.status(502).json({ error: error?.message || 'Falha ao validar webhook na InfinitePay.' });
   }
 
-  const status = paymentCheck?.paid ? 'paid' : mapNonPaidPaymentStatus(payload);
   const eventId = getWebhookEventId(payload, orderId, status, transactionNsu);
 
   await recordPaymentEvent({
@@ -237,6 +242,18 @@ export default async function handler(req: any, res: any) {
   });
 
   await updateOrderStatus({ orderId, status, transactionNsu });
+  await recordPayment({
+    orderId,
+    provider: 'infinitepay',
+    providerPaymentId: transactionNsu || eventId,
+    method: normalizePaymentMethod(getPayloadValue(payload, ['capture_method', 'payment_method', 'method'])),
+    status: status as any,
+    rawResponse: { ...payload, payment_check: paymentCheck },
+  });
+
+  if (status === 'paid') {
+    await fulfillPaidOrder(orderId);
+  }
 
   return res.status(200).json({ received: true, orderId, status });
 }

@@ -5,7 +5,7 @@ export function buildCustomerOrdersPath(orderId?: string | null, status?: Paymen
   if (orderId) params.set('order', orderId);
   if (status) params.set('status', status);
   const query = params.toString();
-  return query ? `/minhas-compras?${query}` : '/minhas-compras';
+  return query ? `/minha-conta?${query}` : '/minha-conta';
 }
 
 export function buildLegacyOrdersOpenPath(orderId?: string | null, status?: PaymentReturnStatus | null) {

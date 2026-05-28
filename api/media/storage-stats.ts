@@ -47,7 +47,7 @@ async function getAuthenticatedAdminUser(req: any): Promise<{ id: string } | nul
   if (!response.ok) return null;
 
   const user: any = await response.json().catch(() => null);
-  return user?.app_metadata?.role === 'admin' && user?.id ? { id: String(user.id) } : null;
+  return (user?.app_metadata?.role === 'admin' || user?.app_metadata?.role === 'super_admin') && user?.id ? { id: String(user.id) } : null;
 }
 
 function cleanProviderErrorMessage(raw: string, fallback: string) {

@@ -106,6 +106,21 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
   return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
 }
 
+async function assertVerifiedPhotographer(userId: string) {
+  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
+  const response = await fetch(`${supabaseUrl}/rest/v1/photographers?select=id,verified&id=eq.${encodeURIComponent(userId)}&limit=1`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) return false;
+  const rows = await response.json().catch(() => []);
+  return Array.isArray(rows) && rows.some((row) => row?.id === userId && row?.verified === true);
+}
+
 function readRequestBuffer(req: any): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
@@ -247,6 +262,10 @@ export default async function handler(req: any, res: any) {
 
     if (!authUser?.id) {
       return res.status(401).json({ error: 'Entre novamente no painel para enviar arquivos.' });
+    }
+
+    if (!(await assertVerifiedPhotographer(authUser.id))) {
+      return res.status(403).json({ error: 'Apenas fotografos aprovados podem enviar midias.' });
     }
 
     if (!storagePath || storagePath.includes('..') || storagePath.startsWith('/') || !storagePath.startsWith(`${authUser.id}/`)) {

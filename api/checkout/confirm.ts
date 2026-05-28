@@ -1,3 +1,6 @@
+import { infinitePayProvider } from '../payments/providers/infinitepay';
+import { fulfillPaidOrder, recordPayment } from '../shared/checkoutFulfillment';
+
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -108,11 +111,6 @@ async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise
   return data as T;
 }
 
-function getInfinitePayPaymentCheckEndpoint() {
-  return process.env.INFINITEPAY_PAYMENT_CHECK_ENDPOINT ||
-    `${(process.env.INFINITEPAY_BASE_URL || 'https://api.checkout.infinitepay.io').replace(/\/+$/, '')}/payment_check`;
-}
-
 function normalizeStatus(value: string) {
   return value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, '');
 }
@@ -189,15 +187,10 @@ export default async function handler(req: any, res: any) {
   }
 
   const body = getJsonBody(req);
-  const handle = process.env.INFINITEPAY_HANDLE;
   const orderId = getBodyValue(body, ['order', 'order_nsu', 'orderNsu', 'orderNSU', 'order_id', 'orderId']);
   const transactionNsu = getBodyValue(body, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
   const slug = getBodyValue(body, ['slug', 'invoice_slug', 'invoiceSlug', 'invoice_id', 'invoiceId']);
   const failureReturn = hasFailureReturn(body);
-
-  if (!handle) {
-    return res.status(500).json({ error: 'INFINITEPAY_HANDLE nao configurado.' });
-  }
 
   if (!isUuid(orderId)) {
     return res.status(400).json({ error: 'Pedido invalido.' });
@@ -217,6 +210,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (existingOrder.status === 'paid') {
+    await fulfillPaidOrder(orderId);
     return res.status(200).json({
       paid: true,
       confirmedBy: 'order_status',
@@ -227,7 +221,7 @@ export default async function handler(req: any, res: any) {
   if (failureReturn) {
     await recordPaymentEvent({
       orderId,
-      status: 'cancelled',
+      status: 'canceled',
       payload: {
         source: 'checkout-confirm',
         reason: 'failure_return',
@@ -247,31 +241,33 @@ export default async function handler(req: any, res: any) {
   let paid = false;
   let paymentCheckError = '';
   let paymentCheck: any = {};
+  let providerPaymentId = transactionNsu || existingOrder.paymentExternalId || orderId;
   if (transactionNsu && slug) {
     try {
-      const paymentCheckResponse = await fetch(getInfinitePayPaymentCheckEndpoint(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          handle,
-          order_nsu: orderId,
-          transaction_nsu: transactionNsu,
-          slug,
-        }),
-      });
-
-      if (paymentCheckResponse.ok) {
-        paymentCheck = await paymentCheckResponse.json().catch(() => ({}));
-        paid = Boolean(paymentCheck?.paid);
-      } else {
-        paymentCheckError = await paymentCheckResponse.text().catch(() => '');
-      }
+      const checked = await infinitePayProvider.checkPayment({ orderId, transactionNsu, slug });
+      paymentCheck = checked.rawResponse;
+      providerPaymentId = checked.providerPaymentId || providerPaymentId;
+      paid = checked.status === 'paid';
     } catch (error: any) {
       paymentCheckError = error?.message || 'Falha ao confirmar pagamento na InfinitePay.';
     }
   }
 
   if (!paid) {
+    await recordPayment({
+      orderId,
+      provider: 'infinitepay',
+      providerPaymentId,
+      method: 'checkout',
+      status: 'pending',
+      rawResponse: {
+        source: 'checkout-confirm',
+        paymentCheckError,
+        payment_check: paymentCheck,
+        body,
+      },
+    });
+
     await recordPaymentEvent({
       orderId,
       status: 'pending',
@@ -294,13 +290,26 @@ export default async function handler(req: any, res: any) {
     });
   }
 
-  await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled)`, {
+  await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled,canceled,refused)`, {
     method: 'PATCH',
     headers: { Prefer: 'return=minimal' },
     body: JSON.stringify({
       status: 'paid',
-      paymentExternalId: transactionNsu || existingOrder.paymentExternalId,
+      paymentExternalId: providerPaymentId,
     }),
+  });
+
+  await recordPayment({
+    orderId,
+    provider: 'infinitepay',
+    providerPaymentId,
+    method: 'checkout',
+    status: 'paid',
+    rawResponse: {
+      source: 'checkout-confirm',
+      payment_check: paymentCheck,
+      body,
+    },
   });
 
   await recordPaymentEvent({
@@ -314,6 +323,8 @@ export default async function handler(req: any, res: any) {
       body,
     },
   });
+
+  await fulfillPaidOrder(orderId);
 
   return res.status(200).json({ paid: true, confirmedBy: 'payment_check' });
 }

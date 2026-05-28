@@ -3,6 +3,7 @@ import { Play, ShoppingCart, Check, Clock, MapPin, Heart, Share2 } from 'lucide-
 import { motion } from 'motion/react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
+import { ProtectedVideoPreview } from './ProtectedVideoPreview';
 
 interface VideoGridProps {
   videos: Product[];
@@ -99,10 +100,12 @@ export function VideoGrid({
             className="group relative bg-white brutal-border brutal-shadow hover:-translate-x-1 hover:-translate-y-1 hover:shadow-heavy transition-all"
           >
             <div className="relative aspect-video overflow-hidden bg-brutal-black">
-              <img
-                src={video.thumbnailUrl || video.url}
+              <ProtectedVideoPreview
+                src={video.url}
+                poster={video.thumbnailUrl}
                 alt={video.name}
-                className="w-full h-full object-cover opacity-80"
+                watermark={`FUNPACE ${video.bib || video.id.slice(0, 6)}`}
+                imgClassName="w-full h-full object-cover opacity-80"
               />
 
               <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
@@ -131,11 +134,10 @@ export function VideoGrid({
                 </button>
               </div>
 
-              {/* Play Button Overlay */}
               <div
-                className="absolute inset-0 flex items-center justify-center group/play"
+                className="pointer-events-none absolute inset-0 flex items-center justify-center group/play"
               >
-                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md brutal-border flex items-center justify-center transform group-hover/play:scale-110 transition-transform">
+                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md brutal-border flex items-center justify-center transform group-hover/play:scale-110 group-hover:opacity-0 transition-all">
                   <Play className="w-8 h-8 text-white fill-white ml-1" />
                 </div>
               </div>

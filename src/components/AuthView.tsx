@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Mail, Lock, User, ArrowRight, X, Loader2 } from 'lucide-react';
-import { loginWithEmail, registerWithEmail, loginWithGoogle } from '../lib/supabase';
+import { loginWithEmail, registerWithEmail, loginWithGoogle, requestPasswordReset } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { motion, AnimatePresence } from 'motion/react';
 import { isGoogleAuthEnabled, isMockMode } from '../lib/config';
@@ -19,11 +19,13 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
   const [name, setName] = useState('');
   const [cpf, setCpf] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     setLoading(true);
 
     try {
@@ -37,6 +39,25 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    setError(null);
+    setMessage(null);
+    if (!email.trim()) {
+      setError('Informe seu e-mail para recuperar a senha.');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await requestPasswordReset(email.trim().toLowerCase());
+      setMessage('Enviamos um link de recuperacao para seu e-mail.');
+    } catch (err: any) {
+      setError(err?.message || 'Nao foi possivel enviar a recuperacao de senha.');
     } finally {
       setLoading(false);
     }
@@ -162,6 +183,12 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             </p>
           )}
 
+          {message && (
+            <p className="bg-green-100 border-l-4 border-green-500 p-3 text-green-700 font-mono text-xs uppercase">
+              {message}
+            </p>
+          )}
+
           <button
             type="submit"
             disabled={loading}
@@ -172,6 +199,17 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             </span>
             {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
           </button>
+
+          {mode === 'login' && (
+            <button
+              type="button"
+              onClick={handlePasswordReset}
+              disabled={loading}
+              className="w-full text-center font-mono text-[10px] uppercase tracking-widest text-gray-500 hover:text-brutal-accent cursor-pointer disabled:cursor-wait"
+            >
+              Esqueci minha senha
+            </button>
+          )}
 
           {googleEnabled && (
             <div className="space-y-4">

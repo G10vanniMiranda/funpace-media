@@ -5,6 +5,7 @@ import { Order, Product } from '../types';
 import { orderService } from '../lib/services';
 import { getCurrentAccessToken, getCurrentUser } from '../lib/supabase';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
+import { ProtectedMedia } from './ProtectedMedia';
 
 interface CustomerOrdersDrawerProps {
   isOpen: boolean;
@@ -20,6 +21,8 @@ const statusLabels: Record<Order['status'], string> = {
   paid: 'Pago',
   failed: 'Falhou',
   cancelled: 'Cancelado',
+  canceled: 'Cancelado',
+  refused: 'Recusado',
   refunded: 'Reembolsado',
 };
 
@@ -28,6 +31,8 @@ const statusClasses: Record<Order['status'], string> = {
   paid: 'bg-green-100 text-green-800',
   failed: 'bg-red-100 text-red-800',
   cancelled: 'bg-gray-100 text-gray-700',
+  canceled: 'bg-gray-100 text-gray-700',
+  refused: 'bg-red-100 text-red-800',
   refunded: 'bg-blue-100 text-blue-800',
 };
 
@@ -36,6 +41,8 @@ const statusPanelClasses: Record<Order['status'], string> = {
   paid: 'border-green-300 bg-green-50 text-green-800',
   failed: 'border-red-300 bg-red-50 text-red-800',
   cancelled: 'border-gray-300 bg-gray-50 text-gray-700',
+  canceled: 'border-gray-300 bg-gray-50 text-gray-700',
+  refused: 'border-red-300 bg-red-50 text-red-800',
   refunded: 'border-blue-300 bg-blue-50 text-blue-800',
 };
 
@@ -220,7 +227,7 @@ export function CustomerOrdersDrawer({
   }, [isOpen]);
 
   const hideItem = (itemId: string) => {
-    const ok = window.confirm('Remover este item de "Minhas Compras" neste dispositivo?');
+    const ok = window.confirm('Remover este item da sua conta neste dispositivo?');
     if (!ok) return;
     setHiddenItemIds((prev) => {
       const next = new Set(prev);
@@ -317,7 +324,7 @@ export function CustomerOrdersDrawer({
               <div className="flex items-center gap-3">
                 <ReceiptText className="w-6 h-6 text-brutal-accent" />
                 <div>
-                  <h2 className="font-display text-2xl uppercase tracking-tighter">Minhas Compras</h2>
+                  <h2 className="font-display text-2xl uppercase tracking-tighter">Minha Conta</h2>
                   <p className="font-mono text-[10px] text-gray-400 uppercase">Pedidos e pagamentos</p>
                 </div>
               </div>
@@ -343,11 +350,13 @@ export function CustomerOrdersDrawer({
                     {favoriteProducts.slice(0, 6).map((item) => (
                       <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
                         <div className="w-11 h-11 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
-                          {item.thumbnailUrl || item.url ? (
-                            <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <ImageIcon className="w-4 h-4" />
-                          )}
+                          <ProtectedMedia
+                            src={item.thumbnailUrl || item.url}
+                            alt={item.name}
+                            type={item.type}
+                            watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+                            imgClassName="w-full h-full object-cover"
+                          />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-display text-sm uppercase truncate">{item.name}</p>
@@ -465,11 +474,13 @@ export function CustomerOrdersDrawer({
                         {(order.items ?? []).map((item) => (
                           <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
                             <div className="w-12 h-12 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
-                              {item.thumbnailUrl || item.type === 'IMG' ? (
-                                <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                              ) : (
-                                <Video className="w-5 h-5" />
-                              )}
+                              <ProtectedMedia
+                                src={item.thumbnailUrl || (item.type === 'IMG' ? item.url : null)}
+                                alt={item.name}
+                                type={item.type}
+                                watermark={`FUNPACE ${order.id.slice(0, 8)}`}
+                                imgClassName="w-full h-full object-cover"
+                              />
                             </div>
                             <div className="flex-1 min-w-0">
                               <p className="font-display text-sm uppercase truncate">{item.name}</p>
@@ -547,7 +558,7 @@ export function CustomerOrdersDrawer({
 
 interface CustomerOrdersPageProps {
   highlightedOrderId?: string | null;
-  paymentStatus?: 'paid' | 'pending' | 'cancelled' | null;
+  paymentStatus?: 'paid' | 'pending' | 'cancelled' | 'canceled' | null;
   favoriteProducts?: Product[];
   isAuthenticated: boolean;
   onLoginRequested: () => void;
@@ -595,13 +606,13 @@ function FavoritePanelItem({
   return (
     <article className="bg-white border border-slate-200 shadow-sm overflow-hidden">
       <div className="aspect-4/3 bg-brutal-black text-white flex items-center justify-center overflow-hidden">
-        {product.thumbnailUrl || product.url ? (
-          <img src={product.thumbnailUrl || product.url} alt={product.name} className="h-full w-full object-cover" />
-        ) : product.type === 'IMG' ? (
-          <ImageIcon className="w-8 h-8" />
-        ) : (
-          <Video className="w-8 h-8" />
-        )}
+        <ProtectedMedia
+          src={product.thumbnailUrl || product.url}
+          alt={product.name}
+          type={product.type}
+          watermark={`FUNPACE ${product.bib || product.id.slice(0, 6)}`}
+          imgClassName="h-full w-full object-cover"
+        />
       </div>
       <div className="p-4">
         <div className="flex items-start justify-between gap-3">
@@ -968,11 +979,13 @@ export function CustomerOrdersPage({
                       {(order.items ?? []).map((item) => (
                         <div key={item.id} className="grid grid-cols-[56px_1fr] gap-3 bg-slate-50 border border-slate-200 p-3 md:grid-cols-[64px_1fr_auto] md:items-center">
                           <div className="w-14 h-14 md:w-16 md:h-16 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
-                            {item.thumbnailUrl || item.type === 'IMG' ? (
-                              <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                            ) : (
-                              <Video className="w-5 h-5" />
-                            )}
+                            <ProtectedMedia
+                              src={item.thumbnailUrl || (item.type === 'IMG' ? item.url : null)}
+                              alt={item.name}
+                              type={item.type}
+                              watermark={`FUNPACE ${order.id.slice(0, 8)}`}
+                              imgClassName="w-full h-full object-cover"
+                            />
                           </div>
                           <div className="min-w-0">
                             <p className="font-display text-base uppercase truncate">{item.name}</p>
@@ -1081,11 +1094,13 @@ export function CustomerOrdersPage({
                     {favoriteProducts.slice(0, 6).map((item) => (
                       <div key={item.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2">
                         <div className="w-10 h-10 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
-                          {item.thumbnailUrl || item.url ? (
-                            <img src={item.thumbnailUrl || item.url} alt={item.name} className="w-full h-full object-cover" />
-                          ) : (
-                            <ImageIcon className="w-4 h-4" />
-                          )}
+                          <ProtectedMedia
+                            src={item.thumbnailUrl || item.url}
+                            alt={item.name}
+                            type={item.type}
+                            watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+                            imgClassName="w-full h-full object-cover"
+                          />
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-display text-xs uppercase truncate">{item.name}</p>

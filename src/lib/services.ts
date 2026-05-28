@@ -10,6 +10,11 @@ import {
   PhotographerSale,
   WithdrawalRequest,
   Buyer,
+  Customer,
+  PaymentRecord,
+  PaymentEventLog,
+  Coupon,
+  AdminActivityLog,
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
@@ -60,6 +65,17 @@ function sortEvents(events: Event[]) {
   });
 }
 
+function createEventSlug(name: string, date: string) {
+  const normalized = `${name}-${date || Date.now()}`
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || `evento-${Date.now()}`;
+}
+
 function createPublicMediaUrl(rawPathOrUrl?: string | null) {
   const value = rawPathOrUrl || '';
   if (!value || /^https?:\/\//i.test(value)) return value;
@@ -76,7 +92,7 @@ function mediaPathKey(value?: string | null) {
   return value || '';
 }
 
-async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null }>(items: T[]): Promise<T[]> {
+async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; type?: string }>(items: T[]): Promise<T[]> {
   if (isMockMode || items.length === 0) return items;
 
   const withPublicFallback = () => items.map((item) => ({
@@ -87,9 +103,10 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
 
   const paths = Array.from(new Set(items.flatMap((item) => {
     const thumbnail = mediaPathKey(item.thumbnailUrl);
+    const shouldSignOriginal = item.type === 'VIDEO' || item.type === 'VIEW' || !thumbnail;
     return [
       thumbnail,
-      thumbnail ? '' : mediaPathKey(item.url),
+      shouldSignOriginal ? mediaPathKey(item.url) : '',
     ];
   }).filter(Boolean)));
 
@@ -339,6 +356,26 @@ export const productService = {
     return updated;
   },
 
+  async updateProductStatus(id: string, status: NonNullable<Product['status']>): Promise<Product> {
+    if (isMockMode) {
+      const existingProduct = mockProducts.find((item) => item.id === id);
+      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      const updatedProduct = { ...existingProduct, status };
+      mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
+      return updatedProduct;
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${params.toString()}&${selectAll}`,
+      { status },
+      true,
+    );
+
+    if (!updated) throw new Error('Produto nao encontrado.');
+    return updated;
+  },
+
   async removeProduct(id: string): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
@@ -515,17 +552,49 @@ export const eventService = {
     }
   },
 
-  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'>): Promise<Event> {
+  async getPhotographerEvents(photographerId: string, count = 200): Promise<Event[]> {
     if (isMockMode) {
-      return {
+      return loadLocalEvents()
+        .filter((event) => !event.photographerId || event.photographerId === photographerId)
+        .slice(0, count);
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      photographerId: `eq.${photographerId}`,
+      order: 'date.asc,createdAt.desc',
+      limit: String(count),
+    });
+    try {
+      const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+      return sortEvents(events).slice(0, count);
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        return loadLocalEvents()
+          .filter((event) => !event.photographerId || event.photographerId === photographerId)
+          .slice(0, count);
+      }
+      throw error;
+    }
+  },
+
+  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & Partial<Pick<Event, 'photographerId' | 'description' | 'coverImage' | 'bannerImage' | 'isPublished'>>): Promise<Event> {
+    if (isMockMode) {
+      const created = {
         id: `mock-event-${crypto.randomUUID()}`,
+        slug: createEventSlug(input.name, input.date),
         ...input,
+        isPublished: input.isPublished ?? true,
         createdAt: new Date().toISOString(),
       };
+      saveLocalEvents([created, ...loadLocalEvents()]);
+      return created;
     }
 
     const payload = {
       ...input,
+      slug: createEventSlug(input.name, input.date),
+      isPublished: input.isPublished ?? true,
       createdAt: new Date().toISOString(),
     };
 
@@ -549,6 +618,44 @@ export const eventService = {
       throw error;
     }
   },
+
+  async updateEvent(id: string, input: Partial<Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status' | 'description' | 'coverImage' | 'bannerImage' | 'isPublished' | 'isFeatured' | 'moderationStatus'>>): Promise<Event> {
+    if (isMockMode) {
+      const events = loadLocalEvents();
+      const existing = events.find((event) => event.id === id);
+      if (!existing) throw new Error('Evento nao encontrado.');
+      const updated = {
+        ...existing,
+        ...input,
+        slug: input.name || input.date ? createEventSlug(input.name ?? existing.name, input.date ?? existing.date) : existing.slug,
+        updatedAt: new Date().toISOString(),
+      };
+      saveLocalEvents(events.map((event) => (event.id === id ? updated : event)));
+      return updated;
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Event>[]>(
+      `/rest/v1/events?${params.toString()}&${selectAll}`,
+      input,
+      true,
+    );
+
+    if (!updated) throw new Error('Evento nao encontrado.');
+    return updated;
+  },
+
+  async removeEvent(id: string): Promise<void> {
+    if (isMockMode) {
+      saveLocalEvents(loadLocalEvents().filter((event) => event.id !== id));
+      return;
+    }
+
+    await supabaseFetchNoContent(
+      `/rest/v1/events?id=eq.${encodeURIComponent(id)}`,
+      { method: 'DELETE' },
+    );
+  },
 };
 
 export interface InfinitePayCheckoutItem {
@@ -563,20 +670,31 @@ export interface InfinitePayCustomer {
   phone: string;
 }
 
-export interface CreateInfinitePayCheckoutInput {
+export type CheckoutPaymentMethod = 'pix' | 'credit_card' | 'checkout';
+
+export interface CreateCheckoutInput {
   userId: string;
   buyer: Buyer;
   items: { id: string }[];
   successUrl: string;
   cancelUrl?: string;
+  paymentMethod?: CheckoutPaymentMethod;
+}
+
+export interface CreateCheckoutResult {
+  paymentUrl: string;
+  orderId: string;
+  total: number;
+  subtotal: number;
+  discountTotal: number;
+  paymentMethod: CheckoutPaymentMethod;
+  provider: string;
+  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
+  pix?: { qrCode?: string; qrCodeImage?: string; expiresAt?: string } | null;
 }
 
 export const paymentService = {
-  async createInfinitePayCheckout(input: CreateInfinitePayCheckoutInput): Promise<{
-    paymentUrl: string;
-    orderId: string;
-    total: number;
-  }> {
+  async createCheckout(input: CreateCheckoutInput): Promise<CreateCheckoutResult> {
     const accessToken = await getCurrentAccessToken();
     const response = await fetch('/api/checkout/create-session', {
       method: 'POST',
@@ -601,12 +719,91 @@ export const paymentService = {
     }
 
     return {
-      paymentUrl: data.url,
+      paymentUrl: data.paymentUrl || data.url,
       orderId: data.orderId,
       total: Number(data.total || 0),
+      subtotal: Number(data.subtotal ?? data.total ?? 0),
+      discountTotal: Number(data.discountTotal || 0),
+      paymentMethod: data.paymentMethod || input.paymentMethod || 'checkout',
+      provider: data.provider || 'infinitepay',
+      status: data.status || 'pending',
+      pix: data.pix || null,
     };
   },
+
+  async createInfinitePayCheckout(input: CreateCheckoutInput) {
+    return this.createCheckout({ ...input, paymentMethod: input.paymentMethod || 'checkout' });
+  },
 };
+
+export const customerAccountService = {
+  async upsertCustomerProfile(input: { name: string; avatarUrl?: string | null }) {
+    const user = getCurrentUser();
+    if (!user?.id || !user.email) throw new Error('Entre novamente para atualizar sua conta.');
+
+    const [profile] = await supabaseRest.post<Customer[]>(
+      '/rest/v1/customers?on_conflict=id',
+      {
+        id: user.id,
+        email: user.email,
+        name: input.name.trim(),
+        avatarUrl: input.avatarUrl || null,
+      },
+      true,
+    );
+
+    return profile;
+  },
+
+  async getFavorites(): Promise<Product[]> {
+    const user = getCurrentUser();
+    if (!user?.id) return [];
+
+    const rows = await supabaseRest.get<Array<{ products: Product | null }>>(
+      `/rest/v1/customer_favorites?select=products(*)&userId=eq.${encodeURIComponent(user.id)}&order=createdAt.desc`,
+      true,
+    ).catch(() => []);
+
+    const products = rows.map((row) => row.products).filter(Boolean) as Product[];
+    return signMediaUrls(products);
+  },
+
+  async setFavorite(product: Product, isFavorite: boolean) {
+    const user = getCurrentUser();
+    if (!user?.id || !user.email) return;
+
+    if (isFavorite) {
+      await supabaseRest.post('/rest/v1/customer_favorites?on_conflict=userId,photoId', {
+        userId: user.id,
+        customerEmail: user.email,
+        photoId: product.id,
+      }, true);
+      return;
+    }
+
+    await supabaseFetchNoContent(
+      `/rest/v1/customer_favorites?userId=eq.${encodeURIComponent(user.id)}&photoId=eq.${encodeURIComponent(product.id)}`,
+      { method: 'DELETE' },
+    );
+  },
+};
+
+async function supabaseFetchNoContent(path: string, init: RequestInit) {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) throw new Error('Sessao expirada. Entre novamente.');
+  const baseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+  const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
+  const response = await fetch(`${String(baseUrl).replace(/\/+$/, '')}${path}`, {
+    ...init,
+    headers: {
+      apikey: anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+  });
+  if (!response.ok) throw new Error(await response.text());
+}
 
 export const photographerDashboardService = {
   async getDashboard(vendedorId: string, products: Product[]): Promise<{
@@ -813,7 +1010,7 @@ export const photographerDashboardService = {
         availableBalance,
         monthlyGoal: 5000,
       },
-        recentSales: paidSales,
+      recentSales: paidSales,
       productPerformance,
     };
   },
@@ -844,9 +1041,18 @@ export const platformSettingsService = {
     return settings;
   },
 
-  async updateSettings(settings: Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>): Promise<PlatformSettings> {
+  async updateSettings(settings: Partial<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>): Promise<PlatformSettings> {
     if (isMockMode) {
-      return { id: 'default', ...settings };
+      return {
+        id: 'default',
+        platformFeePercent: settings.platformFeePercent ?? 30,
+        withdrawalFee: settings.withdrawalFee ?? 5,
+        autoBlockSuspicious: settings.autoBlockSuspicious ?? true,
+        paymentProvider: settings.paymentProvider,
+        brandName: settings.brandName,
+        supportEmail: settings.supportEmail,
+        maxUploadBytes: settings.maxUploadBytes,
+      };
     }
 
     const params = new URLSearchParams({ id: 'eq.default' });
@@ -1031,7 +1237,7 @@ export const photographerService = {
 
   async updatePhotographerAdmin(
     id: string,
-    changes: Partial<Pick<Photographer, 'name' | 'bio' | 'avatar' | 'phone' | 'cpf' | 'verified'>>,
+    changes: Partial<Pick<Photographer, 'name' | 'bio' | 'avatar' | 'phone' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
   ): Promise<Photographer> {
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);
@@ -1050,5 +1256,119 @@ export const photographerService = {
 
     if (!updated) throw new Error('Fotografo nao encontrado.');
     return updated;
+  },
+};
+
+export const adminService = {
+  async getCustomers(count = 500): Promise<Customer[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<Customer>[]>(`/rest/v1/customers?${params.toString()}`, true);
+  },
+
+  async getPayments(count = 500): Promise<PaymentRecord[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<PaymentRecord>[]>(`/rest/v1/payments?${params.toString()}`, true);
+  },
+
+  async getPaymentEvents(count = 500): Promise<PaymentEventLog[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<PaymentEventLog>[]>(`/rest/v1/payment_events?${params.toString()}`, true);
+  },
+
+  async getCoupons(count = 200): Promise<Coupon[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<Coupon>[]>(`/rest/v1/coupons?${params.toString()}`, true);
+  },
+
+  async createCoupon(input: Pick<Coupon, 'code' | 'type' | 'value' | 'maxUses' | 'startsAt' | 'expiresAt' | 'isActive'>): Promise<Coupon> {
+    if (isMockMode) {
+      return {
+        id: `mock-coupon-${crypto.randomUUID()}`,
+        ...input,
+        usedCount: 0,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    const [created] = await supabaseRest.post<SupabaseRow<Coupon>[]>(
+      `/rest/v1/coupons?${selectAll}`,
+      {
+        ...input,
+        code: input.code.trim().toUpperCase(),
+        createdAt: new Date().toISOString(),
+      },
+      true,
+    );
+
+    if (!created) throw new Error('Nao foi possivel criar o cupom.');
+    return created;
+  },
+
+  async updateCoupon(id: string, changes: Partial<Pick<Coupon, 'code' | 'type' | 'value' | 'maxUses' | 'startsAt' | 'expiresAt' | 'isActive'>>): Promise<Coupon> {
+    if (isMockMode) {
+      throw new Error('Atualizacao de cupom esta disponivel apenas no modo producao.');
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Coupon>[]>(
+      `/rest/v1/coupons?${params.toString()}&${selectAll}`,
+      'code' in changes && changes.code ? { ...changes, code: changes.code.trim().toUpperCase() } : changes,
+      true,
+    );
+
+    if (!updated) throw new Error('Cupom nao encontrado.');
+    return updated;
+  },
+
+  async getAdminLogs(count = 500): Promise<AdminActivityLog[]> {
+    if (isMockMode) return [];
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: String(count),
+    });
+    return supabaseRest.get<SupabaseRow<AdminActivityLog>[]>(`/rest/v1/admin_activity_logs?${params.toString()}`, true);
+  },
+
+  async logAction(input: Pick<AdminActivityLog, 'action' | 'targetType' | 'targetId' | 'metadata'>): Promise<void> {
+    if (isMockMode) return;
+
+    const user = getCurrentUser();
+    await supabaseRest.post('/rest/v1/admin_activity_logs', {
+      actorId: user?.id ?? null,
+      actorEmail: user?.email ?? null,
+      action: input.action,
+      targetType: input.targetType ?? null,
+      targetId: input.targetId ?? null,
+      metadata: input.metadata ?? {},
+      createdAt: new Date().toISOString(),
+    }, true).catch((error) => {
+      console.error('Nao foi possivel registrar log admin:', error);
+    });
   },
 };

@@ -7,7 +7,8 @@ import { VideoGrid } from './components/VideoGrid';
 import { EventGrid } from './components/EventGrid';
 import { CartDrawer } from './components/CartDrawer';
 import { CheckoutPage } from './components/CheckoutPage';
-import { CustomerOrdersDrawer, CustomerOrdersPage } from './components/CustomerOrdersDrawer';
+import { CustomerOrdersPage } from './components/CustomerOrdersDrawer';
+import { CustomerAccountPage } from './components/CustomerAccountPage';
 import { Footer } from './components/Footer';
 import { AuthView } from './components/AuthView';
 import { PhotographerSection } from './components/PhotographerSection';
@@ -24,14 +25,15 @@ import { Faq } from './routes/Faq';
 import { Contato } from './routes/Contato';
 import { Termos } from './routes/Termos';
 import { Privacidade } from './routes/Privacidade';
-import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest } from './types';
+import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, Customer, PaymentRecord, PaymentEventLog, Coupon, AdminActivityLog } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
+import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
 import { logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, Video, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
+import { useToast } from './contexts/ToastContext';
 
 enum OperationType {
   CREATE = 'create',
@@ -100,6 +102,7 @@ function handleDataError(error: unknown, operationType: OperationType, path: str
 // Main Storefront Component
 function Storefront() {
   const { user } = useAuth();
+  const { showToast } = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [cart, setCart] = useState<Product[]>(() => loadStoredCart());
@@ -107,7 +110,6 @@ function Storefront() {
   const [likedProductIds, setLikedProductIds] = useState<Set<string>>(() => loadLikedProductIds());
   const [heartCounts, setHeartCounts] = useState<Record<string, number>>({});
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [isOrdersOpen, setIsOrdersOpen] = useState(false);
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [searchBib, setSearchBib] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'photos' | 'videos'>('photos');
@@ -123,9 +125,8 @@ function Storefront() {
   const [selectedEventName, setSelectedEventName] = useState<string | null>(null);
   const [eventQuery, setEventQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [highlightedOrderId, setHighlightedOrderId] = useState<string | null>(null);
   const [paymentNotice, setPaymentNotice] = useState<{
-    status: 'paid' | 'pending' | 'cancelled';
+    status: 'paid' | 'pending' | 'cancelled' | 'canceled';
     orderId?: string | null;
     message: string;
   } | null>(null);
@@ -215,8 +216,6 @@ function Storefront() {
             orderId,
             message: 'Pagamento confirmado. Seus arquivos digitais ja estao liberados para download.',
           });
-          setHighlightedOrderId(orderId);
-          setIsOrdersOpen(true);
           setCart([]);
         } catch (error: any) {
           console.error('Erro ao confirmar pagamento:', error);
@@ -225,7 +224,6 @@ function Storefront() {
             orderId: params.get('order') || params.get('order_nsu'),
             message: 'Recebemos o retorno do checkout. Se o pagamento foi aprovado, a liberacao acontecera quando a InfinitePay confirmar.',
           });
-          setIsOrdersOpen(true);
         } finally {
           window.history.replaceState({}, '', window.location.pathname);
         }
@@ -238,7 +236,6 @@ function Storefront() {
         orderId: params.get('order') || params.get('order_nsu'),
         message: 'O pagamento foi cancelado. O pedido continua disponivel para uma nova tentativa.',
       });
-      setIsOrdersOpen(true);
       window.history.replaceState({}, '', window.location.pathname);
     }
   }, []);
@@ -361,6 +358,8 @@ function Storefront() {
 
     setProductHeart(item.id, shouldLike).then((count) => {
       setHeartCounts((current) => ({ ...current, [item.id]: count }));
+      customerAccountService.setFavorite(item, shouldLike).catch(() => undefined);
+      showToast(shouldLike ? 'Favorito salvo.' : 'Favorito removido.', 'success');
     }).catch(() => {
       setHeartCounts((current) => ({
         ...current,
@@ -373,6 +372,7 @@ function Storefront() {
         saveLikedProductIds(next);
         return next;
       });
+      showToast('Nao foi possivel atualizar o favorito.', 'error');
     });
   };
 
@@ -448,12 +448,12 @@ function Storefront() {
     setSelfieFile(null);
   };
 
-  const handleCheckout = async (buyer: Buyer) => {
+  const handleCheckout = async (buyer: Buyer, paymentMethod: CheckoutPaymentMethod = 'checkout') => {
     setIsLoading(true);
     try {
       if (!user?.email) {
         setIsAuthOpen(true);
-        return;
+        throw new Error('Entre para finalizar a compra.');
       }
 
       // 1. Criar sessão de pagamento no backend enviando os dados do comprador
@@ -468,19 +468,21 @@ function Storefront() {
         throw new Error('Removemos midias antigas do carrinho. Adicione novamente as midias publicadas e tente outra vez.');
       }
 
-      const result = await paymentService.createInfinitePayCheckout({
+      const result = await paymentService.createCheckout({
         userId: user.uid,
         buyer,
         items: checkoutItems,
         successUrl: `${window.location.origin}/pagamento/sucesso`,
         cancelUrl: `${window.location.origin}?payment=cancel`,
+        paymentMethod,
       });
 
-      window.location.href = result.paymentUrl;
+      return result;
 
     } catch (error: any) {
       console.error("Erro no checkout:", error);
       alert("Erro ao processar checkout: " + error.message);
+      throw error;
     } finally {
       setIsLoading(false);
     }
@@ -492,7 +494,7 @@ function Storefront() {
       return;
     }
 
-    setIsOrdersOpen(true);
+    navigate('/minha-conta');
   };
 
   const selectedPhotographer = null; // Replaced by profile view logic
@@ -523,7 +525,7 @@ function Storefront() {
     const params = new URLSearchParams(location.search);
     const orderId = params.get('order');
     const status = params.get('status');
-    const paymentStatus = status === 'paid' || status === 'pending' || status === 'cancelled' ? status : null;
+    const paymentStatus = status === 'paid' || status === 'pending' || status === 'cancelled' || status === 'canceled' ? status : null;
 
     return (
       <div className="min-h-screen bg-brutal-white font-sans text-brutal-black selection:bg-brutal-accent selection:text-white">
@@ -541,7 +543,8 @@ function Storefront() {
             localStorage.setItem('funpace:photographer-panel-active', 'true');
             navigate('/fotografo');
           }}
-          onOpenOrders={() => navigate('/minhas-compras')}
+          onOpenOrders={() => navigate('/minha-conta')}
+          onOpenAccount={() => navigate('/minha-conta')}
         />
 
         <CustomerOrdersPage
@@ -617,6 +620,7 @@ function Storefront() {
           navigate('/fotografo');
         }}
         onOpenOrders={handleOpenOrders}
+        onOpenAccount={() => user ? navigate('/minha-conta') : setIsAuthOpen(true)}
       />
 
       {selectedPhotographer ? (
@@ -858,21 +862,13 @@ function Storefront() {
         }}
       />
 
-      <CustomerOrdersDrawer
-        isOpen={isOrdersOpen}
-        onClose={() => setIsOrdersOpen(false)}
-        highlightedOrderId={highlightedOrderId}
-        favoriteProducts={favoriteProducts}
-        onAddToCart={handleAddToCart}
-        onToggleFavorite={handleToggleFavorite}
-      />
-
       <PaymentNoticeModal
         notice={paymentNotice}
         onClose={() => setPaymentNotice(null)}
         onOpenOrders={() => {
+          const orderQuery = paymentNotice?.orderId ? `?order=${encodeURIComponent(paymentNotice.orderId)}` : '';
           setPaymentNotice(null);
-          setIsOrdersOpen(true);
+          navigate(`/minha-conta${orderQuery}`);
         }}
       />
 
@@ -963,7 +959,7 @@ function PaymentNoticeModal({
   onClose,
   onOpenOrders,
 }: {
-  notice: { status: 'paid' | 'pending' | 'cancelled'; orderId?: string | null; message: string } | null;
+  notice: { status: 'paid' | 'pending' | 'cancelled' | 'canceled'; orderId?: string | null; message: string } | null;
   onClose: () => void;
   onOpenOrders: () => void;
 }) {
@@ -1022,7 +1018,7 @@ function PaymentNoticeModal({
                     className="min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
                   >
                     <ReceiptText className="w-4 h-4" />
-                    Abrir minhas compras
+                    Abrir minha conta
                   </button>
                   <button
                     onClick={onClose}
@@ -1041,6 +1037,11 @@ function PaymentNoticeModal({
 }
 
 function CustomerOrdersRoute() {
+  const location = useLocation();
+  return <Navigate to={`/minha-conta${location.search}`} replace />;
+}
+
+function LegacyCustomerOrdersRoute() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
@@ -1083,7 +1084,7 @@ function CustomerOrdersRoute() {
   const params = new URLSearchParams(location.search);
   const orderId = params.get('order');
   const status = params.get('status');
-  const paymentStatus = status === 'paid' || status === 'pending' || status === 'cancelled' ? status : null;
+    const paymentStatus = status === 'paid' || status === 'pending' || status === 'cancelled' || status === 'canceled' ? status : null;
 
   return (
     <div className="min-h-screen bg-brutal-white font-sans text-brutal-black selection:bg-brutal-accent selection:text-white">
@@ -1098,7 +1099,8 @@ function CustomerOrdersRoute() {
           localStorage.setItem('funpace:photographer-panel-active', 'true');
           navigate('/fotografo');
         }}
-        onOpenOrders={() => navigate('/minhas-compras')}
+        onOpenOrders={() => navigate('/minha-conta')}
+        onOpenAccount={() => navigate('/minha-conta')}
       />
 
       <CustomerOrdersPage
@@ -1132,6 +1134,113 @@ function CustomerOrdersRoute() {
           />
         )}
       </AnimatePresence>
+    </div>
+  );
+}
+
+function CustomerAccountRoute() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [cart, setCart] = useState<Product[]>(() => loadStoredCart());
+  const [favoriteProducts, setFavoriteProducts] = useState<Product[]>(() => loadFavoriteProducts());
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+
+  React.useEffect(() => {
+    const validCart = cart.filter((item) => isValidCartProductId(item.id));
+    if (validCart.length !== cart.length) {
+      setCart(validCart);
+      return;
+    }
+
+    localStorage.setItem(cartStorageKey, JSON.stringify(validCart));
+  }, [cart]);
+
+  React.useEffect(() => {
+    if (!user) setIsAuthOpen(true);
+  }, [user]);
+
+  const handleAddToCart = (item: Product) => {
+    if (!isValidCartProductId(item.id)) {
+      alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
+      return;
+    }
+
+    setCart((current) => current.some((cartItem) => cartItem.id === item.id) ? current : [...current, item]);
+    setIsCartOpen(true);
+  };
+
+  const handleToggleFavorite = (item: Product) => {
+    setFavoriteProducts((current) => {
+      const exists = current.some((favorite) => favorite.id === item.id);
+      const next = exists ? current.filter((favorite) => favorite.id !== item.id) : [item, ...current];
+      saveFavoriteProducts(next);
+      customerAccountService.setFavorite(item, !exists).catch(() => undefined);
+      return next;
+    });
+  };
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-brutal-white font-sans text-brutal-black">
+        <Navbar
+          cartItemCount={cart.length}
+          onOpenCart={() => setIsCartOpen(true)}
+          onNavigateHome={() => navigate('/')}
+          onOpenAuth={() => setIsAuthOpen(true)}
+          onSearch={(bib) => navigate(`/?bib=${encodeURIComponent(bib)}`)}
+          onSelfieSearch={() => navigate('/')}
+          onOpenDashboard={() => navigate('/fotografo')}
+          onOpenOrders={() => navigate('/minha-conta')}
+          onOpenAccount={() => navigate('/minha-conta')}
+        />
+        <div className="mx-auto flex min-h-[70vh] max-w-xl flex-col items-center justify-center px-6 text-center">
+          <UserCircle className="mb-4 h-16 w-16 text-gray-300" />
+          <h1 className="font-display text-4xl uppercase">Entre para acessar</h1>
+          <p className="mt-3 font-mono text-xs uppercase leading-relaxed text-gray-500">Sua conta reune pedidos, downloads e favoritos.</p>
+          <button onClick={() => setIsAuthOpen(true)} className="mt-6 min-h-12 bg-brutal-black px-6 text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent">
+            Entrar / cadastrar
+          </button>
+        </div>
+        <AnimatePresence>
+          {isAuthOpen && <AuthView onClose={() => setIsAuthOpen(false)} onSuccess={() => setIsAuthOpen(false)} />}
+        </AnimatePresence>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-brutal-white font-sans text-brutal-black">
+      <Navbar
+        cartItemCount={cart.length}
+        onOpenCart={() => setIsCartOpen(true)}
+        onNavigateHome={() => navigate('/')}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        onSearch={(bib) => navigate(`/?bib=${encodeURIComponent(bib)}`)}
+        onSelfieSearch={() => navigate('/')}
+        onOpenDashboard={() => navigate('/fotografo')}
+        onOpenOrders={() => navigate('/minha-conta')}
+        onOpenAccount={() => navigate('/minha-conta')}
+      />
+
+      <CustomerAccountPage
+        favoriteProducts={favoriteProducts}
+        onAddToCart={handleAddToCart}
+        onToggleFavorite={handleToggleFavorite}
+      />
+
+      <CartDrawer
+        isOpen={isCartOpen}
+        onClose={() => setIsCartOpen(false)}
+        cartItems={cart}
+        onRemoveItem={(id) => setCart((current) => current.filter((item) => item.id !== id))}
+        isAuthenticated={Boolean(user)}
+        onLoginRequested={() => setIsAuthOpen(true)}
+        onOpenCheckout={() => {
+          setIsCartOpen(false);
+          navigate('/checkout');
+        }}
+      />
     </div>
   );
 }
@@ -1231,6 +1340,11 @@ function AdminRoute() {
   const [videos, setVideos] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [payments, setPayments] = useState<PaymentRecord[]>([]);
+  const [paymentEvents, setPaymentEvents] = useState<PaymentEventLog[]>([]);
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [adminLogs, setAdminLogs] = useState<AdminActivityLog[]>([]);
   const [metrics, setMetrics] = useState<AdminMetrics>({
     grossRevenue: 0,
     platformFee: 0,
@@ -1248,12 +1362,17 @@ function AdminRoute() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [allPhotographers, allProducts, allOrders, allWithdrawals, platformSettings] = await Promise.all([
+      const [allPhotographers, allProducts, allOrders, allWithdrawals, platformSettings, allCustomers, allPayments, allPaymentEvents, allCoupons, allAdminLogs] = await Promise.all([
         photographerService.getAllPhotographers(),
         productService.getAdminProducts(1000),
         orderService.getAdminOrders(200),
         withdrawalService.getAdminWithdrawals(200),
         platformSettingsService.getPublicSettings(),
+        adminService.getCustomers(500),
+        adminService.getPayments(500),
+        adminService.getPaymentEvents(500),
+        adminService.getCoupons(200),
+        adminService.getAdminLogs(500),
       ]);
 
       // Compute photographer stats from real data to avoid relying on stored `photographers.stats` (which may be stale).
@@ -1304,6 +1423,11 @@ function AdminRoute() {
       setVideos(activeProducts.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
       setOrders(allOrders);
       setWithdrawals(allWithdrawals);
+      setCustomers(allCustomers);
+      setPayments(allPayments);
+      setPaymentEvents(allPaymentEvents);
+      setCoupons(allCoupons);
+      setAdminLogs(allAdminLogs);
       setMetrics({
         grossRevenue,
         platformFee: grossRevenue * platformFeeRate,
@@ -1362,6 +1486,11 @@ function AdminRoute() {
       videos={videos}
       orders={orders}
       withdrawals={withdrawals}
+      customers={customers}
+      payments={payments}
+      paymentEvents={paymentEvents}
+      coupons={coupons}
+      adminLogs={adminLogs}
       metrics={metrics}
       onLogout={handleAdminLogout}
       onRefresh={loadData}
@@ -1377,6 +1506,7 @@ export default function App() {
         <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
+        <Route path="/minha-conta" element={<CustomerAccountRoute />} />
         <Route path="/minhas-compras" element={<CustomerOrdersRoute />} />
         <Route path="/eventos" element={<Storefront />} />
         <Route path="/eventos/:slug" element={<Storefront />} />

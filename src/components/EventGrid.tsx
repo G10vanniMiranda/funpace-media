@@ -1,6 +1,7 @@
 import React from 'react';
 import { CalendarDays, Camera, MapPin, Video } from 'lucide-react';
 import { Product } from '../types';
+import { ProtectedMedia } from './ProtectedMedia';
 
 interface EventGridProps {
   products: Product[];
@@ -125,13 +126,14 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
             >
               <div className="relative aspect-4/3 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
                 {event.coverUrl ? (
-                  <img
+                  <ProtectedMedia
                     src={event.coverUrl}
                     alt={event.name}
+                    watermark={`FUNPACE ${event.name.slice(0, 12)}`}
                     loading="lazy"
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                    className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
+                    imgClassName="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">

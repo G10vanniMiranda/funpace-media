@@ -71,7 +71,7 @@ export function Precos() {
               {
                 icon: Camera,
                 title: 'Para compradores',
-                text: 'O valor final aparece antes do checkout. Depois do pagamento confirmado, os arquivos ficam liberados em Minhas Compras.',
+                text: 'O valor final aparece antes do checkout. Depois do pagamento confirmado, os arquivos ficam liberados em Minha Conta.',
               },
               {
                 icon: CreditCard,

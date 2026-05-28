@@ -10,7 +10,7 @@ const buyerQuestions = [
   },
   {
     question: 'Quando o download fica liberado?',
-    answer: 'Depois que a InfinitePay confirma o pagamento, o pedido aparece como pago em Minhas Compras e os arquivos ficam liberados.',
+    answer: 'Depois que a InfinitePay confirma o pagamento, o pedido aparece como pago em Minha Conta e os arquivos ficam liberados.',
   },
   {
     question: 'Posso comprar fotos de eventos diferentes?',

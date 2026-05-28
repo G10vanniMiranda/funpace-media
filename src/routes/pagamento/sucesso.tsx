@@ -111,7 +111,7 @@ export function PagamentoSucesso() {
         }
 
         setStatus('paid');
-        setMessage('Pagamento confirmado. Seus arquivos digitais ja estao liberados para download em Minhas Compras.');
+        setMessage('Pagamento confirmado. Seus arquivos digitais ja estao liberados na sua conta.');
         navigate(buildCustomerOrdersPath(order, 'paid'), { replace: true });
       } catch (error) {
         console.error('Erro ao confirmar pagamento:', error);
@@ -173,7 +173,7 @@ export function PagamentoSucesso() {
                 className="min-h-12 w-full px-4 py-3 bg-brutal-black text-white brutal-border font-display text-xs sm:text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
               >
                 <ReceiptText className="w-4 h-4 shrink-0" />
-                Minhas compras
+                Minha conta
               </button>
               <button
                 onClick={() => navigate('/')}

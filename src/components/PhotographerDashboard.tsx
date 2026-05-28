@@ -56,6 +56,20 @@ type ProductEditForm = {
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
 type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'custom';
+type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings';
+
+type EventFormState = {
+  id: string | null;
+  name: string;
+  date: string;
+  location: string;
+  checkpoint: string;
+  description: string;
+  status: Event['status'];
+  isPublished: boolean;
+  coverImage: string;
+  bannerImage: string;
+};
 
 const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: string }> = [
   { key: 'today', label: 'Hoje' },
@@ -294,6 +308,18 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
       }
 
       context.drawImage(image, 0, 0, width, height);
+      context.save();
+      context.translate(width / 2, height / 2);
+      context.rotate(-Math.PI / 6);
+      context.font = `900 ${Math.max(18, Math.round(width / 12))}px Arial, sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillStyle = 'rgba(255,255,255,0.26)';
+      context.strokeStyle = 'rgba(0,0,0,0.32)';
+      context.lineWidth = Math.max(2, width / 220);
+      context.strokeText('FUNPACE', 0, 0);
+      context.fillText('FUNPACE', 0, 0);
+      context.restore();
       canvas.toBlob((blob) => {
         if (!blob) {
           resolve(null);
@@ -475,7 +501,7 @@ async function generateMediaThumbnail(file: File): Promise<File | null> {
 }
 
 export function PhotographerDashboard({ photographer, onLogout }: PhotographerDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'products' | 'earnings'>('overview');
+  const [activeTab, setActiveTab] = useState<PhotographerTab>('overview');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [dashboardMetrics, setDashboardMetrics] = useState<PhotographerDashboardMetrics>(() => getInitialDashboardMetrics(photographer));
@@ -493,6 +519,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
   const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
+  const [eventForm, setEventForm] = useState<EventFormState>(() => ({
+    id: null,
+    name: '',
+    date: formatDateInput(new Date()),
+    location: '',
+    checkpoint: 'Ponto Principal',
+    description: '',
+    status: 'scheduled',
+    isPublished: true,
+    coverImage: '',
+    bannerImage: '',
+  }));
+  const [eventError, setEventError] = useState('');
+  const [isSavingEvent, setIsSavingEvent] = useState(false);
   const [selectedEventId, setSelectedEventId] = useState('');
   const [batchPriceInput, setBatchPriceInput] = useState('19.90');
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -545,14 +585,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const allFilteredProductsSelected = filteredProducts.length > 0 &&
     filteredProducts.every((product) => selectedProductIds.has(product.id));
   const upcomingEvents = React.useMemo(() => {
-    const eventNames = Array.from(new Set(products.map((product) => product.event).filter(Boolean)));
-    return eventNames.slice(0, 3).map((eventName, index) => ({
-      id: `${eventName}-${index}`,
-      title: eventName,
-      date: ['27 MAI, 2026', '01 JUN, 2026', '05 JUN, 2026'][index] ?? '10 JUN, 2026',
-      time: ['16:00', '14:00', '18:00'][index] ?? '08:00',
+    return availableEvents
+      .filter((eventItem) => eventItem.status !== 'closed')
+      .slice(0, 3)
+      .map((eventItem) => ({
+      id: eventItem.id,
+      title: eventItem.name,
+      date: eventItem.date ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' }).format(new Date(`${eventItem.date}T12:00:00`)) : 'Sem data',
+      time: eventItem.location || eventItem.checkpoint || 'Evento ativo',
+      isPublished: eventItem.isPublished !== false,
     }));
-  }, [products]);
+  }, [availableEvents]);
+  const publishableEvents = React.useMemo(() => (
+    availableEvents.filter((eventItem) => eventItem.status !== 'closed' && eventItem.isPublished !== false)
+  ), [availableEvents]);
   const visibleProductStats = React.useMemo(() => {
     const activeProducts = products.filter((product) => (product.status ?? 'published') !== 'removed');
     return {
@@ -705,7 +751,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         setProducts(visibleProducts);
         const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
         const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
-        const events = await eventService.getActiveEvents();
+        const events = await eventService.getPhotographerEvents(photographer.id);
         setDashboardMetrics(dashboard.metrics);
         setRecentSales(dashboard.recentSales);
         setProductPerformance(dashboard.productPerformance);
@@ -721,13 +767,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   }, [photographer.id]);
 
   React.useEffect(() => {
-    if (selectedEventId || availableEvents.length !== 1) return;
+    if (selectedEventId || publishableEvents.length !== 1) return;
 
-    const [eventItem] = availableEvents;
+    const [eventItem] = publishableEvents;
     setSelectedEventId(eventItem.id);
     setEventInput(eventItem.name);
     setCheckpointInput(eventItem.checkpoint || eventItem.location || 'Ponto Principal');
-  }, [availableEvents, selectedEventId]);
+  }, [publishableEvents, selectedEventId]);
 
   const handleWithdrawalRequest = async () => {
     const pixKey = withdrawalPixKey.trim();
@@ -762,6 +808,109 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setWithdrawalError(error?.message || 'Nao foi possivel solicitar o saque.');
     } finally {
       setIsRequestingWithdrawal(false);
+    }
+  };
+
+  const resetEventForm = () => {
+    setEventForm({
+      id: null,
+      name: '',
+      date: formatDateInput(new Date()),
+      location: '',
+      checkpoint: 'Ponto Principal',
+      description: '',
+      status: 'scheduled',
+      isPublished: true,
+      coverImage: '',
+      bannerImage: '',
+    });
+    setEventError('');
+  };
+
+  const handleEditEvent = (eventItem: Event) => {
+    setEventForm({
+      id: eventItem.id,
+      name: eventItem.name,
+      date: eventItem.date,
+      location: eventItem.location || '',
+      checkpoint: eventItem.checkpoint || 'Ponto Principal',
+      description: eventItem.description || '',
+      status: eventItem.status,
+      isPublished: eventItem.isPublished !== false,
+      coverImage: eventItem.coverImage || '',
+      bannerImage: eventItem.bannerImage || '',
+    });
+    setActiveTab('events');
+  };
+
+  const handleSaveEvent = async () => {
+    const normalizedName = eventForm.name.trim();
+    const normalizedDate = eventForm.date.trim();
+    setEventError('');
+
+    if (!normalizedName || !normalizedDate) {
+      setEventError('Informe nome e data do evento.');
+      return;
+    }
+
+    setIsSavingEvent(true);
+    try {
+      const payload = {
+        photographerId: photographer.id,
+        name: normalizedName,
+        date: normalizedDate,
+        location: eventForm.location.trim() || null,
+        checkpoint: eventForm.checkpoint.trim() || 'Ponto Principal',
+        description: eventForm.description.trim() || null,
+        status: eventForm.status,
+        isPublished: eventForm.isPublished,
+        coverImage: eventForm.coverImage.trim() || null,
+        bannerImage: eventForm.bannerImage.trim() || null,
+      };
+      const saved = eventForm.id
+        ? await eventService.updateEvent(eventForm.id, payload)
+        : await eventService.createEvent(payload);
+
+      setAvailableEvents((current) => {
+        const exists = current.some((eventItem) => eventItem.id === saved.id);
+        return (exists
+          ? current.map((eventItem) => (eventItem.id === saved.id ? saved : eventItem))
+          : [saved, ...current])
+          .sort((left, right) => String(left.date || '').localeCompare(String(right.date || '')));
+      });
+      resetEventForm();
+    } catch (error: any) {
+      console.error('Erro ao salvar evento:', error);
+      setEventError(error?.message || 'Nao foi possivel salvar o evento.');
+    } finally {
+      setIsSavingEvent(false);
+    }
+  };
+
+  const handleToggleEventPublication = async (eventItem: Event) => {
+    try {
+      const updated = await eventService.updateEvent(eventItem.id, { isPublished: eventItem.isPublished === false });
+      setAvailableEvents((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (error) {
+      console.error('Erro ao alterar publicacao do evento:', error);
+      alert('Nao foi possivel alterar a publicacao do evento.');
+    }
+  };
+
+  const handleRemoveEvent = async (eventItem: Event) => {
+    const hasProducts = products.some((product) => product.event === eventItem.name);
+    const shouldRemove = window.confirm(hasProducts
+      ? 'Este evento possui produtos vinculados. Remover o evento nao remove as fotos, mas elas ficam com o nome atual no catalogo. Continuar?'
+      : 'Remover este evento?');
+    if (!shouldRemove) return;
+
+    try {
+      await eventService.removeEvent(eventItem.id);
+      setAvailableEvents((current) => current.filter((item) => item.id !== eventItem.id));
+      if (selectedEventId === eventItem.id) setSelectedEventId('');
+    } catch (error) {
+      console.error('Erro ao remover evento:', error);
+      alert('Nao foi possivel remover o evento.');
     }
   };
 
@@ -997,7 +1146,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       return;
     }
 
-    if (availableEvents.length > 0 && !selectedEvent) {
+    if (publishableEvents.length > 0 && !selectedEvent) {
       alert("Selecione o evento cadastrado antes de publicar.");
       return;
     }
@@ -1051,6 +1200,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             checkpoint: normalizedCheckpoint,
             bib: item.bib.trim(),
             thumbnailUrl: uploadedThumbnail?.path,
+            watermarkUrl: uploadedThumbnail?.path,
             storagePath: uploadedFile.path,
             status: 'published'
           });
@@ -1140,6 +1290,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             onClick={() => setActiveTab('overview')}
           />
           <SidebarLink
+            icon={<CalendarDays />}
+            label="Eventos"
+            active={activeTab === 'events'}
+            onClick={() => setActiveTab('events')}
+          />
+          <SidebarLink
             icon={<ImageIcon />}
             label="Meus Produtos"
             active={activeTab === 'products'}
@@ -1181,6 +1337,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           <div>
             <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Dashboard'}
+              {activeTab === 'events' && 'Eventos'}
               {activeTab === 'products' && 'Produtos'}
               {activeTab === 'earnings' && 'Meus Ganhos'}
             </h2>
@@ -1397,7 +1554,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <div className="bg-[#0d131c] border border-white/10">
                     <div className="p-5 border-b border-white/10 flex items-center justify-between">
                       <h3 className="font-sans font-black text-base uppercase">Proximos Eventos</h3>
-                      <button className="font-mono text-[10px] uppercase text-gray-400 hover:text-white">Ver todos</button>
+                      <button onClick={() => setActiveTab('events')} className="font-mono text-[10px] uppercase text-gray-400 hover:text-white">Ver todos</button>
                     </div>
                     <div className="divide-y divide-white/10">
                       {(upcomingEvents.length ? upcomingEvents : [
@@ -1414,12 +1571,226 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             <p className="font-mono text-[10px] text-gray-500 uppercase">{event.date} - {event.time}</p>
                           </div>
                           <span className="px-3 py-1 rounded border border-purple-400/30 bg-purple-400/10 font-mono text-[9px] text-purple-200 uppercase">
-                            Confirmado
+                            {'isPublished' in event && event.isPublished === false ? 'Oculto' : 'Publicado'}
                           </span>
                         </div>
                       ))}
                     </div>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'events' && (
+            <motion.div
+              key="events"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="space-y-5"
+            >
+              <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5 md:p-6">
+                  <div className="flex items-start justify-between gap-4 mb-6">
+                    <div>
+                      <h3 className="font-sans font-black text-base uppercase text-white">
+                        {eventForm.id ? 'Editar evento' : 'Novo evento'}
+                      </h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">
+                        Eventos organizam uploads, precos e publicacao.
+                      </p>
+                    </div>
+                    {eventForm.id && (
+                      <button
+                        type="button"
+                        onClick={resetEventForm}
+                        className="h-10 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white"
+                      >
+                        Novo
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do evento</label>
+                      <input
+                        type="text"
+                        value={eventForm.name}
+                        onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
+                        placeholder="Ex: Maratona Manaus 2026"
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Data</label>
+                      <input
+                        type="date"
+                        value={eventForm.date}
+                        onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
+                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Local</label>
+                        <input
+                          type="text"
+                          value={eventForm.location}
+                          onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                          placeholder="Cidade / local"
+                          className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint padrao</label>
+                        <input
+                          type="text"
+                          value={eventForm.checkpoint}
+                          onChange={(event) => setEventForm((current) => ({ ...current, checkpoint: event.target.value }))}
+                          placeholder="Chegada, KM 10..."
+                          className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Descricao</label>
+                      <textarea
+                        value={eventForm.description}
+                        onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
+                        rows={3}
+                        placeholder="Resumo para equipe e publicacao"
+                        className="w-full px-4 py-3 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent resize-none"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Status operacional</label>
+                        <select
+                          value={eventForm.status}
+                          onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value as Event['status'] }))}
+                          className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                        >
+                          <option value="scheduled">Agendado</option>
+                          <option value="active">Ativo</option>
+                          <option value="closed">Fechado</option>
+                        </select>
+                      </div>
+                      <label className="h-12 mt-6 px-4 bg-[#05080d] border border-white/15 flex items-center justify-between gap-3 cursor-pointer">
+                        <span className="font-mono text-[10px] uppercase text-gray-300">Publicado na operacao</span>
+                        <input
+                          type="checkbox"
+                          checked={eventForm.isPublished}
+                          onChange={(event) => setEventForm((current) => ({ ...current, isPublished: event.target.checked }))}
+                          className="h-5 w-5 accent-brutal-accent"
+                        />
+                      </label>
+                    </div>
+
+                    {eventError && (
+                      <div className="border border-red-400/30 bg-red-500/10 p-3 font-mono text-[10px] uppercase text-red-200">
+                        {eventError}
+                      </div>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={handleSaveEvent}
+                      disabled={isSavingEvent}
+                      className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400"
+                    >
+                      {isSavingEvent ? 'Salvando...' : eventForm.id ? 'Salvar evento' : 'Criar evento'}
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-[#0d131c] border border-white/10">
+                  <div className="p-5 border-b border-white/10 flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-sans font-black text-base uppercase text-white">Eventos do fotografo</h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">{availableEvents.length} evento(s) cadastrados</p>
+                    </div>
+                    <CalendarDays className="w-5 h-5 text-gray-500" />
+                  </div>
+
+                  {availableEvents.length === 0 ? (
+                    <div className="m-5 p-10 text-center bg-[#080d14] border border-white/10">
+                      <CalendarDays className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                      <p className="font-sans font-black text-xl uppercase text-white">Nenhum evento criado</p>
+                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Crie o primeiro evento para organizar seus uploads.</p>
+                    </div>
+                  ) : (
+                    <div className="divide-y divide-white/10">
+                      {availableEvents.map((eventItem) => {
+                        const eventProducts = products.filter((product) => product.event === eventItem.name);
+                        const eventRevenue = periodSales
+                          .filter((sale) => sale.event === eventItem.name)
+                          .reduce((total, sale) => total + Number(sale.netAmount || 0), 0);
+                        return (
+                          <div key={eventItem.id} className="p-5 grid gap-4">
+                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2 mb-2">
+                                  <span className={`px-2 py-1 font-mono text-[8px] uppercase border ${eventItem.isPublished === false ? 'border-yellow-400/30 bg-yellow-400/10 text-yellow-200' : 'border-green-400/30 bg-green-400/10 text-green-200'}`}>
+                                    {eventItem.isPublished === false ? 'Oculto' : 'Publicado'}
+                                  </span>
+                                  <span className="px-2 py-1 font-mono text-[8px] uppercase border border-white/10 text-gray-300">
+                                    {eventItem.status}
+                                  </span>
+                                </div>
+                                <p className="font-sans font-black text-lg uppercase text-white truncate">{eventItem.name}</p>
+                                <p className="font-mono text-[10px] uppercase text-gray-500 truncate">
+                                  {eventItem.date} - {eventItem.location || eventItem.checkpoint || 'Sem local'}
+                                </p>
+                                {eventItem.description && (
+                                  <p className="font-sans text-sm text-gray-400 mt-2 line-clamp-2">{eventItem.description}</p>
+                                )}
+                              </div>
+                              <div className="flex md:flex-col gap-2 shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditEvent(eventItem)}
+                                  className="h-10 px-3 border border-white/15 text-white font-mono text-[10px] uppercase hover:border-brutal-accent"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleToggleEventPublication(eventItem)}
+                                  className="h-10 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white"
+                                >
+                                  {eventItem.isPublished === false ? 'Publicar' : 'Ocultar'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveEvent(eventItem)}
+                                  className="h-10 px-3 border border-red-500/40 text-red-200 font-mono text-[10px] uppercase hover:bg-red-500/10"
+                                >
+                                  Excluir
+                                </button>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-[#080d14] border border-white/10 p-3">
+                                <p className="font-mono text-[9px] uppercase text-gray-500">Fotos/videos</p>
+                                <p className="font-sans font-black text-2xl text-white">{eventProducts.length}</p>
+                              </div>
+                              <div className="bg-[#080d14] border border-white/10 p-3">
+                                <p className="font-mono text-[9px] uppercase text-gray-500">Receita periodo</p>
+                                <p className="font-sans font-black text-2xl text-green-400">{formatCurrency(eventRevenue)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               </div>
             </motion.div>
@@ -1489,6 +1860,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <option value="all">Ativos</option>
                     <option value="published">Publicado</option>
                     <option value="draft">Rascunho</option>
+                    <option value="pending">Pendente</option>
+                    <option value="processing">Processando</option>
+                    <option value="hidden">Oculto</option>
+                    <option value="sold">Vendido</option>
                   </select>
                 </div>
               </div>
@@ -1614,8 +1989,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </div>
                         <div className="flex items-center justify-between gap-3 font-mono text-[10px] uppercase">
                           <span className="text-gray-500">Peito {product.bib || 'N/I'}</span>
-                          <span className={(product.status ?? 'published') === 'draft' ? 'text-yellow-400' : 'text-green-400'}>
-                            {(product.status ?? 'published') === 'draft' ? 'Rascunho' : 'Publicado'}
+                          <span className={(product.status ?? 'published') === 'published' ? 'text-green-400' : 'text-yellow-400'}>
+                            {product.status ?? 'published'}
                           </span>
                         </div>
                       </div>
@@ -2013,6 +2388,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       >
                         <option value="published">Publicado</option>
                         <option value="draft">Rascunho</option>
+                        <option value="hidden">Oculto</option>
+                        <option value="processing">Processando</option>
+                        <option value="pending">Pendente</option>
                       </select>
                     </div>
                   </div>
@@ -2296,15 +2674,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
                       >
                         <option value="">Selecionar evento cadastrado pelo admin</option>
-                        {availableEvents.map((eventItem) => (
+                        {publishableEvents.map((eventItem) => (
                           <option key={eventItem.id} value={eventItem.id}>
                             {eventItem.name} {eventItem.location ? `- ${eventItem.location}` : ''}
                           </option>
                         ))}
                       </select>
-                      {availableEvents.length === 0 && (
+                      {publishableEvents.length === 0 && (
                         <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
-                          Nenhum evento ativo cadastrado. Preencha manualmente ou solicite ao admin.
+                          Nenhum evento publicado. Crie um evento na aba Eventos ou preencha manualmente.
                         </p>
                       )}
                     </div>
@@ -2315,7 +2693,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         type="text"
                         value={eventInput}
                         onChange={e => setEventInput(e.target.value)}
-                        disabled={availableEvents.length > 0}
+                        disabled={publishableEvents.length > 0}
                         placeholder="EX: TREINO DE SABADO, MARATONA SP"
                         className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
                       />
@@ -2327,7 +2705,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         type="text"
                         value={checkpointInput}
                         onChange={e => setCheckpointInput(e.target.value)}
-                        disabled={availableEvents.length > 0}
+                        disabled={publishableEvents.length > 0}
                         placeholder="EX: KM 15, CHEGADA"
                         className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent disabled:opacity-70 disabled:cursor-not-allowed"
                       />

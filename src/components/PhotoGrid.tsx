@@ -2,6 +2,7 @@ import { Check, Heart, Plus, Share2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
+import { ProtectedMedia } from './ProtectedMedia';
 
 interface PhotoGridProps {
   title: string;
@@ -104,23 +105,16 @@ export function PhotoGrid({
             style={{ contentVisibility: 'auto', containIntrinsicSize: '360px 560px' }}
           >
             <div className="aspect-3/4 bg-gray-200 brutal-border overflow-hidden relative brutal-shadow transition-transform duration-300">
-              <img
+              <ProtectedMedia
                 src={photo.thumbnailUrl || photo.url}
                 alt={photo.id}
+                type={photo.type}
+                watermark={`FUNPACE ${photo.bib || photo.id.slice(0, 6)}`}
                 loading={index < 8 ? 'eager' : 'lazy'}
                 decoding="async"
                 sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                imgClassName="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
               />
-
-              {/* Fake Watermark */}
-              <div className="absolute inset-0 flex flex-col items-center justify-center opacity-30 pointer-events-none rotate-[-30deg]">
-                {Array(5).fill('FUNPACE').map((text, i) => (
-                  <span key={i} className="font-display text-4xl whitespace-nowrap text-white outline-text tracking-widest my-8">
-                    {text}
-                  </span>
-                ))}
-              </div>
 
               {/* Badges */}
               <div className="absolute top-4 left-4 flex gap-2">

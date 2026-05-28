@@ -24,10 +24,16 @@ import {
   X,
   Mail,
   User as UserIcon,
-  ShoppingCart
+  ShoppingCart,
+  CreditCard,
+  TicketPercent,
+  FileText,
+  Activity,
+  EyeOff,
+  ReceiptText
 } from 'lucide-react';
-import { AdminMetrics, Event, Order, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
-import { eventService, photographerService, platformSettingsService, productService, withdrawalService } from '../lib/services';
+import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
+import { adminService, eventService, photographerService, platformSettingsService, productService, withdrawalService, orderService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { getCurrentAccessToken } from '../lib/supabase';
 
@@ -37,6 +43,11 @@ interface AdminDashboardProps {
   videos: Product[];
   orders: Order[];
   withdrawals: WithdrawalRequest[];
+  customers: Customer[];
+  payments: PaymentRecord[];
+  paymentEvents: PaymentEventLog[];
+  coupons: Coupon[];
+  adminLogs: AdminActivityLog[];
   metrics: AdminMetrics;
   onLogout: () => void;
   onRefresh: () => void;
@@ -51,6 +62,8 @@ type StorageStats = {
   byType: Record<string, { count: number; bytes: number }>;
   updatedAt: string;
 };
+
+type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'coupons' | 'logs' | 'settings';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -96,6 +109,8 @@ const orderStatusLabels: Record<Order['status'], string> = {
   pending: 'Pendente',
   failed: 'Falhou',
   cancelled: 'Cancelado',
+  canceled: 'Cancelado',
+  refused: 'Recusado',
   refunded: 'Reembolsado',
 };
 
@@ -104,6 +119,8 @@ const orderStatusClasses: Record<Order['status'], string> = {
   pending: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300',
   failed: 'border-red-500/30 bg-red-500/10 text-red-300',
   cancelled: 'border-gray-500/30 bg-gray-500/10 text-gray-300',
+  canceled: 'border-gray-500/30 bg-gray-500/10 text-gray-300',
+  refused: 'border-red-500/30 bg-red-500/10 text-red-300',
   refunded: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
 };
 
@@ -377,8 +394,8 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
   }
 }
 
-export function AdminDashboard({ photographers, photos, videos, orders, withdrawals, metrics, onLogout, onRefresh }: AdminDashboardProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'photographers' | 'events' | 'sales' | 'settings'>('overview');
+export function AdminDashboard({ photographers, photos, videos, orders, withdrawals, customers, payments, paymentEvents, coupons, adminLogs, metrics, onLogout, onRefresh }: AdminDashboardProps) {
+  const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [showAddModal, setShowAddModal] = useState(false);
   const [newPhotographer, setNewPhotographer] = useState({ name: '', email: '', bio: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -391,6 +408,25 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [thumbnailBackfillProgress, setThumbnailBackfillProgress] = useState('');
   const [photographerSearch, setPhotographerSearch] = useState('');
   const [photographerStatusFilter, setPhotographerStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
+  const [userSearch, setUserSearch] = useState('');
+  const [mediaSearch, setMediaSearch] = useState('');
+  const [mediaStatusFilter, setMediaStatusFilter] = useState<'all' | NonNullable<Product['status']>>('all');
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
+  const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | Order['status']>('all');
+  const [logSearch, setLogSearch] = useState('');
+  const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [updatingCouponId, setUpdatingCouponId] = useState<string | null>(null);
+  const [couponForm, setCouponForm] = useState({
+    code: '',
+    type: 'percent' as Coupon['type'],
+    value: '10',
+    maxUses: '',
+    expiresAt: '',
+    isActive: true,
+  });
+  const [isCreatingCoupon, setIsCreatingCoupon] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<AdminPeriodKey>('week');
   const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
@@ -409,10 +445,14 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     checkpoint: 'Ponto Principal',
     status: 'active' as Event['status'],
   });
-  const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious'>>({
+  const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
     autoBlockSuspicious: true,
+    paymentProvider: 'infinitepay',
+    brandName: 'Funpace Media',
+    supportEmail: '',
+    maxUploadBytes: 314572800,
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const platformFeeRate = Math.max(0, Math.min(100, Number(settingsForm.platformFeePercent) || 0)) / 100;
@@ -441,6 +481,77 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       return matchesStatus && matchesSearch;
     });
   }, [photographers, photographerSearch, photographerStatusFilter]);
+  const photographerById = React.useMemo(
+    () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
+    [photographers],
+  );
+  const customerRows = React.useMemo(() => {
+    const ordersByEmail = new Map<string, { orders: number; paidOrders: number; spent: number }>();
+    for (const order of orders) {
+      const email = String(order.buyerEmail || '').toLowerCase();
+      if (!email) continue;
+      const current = ordersByEmail.get(email) ?? { orders: 0, paidOrders: 0, spent: 0 };
+      current.orders += 1;
+      if (order.status === 'paid') {
+        current.paidOrders += 1;
+        current.spent += Number(order.total || 0);
+      }
+      ordersByEmail.set(email, current);
+    }
+
+    const customerEmails = new Set(customers.map((customer) => customer.email.toLowerCase()));
+    const fromOrders = Array.from(ordersByEmail.entries())
+      .filter(([email]) => !customerEmails.has(email))
+      .map(([email, stats]) => ({
+        id: `order:${email}`,
+        email,
+        name: orders.find((order) => order.buyerEmail?.toLowerCase() === email)?.buyerName || 'Cliente sem conta',
+        createdAt: orders.find((order) => order.buyerEmail?.toLowerCase() === email)?.createdAt,
+        role: 'customer' as const,
+        ...stats,
+      }));
+
+    return [
+      ...customers.map((customer) => {
+        const stats = ordersByEmail.get(customer.email.toLowerCase()) ?? { orders: 0, paidOrders: 0, spent: 0 };
+        return {
+          id: customer.id,
+          email: customer.email,
+          name: customer.name || 'Cliente',
+          createdAt: customer.createdAt,
+          role: 'customer' as const,
+          ...stats,
+        };
+      }),
+      ...fromOrders,
+    ];
+  }, [customers, orders]);
+  const filteredUsers = React.useMemo(() => {
+    const normalized = userSearch.trim().toLowerCase();
+    if (!normalized) return customerRows;
+    return customerRows.filter((customer) => [
+      customer.name,
+      customer.email,
+      customer.id,
+    ].some((value) => String(value || '').toLowerCase().includes(normalized)));
+  }, [customerRows, userSearch]);
+  const allMedia = React.useMemo(() => [...photos, ...videos], [photos, videos]);
+  const filteredMedia = React.useMemo(() => {
+    const normalized = mediaSearch.trim().toLowerCase();
+    return allMedia.filter((product) => {
+      const productStatus = product.status ?? 'published';
+      const matchesStatus = mediaStatusFilter === 'all' || productStatus === mediaStatusFilter;
+      const matchesSearch = !normalized || [
+        product.name,
+        product.event,
+        product.checkpoint,
+        product.bib,
+        product.id,
+        photographerById.get(product.vendedorId)?.name,
+      ].some((value) => String(value || '').toLowerCase().includes(normalized));
+      return matchesStatus && matchesSearch;
+    });
+  }, [allMedia, mediaSearch, mediaStatusFilter, photographerById]);
   const periodRange = React.useMemo(
     () => getAdminPeriodRange(selectedPeriod, customPeriodStart, customPeriodEnd),
     [selectedPeriod, customPeriodStart, customPeriodEnd],
@@ -465,6 +576,50 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     () => photographers.filter((photographer) => isWithinPeriod(photographer.createdAt, periodRange.start, periodRange.end)),
     [photographers, periodRange],
   );
+  const filteredOrders = React.useMemo(() => {
+    const normalized = orderSearch.trim().toLowerCase();
+    return periodOrders.filter((order) => {
+      const matchesStatus = orderStatusFilter === 'all' || order.status === orderStatusFilter;
+      const eventText = (order.items ?? []).map((item) => item.event).join(' ');
+      const photographerText = (order.items ?? []).map((item) => photographerById.get(item.vendedorId)?.name ?? item.vendedorId).join(' ');
+      const matchesSearch = !normalized || [
+        order.id,
+        order.buyerName,
+        order.buyerEmail,
+        order.paymentProvider,
+        eventText,
+        photographerText,
+      ].some((value) => String(value || '').toLowerCase().includes(normalized));
+      return matchesStatus && matchesSearch;
+    });
+  }, [periodOrders, orderSearch, orderStatusFilter, photographerById]);
+  const filteredPayments = React.useMemo(() => {
+    return payments.filter((payment) => (
+      paymentStatusFilter === 'all' || payment.status === paymentStatusFilter
+    ));
+  }, [payments, paymentStatusFilter]);
+  const operationalLogs = React.useMemo(() => {
+    const webhookLogs: AdminActivityLog[] = paymentEvents.map((eventItem) => ({
+      id: `webhook:${eventItem.id}`,
+      action: 'payment_webhook',
+      targetType: 'payment_event',
+      targetId: eventItem.eventId,
+      metadata: { provider: eventItem.provider, status: eventItem.status, orderId: eventItem.orderId },
+      createdAt: eventItem.createdAt,
+    }));
+    return [...adminLogs, ...webhookLogs].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+  }, [adminLogs, paymentEvents]);
+  const filteredLogs = React.useMemo(() => {
+    const normalized = logSearch.trim().toLowerCase();
+    if (!normalized) return operationalLogs;
+    return operationalLogs.filter((log) => [
+      log.action,
+      log.actorEmail,
+      log.targetType,
+      log.targetId,
+      JSON.stringify(log.metadata || {}),
+    ].some((value) => String(value || '').toLowerCase().includes(normalized)));
+  }, [logSearch, operationalLogs]);
   const periodWithdrawals = React.useMemo(
     () => withdrawals.filter((withdrawal) => isWithinPeriod(withdrawal.createdAt, periodRange.start, periodRange.end)),
     [withdrawals, periodRange],
@@ -624,10 +779,6 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   }, [orders, pendingPhotographers.length, productsMissingThumbnails.length, withdrawals]);
   const pendingWithdrawalTotal = pendingWithdrawals.reduce((sum, withdrawal) => sum + Number(withdrawal.amount || 0), 0);
   const paidOrderStoredTotal = paidOrders.reduce((sum, order) => sum + Number(order.total || 0), 0);
-  const photographerById = React.useMemo(
-    () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
-    [photographers],
-  );
   const mediaEvents = React.useMemo(() => {
     const grouped = new Map<string, {
       name: string;
@@ -892,6 +1043,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           platformFeePercent: Number(settings.platformFeePercent),
           withdrawalFee: Number(settings.withdrawalFee),
           autoBlockSuspicious: Boolean(settings.autoBlockSuspicious),
+          paymentProvider: settings.paymentProvider || 'infinitepay',
+          brandName: settings.brandName || 'Funpace Media',
+          supportEmail: settings.supportEmail || '',
+          maxUploadBytes: Number(settings.maxUploadBytes || 314572800),
         });
       } catch (error) {
         console.error('Erro ao carregar configuracoes:', error);
@@ -1187,6 +1342,16 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         platformFeePercent: Number(updated.platformFeePercent),
         withdrawalFee: Number(updated.withdrawalFee),
         autoBlockSuspicious: Boolean(updated.autoBlockSuspicious),
+        paymentProvider: updated.paymentProvider || settingsForm.paymentProvider,
+        brandName: updated.brandName || settingsForm.brandName,
+        supportEmail: updated.supportEmail || '',
+        maxUploadBytes: Number(updated.maxUploadBytes || settingsForm.maxUploadBytes),
+      });
+      await adminService.logAction({
+        action: 'platform_settings_updated',
+        targetType: 'platform_settings',
+        targetId: 'default',
+        metadata: settingsForm,
       });
       alert('Configuracoes salvas com sucesso.');
     } catch (error) {
@@ -1194,6 +1359,113 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       alert('Erro ao salvar configuracoes.');
     } finally {
       setIsSavingSettings(false);
+    }
+  };
+
+  const handleModerateProduct = async (product: Product, status: NonNullable<Product['status']>) => {
+    setUpdatingProductId(product.id);
+    try {
+      await productService.updateProductStatus(product.id, status);
+      await adminService.logAction({
+        action: 'product_status_updated',
+        targetType: 'product',
+        targetId: product.id,
+        metadata: { status, previousStatus: product.status ?? 'published' },
+      });
+      await onRefresh();
+    } catch (error) {
+      console.error(error);
+      alert('Nao foi possivel atualizar a midia.');
+    } finally {
+      setUpdatingProductId(null);
+    }
+  };
+
+  const handleAdminOrderStatus = async (order: Order, status: Order['status']) => {
+    if (order.status === status) return;
+    const confirmed = window.confirm(`Atualizar pedido #${order.id.slice(0, 8)} para ${orderStatusLabels[status]}?`);
+    if (!confirmed) return;
+
+    setUpdatingOrderId(order.id);
+    try {
+      await orderService.updateOrderStatus(order.id, status);
+      await adminService.logAction({
+        action: 'order_status_updated',
+        targetType: 'order',
+        targetId: order.id,
+        metadata: { status, previousStatus: order.status },
+      });
+      await onRefresh();
+    } catch (error) {
+      console.error(error);
+      alert('Nao foi possivel atualizar o pedido.');
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const handleCreateCoupon = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const code = couponForm.code.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
+    const value = Number(couponForm.value);
+    const maxUses = couponForm.maxUses ? Number(couponForm.maxUses) : null;
+
+    if (code.length < 3) {
+      alert('Informe um codigo de cupom com pelo menos 3 caracteres.');
+      return;
+    }
+    if (!Number.isFinite(value) || value <= 0) {
+      alert('Informe um desconto valido.');
+      return;
+    }
+    if (couponForm.type === 'percent' && value > 100) {
+      alert('Cupom percentual nao pode passar de 100%.');
+      return;
+    }
+
+    setIsCreatingCoupon(true);
+    try {
+      const created = await adminService.createCoupon({
+        code,
+        type: couponForm.type,
+        value,
+        maxUses,
+        startsAt: null,
+        expiresAt: couponForm.expiresAt ? new Date(`${couponForm.expiresAt}T23:59:59`).toISOString() : null,
+        isActive: couponForm.isActive,
+      });
+      await adminService.logAction({
+        action: 'coupon_created',
+        targetType: 'coupon',
+        targetId: created.id,
+        metadata: { code: created.code, type: created.type, value: created.value },
+      });
+      setCouponForm({ code: '', type: 'percent', value: '10', maxUses: '', expiresAt: '', isActive: true });
+      await onRefresh();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel criar o cupom.');
+    } finally {
+      setIsCreatingCoupon(false);
+    }
+  };
+
+  const handleToggleCoupon = async (coupon: Coupon) => {
+    setUpdatingCouponId(coupon.id);
+    try {
+      await adminService.updateCoupon(coupon.id, { isActive: !coupon.isActive });
+      await adminService.logAction({
+        action: 'coupon_status_updated',
+        targetType: 'coupon',
+        targetId: coupon.id,
+        metadata: { isActive: !coupon.isActive, code: coupon.code },
+      });
+      await onRefresh();
+    } catch (error) {
+      console.error(error);
+      alert('Nao foi possivel atualizar o cupom.');
+    } finally {
+      setUpdatingCouponId(null);
     }
   };
 
@@ -1347,6 +1619,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             onClick={() => setActiveTab('overview')}
           />
           <AdminSidebarLink
+            icon={<UserIcon />}
+            label="Usuários"
+            active={activeTab === 'users'}
+            onClick={() => setActiveTab('users')}
+          />
+          <AdminSidebarLink
             icon={<Users />}
             label="Fotógrafos"
             active={activeTab === 'photographers'}
@@ -1359,10 +1637,40 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             onClick={() => setActiveTab('events')}
           />
           <AdminSidebarLink
+            icon={<Camera />}
+            label="Fotos"
+            active={activeTab === 'media'}
+            onClick={() => setActiveTab('media')}
+          />
+          <AdminSidebarLink
+            icon={<ReceiptText />}
+            label="Pedidos"
+            active={activeTab === 'orders'}
+            onClick={() => setActiveTab('orders')}
+          />
+          <AdminSidebarLink
+            icon={<CreditCard />}
+            label="Pagamentos"
+            active={activeTab === 'payments'}
+            onClick={() => setActiveTab('payments')}
+          />
+          <AdminSidebarLink
             icon={<DollarSign />}
             label="Financeiro"
             active={activeTab === 'sales'}
             onClick={() => setActiveTab('sales')}
+          />
+          <AdminSidebarLink
+            icon={<TicketPercent />}
+            label="Cupons"
+            active={activeTab === 'coupons'}
+            onClick={() => setActiveTab('coupons')}
+          />
+          <AdminSidebarLink
+            icon={<Activity />}
+            label="Logs"
+            active={activeTab === 'logs'}
+            onClick={() => setActiveTab('logs')}
           />
           <AdminSidebarLink
             icon={<Settings />}
@@ -1396,9 +1704,15 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           <div>
             <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Painel Administrativo'}
+              {activeTab === 'users' && 'Gestão de Usuários'}
               {activeTab === 'photographers' && 'Gestao de Fotografos'}
               {activeTab === 'events' && 'Eventos'}
+              {activeTab === 'media' && 'Mídias Globais'}
+              {activeTab === 'orders' && 'Pedidos'}
+              {activeTab === 'payments' && 'Pagamentos'}
               {activeTab === 'sales' && 'Fluxo de Caixa'}
+              {activeTab === 'coupons' && 'Cupons e Promoções'}
+              {activeTab === 'logs' && 'Logs e Auditoria'}
               {activeTab === 'settings' && 'Preferências'}
             </h2>
             <div className="flex items-center gap-2 font-mono text-sm text-gray-500">
@@ -1709,6 +2023,56 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     value: `R$ ${report.revenue.toFixed(2)}`,
                   }))}
                 />
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'users' && (
+            <motion.div key="users" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Clientes</p>
+                  <p className="font-sans font-black text-3xl">{customerRows.length}</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Compradores pagantes</p>
+                  <p className="font-sans font-black text-3xl text-green-400">{customerRows.filter((row) => row.paidOrders > 0).length}</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Receita clientes</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(customerRows.reduce((sum, row) => sum + row.spent, 0))}</p>
+                </div>
+              </div>
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase">Usuarios e clientes</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">Compras, gasto total e origem do cadastro</p>
+                  </div>
+                  <div className="relative w-full md:w-80">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
+                    <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Buscar usuario" className="w-full h-11 pl-10 pr-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent" />
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-[#05080d] text-gray-500 font-mono text-[10px] uppercase">
+                      <tr><th className="px-5 py-3">Nome</th><th className="px-5 py-3">E-mail</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Compras</th><th className="px-5 py-3">Total gasto</th><th className="px-5 py-3">Cadastro</th></tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {filteredUsers.slice(0, 120).map((row) => (
+                        <tr key={row.id} className="hover:bg-white/3">
+                          <td className="px-5 py-4 font-sans font-bold text-white">{row.name}</td>
+                          <td className="px-5 py-4 font-mono text-xs text-gray-400">{row.email}</td>
+                          <td className="px-5 py-4"><span className="px-2 py-1 border border-white/10 bg-white/5 font-mono text-[10px] uppercase">customer</span></td>
+                          <td className="px-5 py-4 font-mono text-xs">{row.paidOrders}/{row.orders}</td>
+                          <td className="px-5 py-4 font-sans font-black text-green-400">{formatCurrency(row.spent)}</td>
+                          <td className="px-5 py-4 font-mono text-[10px] text-gray-500">{row.createdAt ? new Date(row.createdAt).toLocaleDateString('pt-BR') : 'N/I'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </motion.div>
           )}
@@ -2027,6 +2391,104 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             </motion.div>
           )}
 
+          {activeTab === 'media' && (
+            <motion.div key="media" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Midias</p><p className="font-sans font-black text-3xl">{allMedia.length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Publicadas</p><p className="font-sans font-black text-3xl text-green-400">{allMedia.filter((item) => (item.status ?? 'published') === 'published').length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Ocultas</p><p className="font-sans font-black text-3xl text-yellow-400">{allMedia.filter((item) => item.status === 'hidden').length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Sem preview</p><p className="font-sans font-black text-3xl text-red-300">{productsMissingThumbnails.length}</p></div>
+              </div>
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col xl:flex-row gap-4 xl:items-center xl:justify-between">
+                  <div><h3 className="font-sans font-black text-base uppercase">Fotos e videos</h3><p className="font-mono text-[10px] uppercase text-gray-500">{filteredMedia.length} resultado(s)</p></div>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <input value={mediaSearch} onChange={(event) => setMediaSearch(event.target.value)} placeholder="Buscar por evento, fotografo, peito" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-80" />
+                    <select value={mediaStatusFilter} onChange={(event) => setMediaStatusFilter(event.target.value as typeof mediaStatusFilter)} className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent">
+                      <option value="all">Todos status</option><option value="published">Publicado</option><option value="hidden">Oculto</option><option value="draft">Rascunho</option><option value="processing">Processando</option><option value="removed">Removido</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-5">
+                  {filteredMedia.slice(0, 80).map((product) => (
+                    <div key={product.id} className="bg-[#080d14] border border-white/10 overflow-hidden">
+                      <div className="aspect-4/3 bg-black relative">
+                        {product.thumbnailUrl || product.type === 'IMG' ? <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover" /> : <video src={product.url} className="w-full h-full object-cover" muted preload="metadata" />}
+                        <span className="absolute left-2 top-2 bg-black/80 border border-white/10 px-2 py-1 font-mono text-[8px] uppercase">{product.type}</span>
+                        <span className="absolute right-2 top-2 bg-brutal-accent px-2 py-1 font-mono text-[8px] uppercase">{product.status ?? 'published'}</span>
+                      </div>
+                      <div className="p-4 space-y-3">
+                        <div><p className="font-sans font-black text-sm uppercase truncate">{product.name}</p><p className="font-mono text-[10px] uppercase text-gray-500 truncate">{product.event || 'Geral'} - {photographerById.get(product.vendedorId)?.name ?? product.vendedorId}</p></div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <button disabled={updatingProductId === product.id} onClick={() => handleModerateProduct(product, 'published')} className="h-9 border border-green-500/30 text-green-300 font-mono text-[10px] uppercase hover:bg-green-500/10">Publicar</button>
+                          <button disabled={updatingProductId === product.id} onClick={() => handleModerateProduct(product, 'hidden')} className="h-9 border border-yellow-500/30 text-yellow-300 font-mono text-[10px] uppercase hover:bg-yellow-500/10"><EyeOff className="w-3 h-3 inline mr-1" />Ocultar</button>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'orders' && (
+            <motion.div key="orders" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col xl:flex-row gap-4 xl:items-center xl:justify-between">
+                  <div><h3 className="font-sans font-black text-base uppercase">Pedidos</h3><p className="font-mono text-[10px] uppercase text-gray-500">{filteredOrders.length} no periodo selecionado</p></div>
+                  <div className="flex flex-col md:flex-row gap-3">
+                    <input value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="Buscar pedido, cliente, evento" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-80" />
+                    <select value={orderStatusFilter} onChange={(event) => setOrderStatusFilter(event.target.value as typeof orderStatusFilter)} className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent">
+                      <option value="all">Todos status</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="refused">Refused</option><option value="canceled">Canceled</option><option value="refunded">Refunded</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-[#05080d] text-gray-500 font-mono text-[10px] uppercase"><tr><th className="px-5 py-3">Pedido</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Valor</th><th className="px-5 py-3">Metodo</th><th className="px-5 py-3">Evento/Fotografo</th><th className="px-5 py-3">Ação</th></tr></thead>
+                    <tbody className="divide-y divide-white/10">
+                      {filteredOrders.slice(0, 160).map((order) => {
+                        const firstItem = order.items?.[0];
+                        return (
+                          <tr key={order.id} className="hover:bg-white/3">
+                            <td className="px-5 py-4 font-mono text-xs">#{order.id.slice(0, 8)}<p className="text-[10px] text-gray-600">{new Date(order.createdAt).toLocaleString('pt-BR')}</p></td>
+                            <td className="px-5 py-4"><p className="font-sans font-bold">{order.buyerName}</p><p className="font-mono text-[10px] text-gray-500">{order.buyerEmail}</p></td>
+                            <td className="px-5 py-4"><span className={`px-2 py-1 border font-mono text-[10px] uppercase ${orderStatusClasses[order.status]}`}>{orderStatusLabels[order.status]}</span></td>
+                            <td className="px-5 py-4 font-sans font-black text-green-400">{formatCurrency(Number(order.total || 0))}</td>
+                            <td className="px-5 py-4 font-mono text-xs uppercase">{order.paymentMethod || 'checkout'}</td>
+                            <td className="px-5 py-4 font-mono text-[10px] text-gray-400">{firstItem?.event || 'N/I'}<br />{firstItem ? photographerById.get(firstItem.vendedorId)?.name ?? firstItem.vendedorId : 'N/I'}</td>
+                            <td className="px-5 py-4"><select disabled={updatingOrderId === order.id} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pending</option><option value="paid">Paid</option><option value="refused">Refused</option><option value="canceled">Canceled</option><option value="refunded">Refunded</option></select></td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'payments' && (
+            <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Pagamentos</p><p className="font-sans font-black text-3xl">{payments.length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Aprovados</p><p className="font-sans font-black text-3xl text-green-400">{payments.filter((item) => item.status === 'paid').length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Pendentes</p><p className="font-sans font-black text-3xl text-yellow-400">{payments.filter((item) => item.status === 'pending').length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Webhooks</p><p className="font-sans font-black text-3xl text-brutal-accent">{paymentEvents.length}</p></div>
+              </div>
+              <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
+                <div className="bg-[#0d131c] border border-white/10">
+                  <div className="p-5 border-b border-white/10 flex items-center justify-between"><h3 className="font-sans font-black text-base uppercase">Historico de pagamentos</h3><select value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value as typeof paymentStatusFilter)} className="h-10 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="all">Todos</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="refused">Refused</option><option value="failed">Failed</option></select></div>
+                  <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{filteredPayments.slice(0, 120).map((payment) => <div key={payment.id} className="p-4 flex justify-between gap-4"><div><p className="font-sans font-black text-sm uppercase">{payment.provider} - {payment.method}</p><p className="font-mono text-[10px] text-gray-500">Pedido #{payment.orderId.slice(0, 8)} - {payment.providerPaymentId}</p></div><span className={`h-fit px-2 py-1 border font-mono text-[10px] uppercase ${orderStatusClasses[payment.status]}`}>{payment.status}</span></div>)}</div>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10">
+                  <div className="p-5 border-b border-white/10"><h3 className="font-sans font-black text-base uppercase">Logs de webhook</h3><p className="font-mono text-[10px] uppercase text-gray-500">Auditoria do gateway</p></div>
+                  <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{paymentEvents.slice(0, 120).map((eventItem) => <div key={eventItem.id} className="p-4"><p className="font-sans font-black text-sm uppercase">{eventItem.provider} - {eventItem.status || 'received'}</p><p className="font-mono text-[10px] text-gray-500">{eventItem.eventId} - {new Date(eventItem.createdAt).toLocaleString('pt-BR')}</p></div>)}</div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'sales' && (
             <motion.div
               key="sales"
@@ -2235,6 +2697,43 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             </motion.div>
           )}
 
+          {activeTab === 'coupons' && (
+            <motion.div key="coupons" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <form onSubmit={handleCreateCoupon} className="bg-[#0d131c] border border-white/10 p-5 grid gap-4 lg:grid-cols-[1fr_150px_150px_150px_180px_auto] lg:items-end">
+                <div><label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Codigo</label><input value={couponForm.code} onChange={(event) => setCouponForm((current) => ({ ...current, code: event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, '') }))} placeholder="FUNPACE10" className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent" /></div>
+                <div><label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Tipo</label><select value={couponForm.type} onChange={(event) => setCouponForm((current) => ({ ...current, type: event.target.value as Coupon['type'] }))} className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"><option value="percent">Percentual</option><option value="fixed">Valor fixo</option></select></div>
+                <div><label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Desconto</label><input type="number" min="0" step="0.01" value={couponForm.value} onChange={(event) => setCouponForm((current) => ({ ...current, value: event.target.value }))} className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent" /></div>
+                <div><label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Limite</label><input type="number" min="1" value={couponForm.maxUses} onChange={(event) => setCouponForm((current) => ({ ...current, maxUses: event.target.value }))} placeholder="Sem limite" className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent" /></div>
+                <div><label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Validade</label><input type="date" value={couponForm.expiresAt} onChange={(event) => setCouponForm((current) => ({ ...current, expiresAt: event.target.value }))} className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent" /></div>
+                <button disabled={isCreatingCoupon} className="h-12 px-5 bg-brutal-accent border border-brutal-accent text-white font-sans text-xs font-black uppercase hover:bg-white hover:text-brutal-accent">{isCreatingCoupon ? 'Criando...' : 'Criar'}</button>
+              </form>
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10"><h3 className="font-sans font-black text-base uppercase">Cupons ativos e historico</h3><p className="font-mono text-[10px] uppercase text-gray-500">{coupons.length} cupom(ns)</p></div>
+                <div className="divide-y divide-white/10">{coupons.map((coupon) => <div key={coupon.id} className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4"><div><p className="font-sans font-black text-xl text-white">{coupon.code}</p><p className="font-mono text-[10px] uppercase text-gray-500">{coupon.type === 'percent' ? `${coupon.value}%` : formatCurrency(Number(coupon.value))} - usado {coupon.usedCount}/{coupon.maxUses || '∞'}</p></div><div className="flex items-center gap-3"><span className={`px-2 py-1 border font-mono text-[10px] uppercase ${coupon.isActive ? 'border-green-500/30 text-green-300 bg-green-500/10' : 'border-gray-500/30 text-gray-400 bg-gray-500/10'}`}>{coupon.isActive ? 'Ativo' : 'Inativo'}</span><button disabled={updatingCouponId === coupon.id} onClick={() => handleToggleCoupon(coupon)} className="h-10 px-4 border border-white/15 font-mono text-[10px] uppercase hover:border-brutal-accent">{coupon.isActive ? 'Desativar' : 'Ativar'}</button></div></div>)}</div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'logs' && (
+            <motion.div key="logs" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
+                  <div><h3 className="font-sans font-black text-base uppercase">Auditoria operacional</h3><p className="font-mono text-[10px] uppercase text-gray-500">{filteredLogs.length} registro(s)</p></div>
+                  <input value={logSearch} onChange={(event) => setLogSearch(event.target.value)} placeholder="Buscar acao, alvo, webhook" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-90" />
+                </div>
+                <div className="divide-y divide-white/10 max-h-[70vh] overflow-y-auto">
+                  {filteredLogs.slice(0, 250).map((log) => (
+                    <div key={log.id} className="p-4 grid gap-3 md:grid-cols-[220px_1fr_auto] md:items-start">
+                      <div><p className="font-sans font-black text-sm uppercase text-white">{log.action}</p><p className="font-mono text-[10px] text-gray-500">{log.actorEmail || 'sistema'}</p></div>
+                      <div><p className="font-mono text-[10px] uppercase text-gray-400">{log.targetType || 'evento'} {log.targetId ? `#${String(log.targetId).slice(0, 12)}` : ''}</p><pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px] text-gray-600 max-h-24 overflow-hidden">{JSON.stringify(log.metadata || {}, null, 2)}</pre></div>
+                      <p className="font-mono text-[10px] text-gray-500">{new Date(log.createdAt).toLocaleString('pt-BR')}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+          )}
+
           {activeTab === 'settings' && (
             <motion.div
               key="settings"
@@ -2314,6 +2813,46 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <ShieldCheck className="w-5 h-5 text-gray-500" />
                 </div>
                 <div className="p-5 space-y-5">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div className="space-y-2">
+                      <label className="font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Gateway ativo</label>
+                      <select
+                        value={settingsForm.paymentProvider}
+                        onChange={(event) => setSettingsForm((current) => ({ ...current, paymentProvider: event.target.value }))}
+                        className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                      >
+                        <option value="infinitepay">InfinitePay</option>
+                        <option value="pagarme">Pagar.me futuro</option>
+                      </select>
+                    </div>
+                    <div className="space-y-2">
+                      <label className="font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Limite upload bytes</label>
+                      <input
+                        type="number"
+                        min="1048576"
+                        value={settingsForm.maxUploadBytes}
+                        onChange={(event) => setSettingsForm((current) => ({ ...current, maxUploadBytes: Number(event.target.value) }))}
+                        className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome da marca</label>
+                      <input
+                        value={settingsForm.brandName}
+                        onChange={(event) => setSettingsForm((current) => ({ ...current, brandName: event.target.value }))}
+                        className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <label className="font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">E-mail suporte</label>
+                      <input
+                        type="email"
+                        value={settingsForm.supportEmail}
+                        onChange={(event) => setSettingsForm((current) => ({ ...current, supportEmail: event.target.value }))}
+                        className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                      />
+                    </div>
+                  </div>
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-[#080d14] border border-white/10">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 border border-white/10 bg-white/5 flex items-center justify-center shrink-0">

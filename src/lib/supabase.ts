@@ -160,7 +160,7 @@ function toAppUser(user: SupabaseAuthUser | null): AppUser | null {
     cpf: user.user_metadata?.cpf ?? null,
     emailVerified: true,
     role: user.app_metadata?.role ?? null,
-    isAdmin: user.app_metadata?.role === 'admin',
+    isAdmin: user.app_metadata?.role === 'admin' || user.app_metadata?.role === 'super_admin',
   };
 }
 
@@ -590,6 +590,57 @@ export const updateCurrentUserPassword = async (password: string) => {
 
   window.dispatchEvent(new Event('supabase-auth-changed'));
   return toAppUser(user);
+};
+
+export const updateCurrentUserProfile = async (input: { name?: string; avatarUrl?: string; cpf?: string | null }) => {
+  assertSupabaseConfig();
+
+  const token = await getCurrentAccessToken();
+  if (!token) {
+    throw new Error('Entre novamente para atualizar seu perfil.');
+  }
+
+  const current = getCurrentUser();
+  const response = await fetch(`${supabaseConfig.url}/auth/v1/user`, {
+    method: 'PUT',
+    headers: {
+      apikey: supabaseConfig.anonKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      data: {
+        name: input.name,
+        full_name: input.name,
+        avatar_url: input.avatarUrl,
+        cpf: input.cpf ?? current?.cpf ?? null,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const message = await response.text();
+    throw new Error(message || 'Nao foi possivel atualizar seu perfil.');
+  }
+
+  const payload = await response.json() as SupabaseAuthUser | { user?: SupabaseAuthUser };
+  const user = 'user' in payload && payload.user ? payload.user : payload as SupabaseAuthUser;
+  const session = getStoredSession();
+  if (session) {
+    setStoredSession({ ...session, user });
+  }
+
+  window.dispatchEvent(new Event('supabase-auth-changed'));
+  return toAppUser(user);
+};
+
+export const requestPasswordReset = async (email: string) => {
+  assertSupabaseConfig();
+  const redirectTo = `${window.location.origin}/minha-conta`;
+  await supabaseFetch('/auth/v1/recover', {
+    method: 'POST',
+    body: JSON.stringify({ email, redirect_to: redirectTo }),
+  });
 };
 
 export const loginWithEmail = async (email: string, password: string) => {

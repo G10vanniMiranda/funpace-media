@@ -7,6 +7,10 @@ export interface Photographer {
   phone?: string;
   cpf?: string;
   verified: boolean;
+  role?: 'photographer';
+  commissionPercent?: number | null;
+  blockedAt?: string | null;
+  lastLoginAt?: string | null;
   createdAt?: string;
   stats: {
     photos: number;
@@ -31,11 +35,14 @@ export interface Product {
   event: string;
   checkpoint: string;
   thumbnailUrl?: string;
+  watermarkUrl?: string | null;
   duration?: string;
   storagePath?: string;
-  status?: 'draft' | 'published' | 'removed';
+  status?: 'draft' | 'pending' | 'processing' | 'published' | 'sold' | 'hidden' | 'removed';
   createdAt?: string;
   favoriteCount?: number;
+  viewCount?: number;
+  salesCount?: number;
 }
 
 export interface Buyer {
@@ -51,16 +58,26 @@ export interface Customer {
   name: string;
   phone?: string | null;
   cpf?: string | null;
+  avatarUrl?: string | null;
+  preferences?: Record<string, unknown> | null;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface Event {
   id: string;
+  photographerId?: string | null;
   name: string;
+  slug?: string | null;
+  description?: string | null;
   date: string;
   location?: string | null;
   checkpoint?: string | null;
+  coverImage?: string | null;
+  bannerImage?: string | null;
+  isPublished?: boolean;
+  isFeatured?: boolean;
+  moderationStatus?: 'pending' | 'approved' | 'rejected';
   status: 'scheduled' | 'active' | 'closed';
   createdAt?: string;
   updatedAt?: string;
@@ -74,10 +91,14 @@ export interface Order {
   buyerPhone: string;
   buyerCpf: string;
   total: number;
-  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'refunded';
+  subtotal?: number | null;
+  discountTotal?: number | null;
+  status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
+  paymentMethod?: 'pix' | 'credit_card' | 'checkout';
   paymentProvider: string;
   paymentExternalId?: string | null;
   checkoutUrl?: string | null;
+  paidEmailSentAt?: string | null;
   createdAt: string;
   updatedAt?: string;
   items?: OrderItem[];
@@ -117,8 +138,59 @@ export interface PlatformSettings {
   platformFeePercent: number;
   withdrawalFee: number;
   autoBlockSuspicious: boolean;
+  paymentProvider?: string;
+  brandName?: string;
+  supportEmail?: string;
+  maxUploadBytes?: number;
   createdAt?: string;
   updatedAt?: string;
+}
+
+export interface PaymentRecord {
+  id: string;
+  orderId: string;
+  provider: string;
+  providerPaymentId: string;
+  method: 'pix' | 'credit_card' | 'checkout';
+  status: Order['status'];
+  rawResponse?: Record<string, unknown>;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface PaymentEventLog {
+  id: string;
+  provider: string;
+  eventId: string;
+  orderId?: string | null;
+  status?: string | null;
+  payload?: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface Coupon {
+  id: string;
+  code: string;
+  type: 'percent' | 'fixed';
+  value: number;
+  maxUses?: number | null;
+  usedCount: number;
+  startsAt?: string | null;
+  expiresAt?: string | null;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface AdminActivityLog {
+  id: string;
+  actorId?: string | null;
+  actorEmail?: string | null;
+  action: string;
+  targetType?: string | null;
+  targetId?: string | null;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface WithdrawalRequest {
@@ -166,6 +238,25 @@ export interface PhotographerDashboardMetrics {
   monthlyEarnings: number;
   availableBalance: number;
   monthlyGoal: number;
+}
+
+export interface PhotographerWallet {
+  id: string;
+  photographerId: string;
+  balance: number;
+  pendingBalance: number;
+  updatedAt?: string;
+}
+
+export interface PhotographerTransaction {
+  id: string;
+  photographerId: string;
+  orderId?: string | null;
+  grossAmount: number;
+  platformFee: number;
+  netAmount: number;
+  status: 'pending' | 'available' | 'paid' | 'cancelled';
+  createdAt: string;
 }
 
 export interface PhotographerProductPerformance {

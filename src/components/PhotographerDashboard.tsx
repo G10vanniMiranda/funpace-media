@@ -623,6 +623,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const currentPreview = selectedFiles[previewIndex];
+  const eventCoverCandidates = React.useMemo(() => {
+    const normalizedEventName = normalizeCatalogText(eventForm.name.trim());
+    if (!normalizedEventName) return [];
+
+    return products
+      .filter((product) => (
+        (product.status ?? 'published') !== 'removed' &&
+        normalizeCatalogText(product.event || '') === normalizedEventName &&
+        Boolean(product.thumbnailUrl || product.url)
+      ))
+      .sort((left, right) => {
+        const leftTime = getTimestamp(left.createdAt);
+        const rightTime = getTimestamp(right.createdAt);
+        return rightTime - leftTime || String(left.name || '').localeCompare(String(right.name || ''), 'pt-BR', { sensitivity: 'base' });
+      })
+      .slice(0, 24);
+  }, [products, eventForm.name]);
 
   React.useEffect(() => {
     if (!showPeriodMenu) return undefined;
@@ -1909,6 +1926,76 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         placeholder="Resumo para equipe e publicacao"
                         className="w-full px-4 py-3 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent resize-none"
                       />
+                    </div>
+
+                    <div className="bg-[#080d14] border border-white/10 p-4">
+                      <div className="flex items-start justify-between gap-4 mb-4">
+                        <div>
+                          <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Capa do evento</label>
+                          <p className="font-mono text-[10px] uppercase text-gray-600">
+                            Escolha uma midia ja enviada neste evento.
+                          </p>
+                        </div>
+                        {eventForm.coverImage && (
+                          <button
+                            type="button"
+                            onClick={() => setEventForm((current) => ({ ...current, coverImage: '' }))}
+                            className="shrink-0 h-9 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white hover:border-brutal-accent"
+                          >
+                            Remover capa
+                          </button>
+                        )}
+                      </div>
+
+                      {eventForm.coverImage && (
+                        <div className="mb-4">
+                          <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
+                          <div className="aspect-video max-w-sm bg-[#05080d] border border-brutal-accent overflow-hidden">
+                            {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                              <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
+                            ) : (
+                              <img src={eventForm.coverImage} alt="Capa atual do evento" className="w-full h-full object-cover" />
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {eventCoverCandidates.length > 0 ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                          {eventCoverCandidates.map((product) => {
+                            const coverUrl = product.thumbnailUrl || product.url;
+                            const isSelected = eventForm.coverImage === coverUrl;
+                            return (
+                              <button
+                                key={product.id}
+                                type="button"
+                                onClick={() => setEventForm((current) => ({ ...current, coverImage: coverUrl }))}
+                                className={`group text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
+                                  }`}
+                              >
+                                <div className="aspect-video bg-black overflow-hidden">
+                                  {coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                                    <video src={coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" muted preload="metadata" />
+                                  ) : (
+                                    <img src={coverUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                  )}
+                                </div>
+                                <div className="p-2">
+                                  <p className="font-mono text-[9px] uppercase text-gray-400 truncate">{product.name}</p>
+                                  <p className="font-mono text-[8px] uppercase text-gray-600">{isSelected ? 'Capa selecionada' : 'Usar como capa'}</p>
+                                </div>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : (
+                        <div className="border border-dashed border-white/10 p-4 text-center">
+                          <ImageIcon className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                          <p className="font-mono text-[10px] uppercase text-gray-500">
+                            Envie fotos para este evento e depois escolha uma capa aqui.
+                          </p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

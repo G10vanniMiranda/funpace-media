@@ -1359,6 +1359,62 @@ export const photographerService = {
 };
 
 export const adminService = {
+  async getSnapshot(): Promise<{
+    photographers: Photographer[];
+    products: Product[];
+    orders: Order[];
+    withdrawals: WithdrawalRequest[];
+    customers: Customer[];
+    payments: PaymentRecord[];
+    paymentEvents: PaymentEventLog[];
+    coupons: Coupon[];
+    adminLogs: AdminActivityLog[];
+    platformSettings: Pick<PlatformSettings, 'platformFeePercent'>;
+  }> {
+    if (isMockMode) {
+      return {
+        photographers: mockPhotographers,
+        products: mockProducts,
+        orders: [],
+        withdrawals: [],
+        customers: [],
+        payments: [],
+        paymentEvents: [],
+        coupons: [],
+        adminLogs: [],
+        platformSettings: { platformFeePercent: 30 },
+      };
+    }
+
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessao admin ausente.');
+
+    const response = await fetch(apiUrl('/api/admin/snapshot'), {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    const raw = await response.text();
+    const data = raw ? JSON.parse(raw) : {};
+
+    if (!response.ok) {
+      throw new Error(data?.error || data?.message || raw || `Snapshot admin HTTP ${response.status}`);
+    }
+
+    return {
+      photographers: data.photographers || [],
+      products: await signMediaUrls(data.products || []),
+      orders: data.orders || [],
+      withdrawals: data.withdrawals || [],
+      customers: data.customers || [],
+      payments: data.payments || [],
+      paymentEvents: data.paymentEvents || [],
+      coupons: data.coupons || [],
+      adminLogs: data.adminLogs || [],
+      platformSettings: data.platformSettings || { platformFeePercent: 30 },
+    };
+  },
+
   async getCustomers(count = 500): Promise<Customer[]> {
     if (isMockMode) return [];
 

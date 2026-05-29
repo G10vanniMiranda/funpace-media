@@ -1335,18 +1335,64 @@ function AdminRoute() {
   const loadData = React.useCallback(async () => {
     setIsLoading(true);
     try {
-      const [allPhotographers, allProducts, allOrders, allWithdrawals, platformSettings, allCustomers, allPayments, allPaymentEvents, allCoupons, allAdminLogs] = await Promise.all([
-        photographerService.getAllPhotographers(),
-        productService.getAdminProducts(1000),
-        orderService.getAdminOrders(200),
-        withdrawalService.getAdminWithdrawals(200),
-        platformSettingsService.getPublicSettings(),
-        adminService.getCustomers(500),
-        adminService.getPayments(500),
-        adminService.getPaymentEvents(500),
-        adminService.getCoupons(200),
-        adminService.getAdminLogs(500),
-      ]);
+      let allPhotographers: Photographer[] = [];
+      let allProducts: Product[] = [];
+      let allOrders: Order[] = [];
+      let allWithdrawals: WithdrawalRequest[] = [];
+      let platformSettings = { platformFeePercent: 30 };
+      let allCustomers: Customer[] = [];
+      let allPayments: PaymentRecord[] = [];
+      let allPaymentEvents: PaymentEventLog[] = [];
+      let allCoupons: Coupon[] = [];
+      let allAdminLogs: AdminActivityLog[] = [];
+
+      try {
+        const snapshot = await adminService.getSnapshot();
+        allPhotographers = snapshot.photographers;
+        allProducts = snapshot.products;
+        allOrders = snapshot.orders;
+        allWithdrawals = snapshot.withdrawals;
+        platformSettings = snapshot.platformSettings;
+        allCustomers = snapshot.customers;
+        allPayments = snapshot.payments;
+        allPaymentEvents = snapshot.paymentEvents;
+        allCoupons = snapshot.coupons;
+        allAdminLogs = snapshot.adminLogs;
+      } catch (snapshotError) {
+        console.warn('Snapshot admin indisponivel; usando carregamento por tabela.', snapshotError);
+        const recover = async <T,>(label: string, promise: Promise<T>, fallback: T) => {
+          try {
+            return await promise;
+          } catch (error) {
+            console.error(`Erro ao carregar ${label}:`, error);
+            return fallback;
+          }
+        };
+
+        [
+          allPhotographers,
+          allProducts,
+          allOrders,
+          allWithdrawals,
+          platformSettings,
+          allCustomers,
+          allPayments,
+          allPaymentEvents,
+          allCoupons,
+          allAdminLogs,
+        ] = await Promise.all([
+          recover('fotografos', photographerService.getAllPhotographers(), []),
+          recover('produtos', productService.getAdminProducts(10000), []),
+          recover('pedidos', orderService.getAdminOrders(5000), []),
+          recover('saques', withdrawalService.getAdminWithdrawals(5000), []),
+          recover('configuracoes', platformSettingsService.getPublicSettings(), { platformFeePercent: 30 }),
+          recover('clientes', adminService.getCustomers(5000), []),
+          recover('pagamentos', adminService.getPayments(5000), []),
+          recover('eventos de pagamento', adminService.getPaymentEvents(5000), []),
+          recover('cupons', adminService.getCoupons(1000), []),
+          recover('logs admin', adminService.getAdminLogs(5000), []),
+        ]);
+      }
 
       // Compute photographer stats from real data to avoid relying on stored `photographers.stats` (which may be stale).
       const publishedProducts = allProducts.filter((product) => (product.status ?? 'published') === 'published');

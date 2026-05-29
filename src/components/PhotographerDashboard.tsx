@@ -64,6 +64,7 @@ type PhotographerCatalogEvent = {
   checkpoint: string;
   coverUrl: string | null;
   dateLabel: string;
+  createdAtLabel: string;
   photos: number;
   videos: number;
   items: number;
@@ -147,6 +148,25 @@ function formatCatalogDate(value?: string) {
     month: 'short',
     year: 'numeric',
   }).format(date).replace('.', '').toUpperCase();
+}
+
+function getTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const timestamp = new Date(value.includes('T') ? value : `${value}T12:00:00`).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function formatCreatedOrderLabel(value?: string | null) {
+  const timestamp = getTimestamp(value);
+  if (!timestamp) return 'Criacao nao registrada';
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(new Date(timestamp));
 }
 
 function formatEventSaveError(error: unknown) {
@@ -641,10 +661,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
   const groupedFilteredProducts = React.useMemo(() => {
     const groups = new Map<string, Product[]>();
-    const eventOrder = new Map<string, number>();
+    const eventDetails = new Map<string, Event>();
 
-    availableEvents.forEach((eventItem, index) => {
-      eventOrder.set(eventItem.name, index);
+    availableEvents.forEach((eventItem) => {
+      eventDetails.set(normalizeCatalogText(eventItem.name), eventItem);
     });
 
     for (const product of filteredProducts) {
@@ -655,13 +675,24 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
 
     return Array.from(groups.entries())
-      .sort(([eventA], [eventB]) => {
-        const orderA = eventOrder.has(eventA) ? eventOrder.get(eventA)! : Number.MAX_SAFE_INTEGER;
-        const orderB = eventOrder.has(eventB) ? eventOrder.get(eventB)! : Number.MAX_SAFE_INTEGER;
-
-        if (orderA !== orderB) return orderA - orderB;
+      .sort(([eventA, productsA], [eventB, productsB]) => {
         if (eventA === 'Geral') return 1;
         if (eventB === 'Geral') return -1;
+
+        const detailA = eventDetails.get(normalizeCatalogText(eventA));
+        const detailB = eventDetails.get(normalizeCatalogText(eventB));
+        const fallbackA = productsA.reduce((earliest, product) => {
+          const timestamp = getTimestamp(product.createdAt);
+          return timestamp && (!earliest || timestamp < earliest) ? timestamp : earliest;
+        }, 0);
+        const fallbackB = productsB.reduce((earliest, product) => {
+          const timestamp = getTimestamp(product.createdAt);
+          return timestamp && (!earliest || timestamp < earliest) ? timestamp : earliest;
+        }, 0);
+        const createdA = getTimestamp(detailA?.createdAt) || fallbackA;
+        const createdB = getTimestamp(detailB?.createdAt) || fallbackB;
+
+        if (createdA !== createdB) return createdB - createdA;
         return eventA.localeCompare(eventB, 'pt-BR', { sensitivity: 'base' });
       })
       .map(([eventName, products]) => ({
@@ -710,6 +741,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
         coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || coverProduct?.url || null,
         dateLabel: formatCatalogDate(eventDetail?.date || fallbackDate),
+        createdAtLabel: formatCreatedOrderLabel(eventDetail?.createdAt || fallbackDate),
         photos: groupProducts.filter((product) => product.type === 'IMG').length,
         videos: groupProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
         items: groupProducts.length,
@@ -2144,7 +2176,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </div>
                         <h3 className="font-sans font-black text-3xl md:text-5xl uppercase text-white">Eventos</h3>
                         <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mt-2">
-                          Fotos e videos organizados por cobertura, igual a vitrine do cliente.
+                          Fotos e videos com coberturas mais recentes primeiro.
                         </p>
                       </div>
                       {selectedProductEventName && (
@@ -2217,6 +2249,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                               <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col gap-3">
                                 <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
                                   {eventItem.items} midias
+                                </p>
+                                <p className="font-mono text-[9px] uppercase tracking-widest text-gray-400">
+                                  {eventItem.createdAtLabel === 'Criacao nao registrada' ? eventItem.createdAtLabel : `Criado em ${eventItem.createdAtLabel}`}
                                 </p>
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <button

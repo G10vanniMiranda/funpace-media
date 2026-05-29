@@ -76,6 +76,40 @@ function createEventSlug(name: string, date: string) {
   return normalized || `evento-${Date.now()}`;
 }
 
+function isDuplicateSlugError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return message.includes('events_slug_key') ||
+    message.toLowerCase().includes('duplicate key value') && message.toLowerCase().includes('slug');
+}
+
+async function createAvailableEventSlug(name: string, date: string, ignoredEventId?: string) {
+  const baseSlug = createEventSlug(name, date);
+  const params = new URLSearchParams({
+    select: 'id,slug',
+    slug: `like.${baseSlug}%`,
+    limit: '500',
+  });
+  const existingEvents = await supabaseRest.get<Array<Pick<Event, 'id' | 'slug'>>>(
+    `/rest/v1/events?${params.toString()}`,
+    true,
+  );
+  const usedSlugs = new Set(
+    existingEvents
+      .filter((event) => event.id !== ignoredEventId)
+      .map((event) => event.slug)
+      .filter(Boolean),
+  );
+
+  if (!usedSlugs.has(baseSlug)) return baseSlug;
+
+  for (let suffix = 2; suffix < 1000; suffix += 1) {
+    const candidate = `${baseSlug}-${suffix}`;
+    if (!usedSlugs.has(candidate)) return candidate;
+  }
+
+  return `${baseSlug}-${crypto.randomUUID().slice(0, 8)}`;
+}
+
 function createPublicMediaUrl(rawPathOrUrl?: string | null) {
   const value = rawPathOrUrl || '';
   if (!value || /^https?:\/\//i.test(value)) return value;
@@ -620,9 +654,10 @@ export const eventService = {
       return created;
     }
 
+    const slug = await createAvailableEventSlug(input.name, input.date);
     const payload = {
       ...input,
-      slug: createEventSlug(input.name, input.date),
+      slug,
       isPublished: input.isPublished ?? true,
       createdAt: new Date().toISOString(),
     };
@@ -644,6 +679,9 @@ export const eventService = {
         saveLocalEvents([created, ...loadLocalEvents()]);
         return created;
       }
+      if (isDuplicateSlugError(error)) {
+        throw new Error('Ja existe um evento com este nome e data. Tente salvar novamente ou ajuste o nome do evento.');
+      }
       throw error;
     }
   },
@@ -663,10 +701,27 @@ export const eventService = {
       return updated;
     }
 
+    const currentParams = new URLSearchParams({
+      select: 'id,name,date,slug',
+      id: `eq.${id}`,
+      limit: '1',
+    });
+    const [existing] = await supabaseRest.get<SupabaseRow<Event>[]>(
+      `/rest/v1/events?${currentParams.toString()}`,
+      true,
+    );
+    if (!existing) throw new Error('Evento nao encontrado.');
+
+    const payload = {
+      ...input,
+      slug: input.name || input.date
+        ? await createAvailableEventSlug(input.name ?? existing.name, input.date ?? existing.date, id)
+        : existing.slug,
+    };
     const params = new URLSearchParams({ id: `eq.${id}` });
     const [updated] = await supabaseRest.patch<SupabaseRow<Event>[]>(
       `/rest/v1/events?${params.toString()}&${selectAll}`,
-      input,
+      payload,
       true,
     );
 

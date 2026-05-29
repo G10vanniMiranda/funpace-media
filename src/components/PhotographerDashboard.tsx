@@ -149,6 +149,17 @@ function formatCatalogDate(value?: string) {
   }).format(date).replace('.', '').toUpperCase();
 }
 
+function formatEventSaveError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.toLowerCase();
+
+  if (message.includes('events_slug_key') || normalized.includes('duplicate key value') && normalized.includes('slug')) {
+    return 'Ja existe um evento com este nome e data. Salve novamente para criar uma variacao automatica ou altere o nome.';
+  }
+
+  return message || 'Nao foi possivel salvar o evento.';
+}
+
 function formatFileSize(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 MB';
   const mb = bytes / (1024 * 1024);
@@ -1012,7 +1023,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       resetEventForm();
     } catch (error: any) {
       console.error('Erro ao salvar evento:', error);
-      setEventError(error?.message || 'Nao foi possivel salvar o evento.');
+      setEventError(formatEventSaveError(error));
     } finally {
       setIsSavingEvent(false);
     }

@@ -203,8 +203,14 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
     }
 
     // Supabase errors are often JSON strings; surface a human message when possible.
+    let parsed: any = null;
     try {
-      const parsed = JSON.parse(raw);
+      parsed = JSON.parse(raw);
+    } catch {
+      parsed = null;
+    }
+
+    if (parsed) {
       const errorCodeRaw = String(
         parsed?.error_code ||
         parsed?.ERROR_CODE ||
@@ -263,8 +269,6 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
       }
 
       if (msg) throw new Error(msg);
-    } catch {
-      // ignore JSON parse errors
     }
 
     throw new Error(raw || `Supabase request failed with status ${response.status}`);

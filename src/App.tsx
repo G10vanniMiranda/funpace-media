@@ -32,7 +32,7 @@ import { CheckoutPaymentMethod, adminService, customerAccountService, productSer
 import { logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Loader2, MapPin, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MapPin, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
 import { useToast } from './contexts/ToastContext';
 
 enum OperationType {
@@ -130,7 +130,6 @@ function Storefront() {
     orderId?: string | null;
     message: string;
   } | null>(null);
-  const eventSelfieInputRef = React.useRef<HTMLInputElement>(null);
 
   React.useEffect(() => {
     const validCart = cart.filter((item) => isValidCartProductId(item.id));
@@ -538,7 +537,6 @@ function Storefront() {
           }}
           onOpenAuth={() => setIsAuthOpen(true)}
           onSearch={handleSearch}
-          onSelfieSearch={handleSelfieSearch}
           onOpenDashboard={() => {
             localStorage.setItem('funpace:photographer-panel-active', 'true');
             navigate('/fotografo');
@@ -614,7 +612,6 @@ function Storefront() {
         }}
         onOpenAuth={() => setIsAuthOpen(true)}
         onSearch={handleSearch}
-        onSelfieSearch={handleSelfieSearch}
         onOpenDashboard={() => {
           localStorage.setItem('funpace:photographer-panel-active', 'true');
           navigate('/fotografo');
@@ -754,30 +751,6 @@ function Storefront() {
                     </div>
                   </div>
 
-                  <div className="bg-white brutal-border brutal-shadow p-5 md:p-6 text-center">
-                    <p className="font-mono text-xs uppercase tracking-[0.22em] text-gray-500 mb-5">
-                      Busque por reconhecimento facial
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => eventSelfieInputRef.current?.click()}
-                      className="min-h-14 w-full px-6 bg-brutal-black text-white brutal-border brutal-shadow-hover font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2"
-                    >
-                      <input
-                        ref={eventSelfieInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        onChange={(event) => {
-                          const file = event.target.files?.[0];
-                          if (file) handleSelfieSearch(file);
-                          event.target.value = '';
-                        }}
-                      />
-                      <ImageIcon className="w-5 h-5 shrink-0" />
-                      Selecionar selfie
-                    </button>
-                  </div>
                 </aside>
               </div>
             </div>
@@ -1094,7 +1067,6 @@ function LegacyCustomerOrdersRoute() {
         onNavigateHome={() => navigate('/')}
         onOpenAuth={() => setIsAuthOpen(true)}
         onSearch={(bib) => navigate(`/?bib=${encodeURIComponent(bib)}`)}
-        onSelfieSearch={() => navigate('/')}
         onOpenDashboard={() => {
           localStorage.setItem('funpace:photographer-panel-active', 'true');
           navigate('/fotografo');
@@ -1189,7 +1161,6 @@ function CustomerAccountRoute() {
           onNavigateHome={() => navigate('/')}
           onOpenAuth={() => setIsAuthOpen(true)}
           onSearch={(bib) => navigate(`/?bib=${encodeURIComponent(bib)}`)}
-          onSelfieSearch={() => navigate('/')}
           onOpenDashboard={() => navigate('/fotografo')}
           onOpenOrders={() => navigate('/minha-conta')}
           onOpenAccount={() => navigate('/minha-conta')}
@@ -1217,7 +1188,6 @@ function CustomerAccountRoute() {
         onNavigateHome={() => navigate('/')}
         onOpenAuth={() => setIsAuthOpen(true)}
         onSearch={(bib) => navigate(`/?bib=${encodeURIComponent(bib)}`)}
-        onSelfieSearch={() => navigate('/')}
         onOpenDashboard={() => navigate('/fotografo')}
         onOpenOrders={() => navigate('/minha-conta')}
         onOpenAccount={() => navigate('/minha-conta')}

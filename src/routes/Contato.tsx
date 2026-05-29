@@ -14,7 +14,6 @@ export function Contato() {
         onNavigateHome={() => navigate('/')}
         onOpenAuth={() => navigate('/')}
         onSearch={() => navigate('/')}
-        onSelfieSearch={() => navigate('/')}
         onOpenDashboard={() => navigate('/fotografo')}
         onOpenOrders={() => navigate('/')}
       />

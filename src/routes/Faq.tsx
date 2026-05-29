@@ -44,7 +44,6 @@ export function Faq() {
         onNavigateHome={() => navigate('/')}
         onOpenAuth={() => navigate('/')}
         onSearch={() => navigate('/')}
-        onSelfieSearch={() => navigate('/')}
         onOpenDashboard={() => navigate('/fotografo')}
         onOpenOrders={() => navigate('/')}
       />

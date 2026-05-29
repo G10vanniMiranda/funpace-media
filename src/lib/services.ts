@@ -220,27 +220,6 @@ async function uploadMediaFile(path: string, file: File) {
       publicUrl: String(payload.publicUrl || payload.url || payload.path || ''),
     };
   }
-  let payload: any = {};
-  try {
-    payload = raw ? JSON.parse(raw) : {};
-  } catch {
-    payload = { error: raw };
-  }
-
-  if (!response.ok) {
-    const message = String(payload?.error || payload?.message || raw || `Falha no upload. HTTP ${response.status}`)
-      .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-      .replace(/<style[\s\S]*?<\/style>/gi, ' ')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-    throw new Error(message || `Falha no upload. HTTP ${response.status}`);
-  }
-
-  return {
-    path: String(payload.path || payload.publicUrl || path),
-    publicUrl: String(payload.publicUrl || payload.url || payload.path || ''),
-  };
 }
 
 function sanitizeStorageFileName(fileName: string) {

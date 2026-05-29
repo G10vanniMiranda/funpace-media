@@ -1,5 +1,5 @@
-import { ShoppingCart, User, Search, Camera, LogOut, X, Menu, Image as ImageIcon, LayoutDashboard } from 'lucide-react';
-import React, { useState, FormEvent, useRef } from 'react';
+import { ShoppingCart, User, Search, Camera, LogOut, X, Menu, LayoutDashboard } from 'lucide-react';
+import React, { useState, FormEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAuth } from '../contexts/AuthContext';
 import { logout } from '../lib/supabase';
@@ -10,7 +10,6 @@ interface NavbarProps {
   onNavigateHome: () => void;
   onOpenAuth: () => void;
   onSearch: (bib: string) => void;
-  onSelfieSearch: (file: File) => void;
   onOpenDashboard: () => void;
   onOpenOrders: () => void;
   onOpenAccount?: () => void;
@@ -28,12 +27,11 @@ function titleCaseFromEmail(email: string) {
     .join(' ');
 }
 
-export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, onSearch, onSelfieSearch, onOpenDashboard, onOpenOrders, onOpenAccount }: NavbarProps) {
+export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, onSearch, onOpenDashboard, onOpenOrders, onOpenAccount }: NavbarProps) {
   const { user } = useAuth();
   const [isSearching, setIsSearching] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const userLabel = user
     ? (user.isAdmin
       ? 'ADMIN'
@@ -47,18 +45,6 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
       setIsSearching(false);
       setIsMenuOpen(false);
       setSearchQuery('');
-    }
-  };
-
-  const handleSelfieClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      onSelfieSearch(file);
-      setIsMenuOpen(false);
     }
   };
 
@@ -265,26 +251,6 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
                         </button>
                       </form>
 
-                      <div className="flex items-center gap-4">
-                        <div className="h-px flex-1 bg-gray-200" />
-                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">Ou</span>
-                        <div className="h-px flex-1 bg-gray-200" />
-                      </div>
-
-                      <button
-                        onClick={handleSelfieClick}
-                        className="w-full min-h-12 brutal-border bg-white flex items-center justify-center gap-2 font-mono text-xs font-bold uppercase hover:bg-gray-50 transition-colors cursor-pointer px-4"
-                      >
-                        <input
-                          type="file"
-                          ref={fileInputRef}
-                          onChange={handleFileChange}
-                          accept="image/*"
-                          className="hidden"
-                        />
-                        <ImageIcon className="w-4 h-4" />
-                        Enviar Selfie
-                      </button>
                     </section>
 
                     <section className="border-t-2 border-dashed border-gray-200 pt-6">

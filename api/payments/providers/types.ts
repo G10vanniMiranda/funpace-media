@@ -20,6 +20,7 @@ export interface CreatePaymentInput {
   items: PaymentProviderCheckoutItem[];
   paymentMethod: PaymentMethod;
   successUrl: string;
+  cancelUrl?: string;
   webhookUrl: string;
 }
 

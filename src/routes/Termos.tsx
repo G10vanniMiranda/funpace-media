@@ -37,7 +37,6 @@ export function Termos() {
         onNavigateHome={() => navigate('/')}
         onOpenAuth={() => navigate('/')}
         onSearch={() => navigate('/')}
-        onSelfieSearch={() => navigate('/')}
         onOpenDashboard={() => navigate('/fotografo')}
         onOpenOrders={() => navigate('/')}
       />

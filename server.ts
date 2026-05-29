@@ -497,6 +497,13 @@ function isUuid(value: unknown) {
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
+function isValidCartProductId(value: unknown) {
+  return typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.length <= 120 &&
+    !/[(),]/.test(value);
+}
+
 function normalizeVisitorId(value: unknown) {
   return String(value || "").replace(/[^a-zA-Z0-9._:-]/g, "").slice(0, 80);
 }
@@ -1139,7 +1146,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
   let orderId = "";
 
   try {
-    const { items, successUrl, buyer } = req.body;
+    const { items, successUrl, cancelUrl, buyer } = req.body;
     const paymentMethod: PaymentMethod = req.body?.paymentMethod === "pix" || req.body?.paymentMethod === "credit_card"
       ? req.body.paymentMethod
       : "checkout";
@@ -1161,8 +1168,8 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(400).json({ error: "Carrinho vazio." });
     }
 
-    const productIds = [...new Set(items.map((item: any) => String(item.id || "").trim()))];
-    if (productIds.length !== items.length || !productIds.every(isUuid)) {
+    const productIds = [...new Set(items.map((item: any) => String(item.id || "").trim()))].filter(Boolean);
+    if (productIds.length !== items.length || productIds.some((id) => !isValidCartProductId(id))) {
       return res.status(400).json({ error: "Carrinho contem produto invalido." });
     }
 
@@ -1269,6 +1276,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
         })),
         paymentMethod,
         successUrl: successRedirectUrl,
+        cancelUrl: typeof cancelUrl === "string" ? cancelUrl : undefined,
         webhookUrl: `${getRequestOrigin(req)}/api/webhooks/${provider.name}`,
       });
     } catch (error: any) {

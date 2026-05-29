@@ -56,6 +56,13 @@ function onlyCpfDigits(value: string | null | undefined) {
   return (value ?? '').replace(/\D/g, '').slice(0, 11);
 }
 
+function isValidCartProductId(value: unknown) {
+  return typeof value === 'string' &&
+    value.trim().length > 0 &&
+    value.length <= 120 &&
+    !/[(),]/.test(value);
+}
+
 function isValidCpf(value: string | null | undefined) {
   const cpf = onlyCpfDigits(value);
   if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
@@ -181,7 +188,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { items, successUrl, buyer, paymentMethod: rawPaymentMethod } = getJsonBody(req);
+    const { items, successUrl, cancelUrl, buyer, paymentMethod: rawPaymentMethod } = getJsonBody(req);
     const authUser = await getAuthenticatedRequestUser(req);
     const paymentMethod: PaymentMethod = rawPaymentMethod === 'pix' || rawPaymentMethod === 'credit_card' ? rawPaymentMethod : 'checkout';
 
@@ -202,7 +209,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const productIds = [...new Set(items.map((item: any) => String(item.id || '').trim()))].filter(Boolean);
-    if (productIds.length !== items.length || productIds.some((id) => id.length > 120 || /[(),]/.test(id))) {
+    if (productIds.length !== items.length || productIds.some((id) => !isValidCartProductId(id))) {
       return res.status(400).json({ error: 'Carrinho contem produto invalido.' });
     }
 
@@ -300,6 +307,7 @@ export default async function handler(req: any, res: any) {
         })),
         paymentMethod,
         successUrl: successRedirectUrl,
+        cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
         webhookUrl: `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}/api/webhooks/${provider.name}`,
       });
     } catch (error: any) {

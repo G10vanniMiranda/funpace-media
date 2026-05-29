@@ -73,6 +73,10 @@ export const infinitePayProvider: PaymentProvider = {
       },
     };
 
+    if (input.cancelUrl) {
+      payload.cancel_url = input.cancelUrl;
+    }
+
     if (phoneDigits.length >= 10) {
       payload.customer = {
         name: String(input.buyer.fullName || '').slice(0, 120),

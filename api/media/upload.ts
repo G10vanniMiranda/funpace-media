@@ -75,6 +75,15 @@ function getSupabaseConfig() {
   };
 }
 
+function getSupabaseAuthApiKey() {
+  return process.env.SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ||
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+    getSupabaseConfig().supabaseKey;
+}
+
 function assertMediaBucketConfigured() {
   if (!mediaBucket) {
     throw new Error('MEDIA_BUCKET nao configurado no servidor.');
@@ -91,10 +100,11 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
   const token = getBearerToken(req);
   if (!token) return null;
 
-  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
+  const { supabaseUrl } = getSupabaseConfig();
+  const authApiKey = getSupabaseAuthApiKey();
   const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
     headers: {
-      apikey: supabaseKey,
+      apikey: authApiKey,
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },

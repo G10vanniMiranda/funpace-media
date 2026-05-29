@@ -186,7 +186,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
 }
 
 async function uploadMediaFile(path: string, file: File) {
-  const accessToken = await getCurrentAccessToken();
+  let accessToken = await getCurrentAccessToken();
   if (!accessToken) {
     throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
   }
@@ -231,6 +231,14 @@ async function uploadMediaFile(path: string, file: File) {
     if (!response.ok) {
       const status = response.status;
       const retryAfterSeconds = Number(response.headers.get('Retry-After') || '5');
+      if (status === 401 && attempt <= maxRetries) {
+        const refreshedToken = await getCurrentAccessToken(true).catch(() => null);
+        if (refreshedToken && refreshedToken !== accessToken) {
+          accessToken = refreshedToken;
+          continue;
+        }
+      }
+
       const shouldRetry = [429, 502, 503, 504].includes(status) && attempt <= maxRetries;
 
       if (shouldRetry) {

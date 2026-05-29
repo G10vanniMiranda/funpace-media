@@ -310,8 +310,8 @@ export const supabaseRest = {
 
 export const getCurrentUser = () => toAppUser(getStoredSession()?.user ?? null);
 
-export const getCurrentAccessToken = async () => {
-  const session = await refreshStoredSession();
+export const getCurrentAccessToken = async (forceRefresh = false) => {
+  const session = await refreshStoredSession(forceRefresh);
   return session?.access_token ?? null;
 };
 

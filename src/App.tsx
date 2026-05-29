@@ -29,7 +29,7 @@ import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, C
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
 import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
-import { logout } from './lib/supabase';
+import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MapPin, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
@@ -248,6 +248,7 @@ function Storefront() {
     : [];
 
   const handlePhotographerLogin = (photographer: Photographer) => {
+    clearStoredSession('customer');
     localStorage.setItem('funpace:photographer-id', photographer.id);
     localStorage.setItem('funpace:photographer-panel-active', 'true');
     setLoggedInPhotographer(photographer);
@@ -1239,6 +1240,7 @@ function PhotographerRoute() {
 
         const currentPhotographer = await photographerService.getPhotographerById(photographerId);
         if (currentPhotographer?.verified) {
+          clearStoredSession('customer');
           localStorage.setItem('funpace:photographer-id', currentPhotographer.id);
           setPhotographer(currentPhotographer);
         } else {
@@ -1260,6 +1262,7 @@ function PhotographerRoute() {
   }, [user?.id]);
 
   const handleLoginSuccess = (loggedPhotographer: Photographer) => {
+    clearStoredSession('customer');
     localStorage.setItem('funpace:photographer-id', loggedPhotographer.id);
     localStorage.setItem('funpace:photographer-panel-active', 'true');
     setPhotographer(loggedPhotographer);
@@ -1471,6 +1474,7 @@ function AdminRoute() {
 export default function App() {
   return (
     <Router>
+      <AuthRouteSync />
       <Routes>
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
@@ -1493,5 +1497,15 @@ export default function App() {
       </Routes>
     </Router>
   );
+}
+
+function AuthRouteSync() {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    window.dispatchEvent(new Event('supabase-auth-changed'));
+  }, [location.pathname]);
+
+  return null;
 }
 

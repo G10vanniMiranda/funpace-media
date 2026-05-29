@@ -1,4 +1,4 @@
-import { CreatePaymentInput, PaymentProvider, PaymentStatusResult } from './types';
+import type { CreatePaymentInput, PaymentProvider, PaymentStatusResult } from './types.ts';
 
 export const pagarmeProvider: PaymentProvider = {
   name: 'pagarme',

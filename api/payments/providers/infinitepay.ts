@@ -1,14 +1,15 @@
-import {
+import type {
   CreatePaymentInput,
   CreatePaymentResult,
   PaymentProvider,
   PaymentStatusResult,
   ProviderPaymentStatus,
-} from './types';
+} from './types.ts';
 import {
   getInfinitePayCheckoutEndpoint,
   getInfinitePayPaymentCheckEndpoint,
-} from '../../shared/utils';
+  fetchWithTimeout,
+} from '../../shared/utils.ts';
 
 function getHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;
@@ -85,11 +86,11 @@ export const infinitePayProvider: PaymentProvider = {
       };
     }
 
-    const response = await fetch(getInfinitePayCheckoutEndpoint(), {
+    const response = await fetchWithTimeout(getInfinitePayCheckoutEndpoint(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    });
+    }, Number(process.env.INFINITEPAY_REQUEST_TIMEOUT_MS || 7000));
     const raw = await response.text();
     let data: any = {};
 
@@ -123,7 +124,7 @@ export const infinitePayProvider: PaymentProvider = {
       return { status: 'pending', providerPaymentId: input.transactionNsu || null, rawResponse: { reason: 'missing_transaction_or_slug' } };
     }
 
-    const response = await fetch(getInfinitePayPaymentCheckEndpoint(), {
+    const response = await fetchWithTimeout(getInfinitePayPaymentCheckEndpoint(), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -132,7 +133,7 @@ export const infinitePayProvider: PaymentProvider = {
         transaction_nsu: input.transactionNsu,
         slug: input.slug,
       }),
-    });
+    }, Number(process.env.INFINITEPAY_REQUEST_TIMEOUT_MS || 7000));
     const raw = await response.text();
     let payload: any = {};
 

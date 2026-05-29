@@ -1,6 +1,6 @@
-import { getActivePaymentProvider } from '../payments/paymentProvider';
-import { PaymentMethod } from '../payments/providers/types';
-import { recordPayment } from '../shared/checkoutFulfillment';
+import { getActivePaymentProvider } from '../payments/paymentProvider.ts';
+import type { PaymentMethod } from '../payments/providers/types.ts';
+import { recordPayment } from '../shared/checkoutFulfillment.ts';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');

@@ -1,5 +1,5 @@
-import { infinitePayProvider } from '../payments/providers/infinitepay';
-import { fulfillPaidOrder, recordPayment } from '../shared/checkoutFulfillment';
+import { infinitePayProvider } from '../payments/providers/infinitepay.ts';
+import { fulfillPaidOrder, recordPayment } from '../shared/checkoutFulfillment.ts';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');

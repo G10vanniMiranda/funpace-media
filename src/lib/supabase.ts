@@ -46,12 +46,11 @@ export type AppUser = {
 };
 
 function getSessionStorageKey() {
-  // Keep admin auth isolated from customer auth. This prevents admin login from leaking into the storefront.
-  // `/admin` uses its own key, everything else uses the customer key.
+  // Keep admin, photographer and customer auth isolated from each other.
   try {
-    return window.location.pathname.startsWith('/admin')
-      ? 'funpace:supabase-session:admin'
-      : 'funpace:supabase-session:customer';
+    if (window.location.pathname.startsWith('/admin')) return 'funpace:supabase-session:admin';
+    if (window.location.pathname.startsWith('/fotografo')) return 'funpace:supabase-session:photographer';
+    return 'funpace:supabase-session:customer';
   } catch {
     // In non-browser contexts, fall back to the customer key.
     return 'funpace:supabase-session:customer';
@@ -88,6 +87,10 @@ function setStoredSession(session: SupabaseSession | null) {
   }
 
   localStorage.setItem(getSessionStorageKey(), JSON.stringify(session));
+}
+
+export function clearStoredSession(scope: 'admin' | 'customer' | 'photographer') {
+  localStorage.removeItem(`funpace:supabase-session:${scope}`);
 }
 
 async function refreshStoredSession(force = false): Promise<SupabaseSession | null> {

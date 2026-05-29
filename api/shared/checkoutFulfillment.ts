@@ -1,5 +1,5 @@
-import { supabaseRequest } from './utils';
-import { paidOrderEmailTemplate } from './emailTemplates';
+import { supabaseRequest } from './utils.ts';
+import { paidOrderEmailTemplate } from './emailTemplates.ts';
 
 type OrderStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 

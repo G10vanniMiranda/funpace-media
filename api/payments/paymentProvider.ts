@@ -1,6 +1,6 @@
-import { infinitePayProvider } from './providers/infinitepay';
-import { pagarmeProvider } from './providers/pagarme';
-import { PaymentProvider } from './providers/types';
+import { infinitePayProvider } from './providers/infinitepay.ts';
+import { pagarmeProvider } from './providers/pagarme.ts';
+import type { PaymentProvider } from './providers/types.ts';
 
 export function getActivePaymentProvider(): PaymentProvider {
   const provider = String(process.env.PAYMENT_PROVIDER || 'infinitepay').trim().toLowerCase();

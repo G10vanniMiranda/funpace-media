@@ -211,3 +211,22 @@ export function getInfinitePayPaymentCheckEndpoint() {
   return process.env.INFINITEPAY_PAYMENT_CHECK_ENDPOINT ||
     `${(process.env.INFINITEPAY_BASE_URL || 'https://api.checkout.infinitepay.io').replace(/\/+$/, '')}/payment_check`;
 }
+
+export async function fetchWithTimeout(input: string | URL, init: RequestInit = {}, timeoutMs = 7000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    return await fetch(input, {
+      ...init,
+      signal: init.signal || controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Tempo limite excedido ao chamar servico externo (${timeoutMs}ms).`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

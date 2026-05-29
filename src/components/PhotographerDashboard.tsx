@@ -10,6 +10,7 @@ import {
   Bell,
   CalendarDays,
   ChevronDown,
+  MapPin,
   Plus,
   TrendingUp,
   Users,
@@ -57,6 +58,16 @@ type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
 type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'custom';
 type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings';
+
+type PhotographerCatalogEvent = {
+  name: string;
+  checkpoint: string;
+  coverUrl: string | null;
+  dateLabel: string;
+  photos: number;
+  videos: number;
+  items: number;
+};
 
 type EventFormState = {
   id: string | null;
@@ -116,6 +127,26 @@ function formatCurrency(value: number) {
     style: 'currency',
     currency: 'BRL',
   }).format(value);
+}
+
+function normalizeCatalogText(value: string) {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function formatCatalogDate(value?: string) {
+  if (!value) return 'DATA A CONFIRMAR';
+
+  const date = new Date(value.includes('T') ? value : `${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return 'DATA A CONFIRMAR';
+
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  }).format(date).replace('.', '').toUpperCase();
 }
 
 function formatFileSize(bytes: number) {
@@ -541,6 +572,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [productSearch, setProductSearch] = useState('');
   const [productTypeFilter, setProductTypeFilter] = useState<ProductTypeFilter>('all');
   const [productStatusFilter, setProductStatusFilter] = useState<ProductStatusFilter>('all');
+  const [selectedProductEventName, setSelectedProductEventName] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set());
   const [isBulkRemovingProducts, setIsBulkRemovingProducts] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<PhotographerPeriodKey>('week');
@@ -647,6 +679,36 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         }),
       }));
   }, [filteredProducts, availableEvents]);
+  const productEventCards = React.useMemo<PhotographerCatalogEvent[]>(() => {
+    const eventDetails = new Map<string, Event>();
+    availableEvents.forEach((eventItem) => {
+      eventDetails.set(normalizeCatalogText(eventItem.name), eventItem);
+    });
+
+    return groupedFilteredProducts.map(({ eventName, products: groupProducts }) => {
+      const eventDetail = eventDetails.get(normalizeCatalogText(eventName));
+      const coverProduct = groupProducts.find((product) => product.thumbnailUrl || product.url);
+      const fallbackDate = groupProducts.reduce<string | undefined>((latest, product) => {
+        if (!product.createdAt) return latest;
+        if (!latest) return product.createdAt;
+        return product.createdAt > latest ? product.createdAt : latest;
+      }, undefined);
+
+      return {
+        name: eventName,
+        checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
+        coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || coverProduct?.url || null,
+        dateLabel: formatCatalogDate(eventDetail?.date || fallbackDate),
+        photos: groupProducts.filter((product) => product.type === 'IMG').length,
+        videos: groupProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+        items: groupProducts.length,
+      };
+    });
+  }, [groupedFilteredProducts, availableEvents]);
+  const visibleGroupedProducts = React.useMemo(() => {
+    if (!selectedProductEventName) return groupedFilteredProducts;
+    return groupedFilteredProducts.filter(({ eventName }) => eventName === selectedProductEventName);
+  }, [groupedFilteredProducts, selectedProductEventName]);
   const selectedProducts = React.useMemo(
     () => products.filter((product) => selectedProductIds.has(product.id) && (product.status ?? 'published') !== 'removed'),
     [products, selectedProductIds],
@@ -1063,6 +1125,18 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     setEventInput(selectedEvent.name);
     setCheckpointInput(selectedEvent.checkpoint || selectedEvent.location || 'Ponto Principal');
+  };
+
+  const openUploadForEvent = (eventName: string) => {
+    const selectedEvent = availableEvents.find((eventItem) => (
+      normalizeCatalogText(eventItem.name) === normalizeCatalogText(eventName)
+    ));
+
+    clearSelectedFiles();
+    setSelectedEventId(selectedEvent?.id || '');
+    setEventInput(selectedEvent?.name || eventName);
+    setCheckpointInput(selectedEvent?.checkpoint || selectedEvent?.location || 'Ponto Principal');
+    setShowUploadModal(true);
   };
 
   const openEditModal = (product: Product) => {
@@ -2036,6 +2110,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         setProductSearch('');
                         setProductTypeFilter('all');
                         setProductStatusFilter('all');
+                        setSelectedProductEventName('');
                       }}
                       className="font-mono text-[10px] uppercase font-bold text-brutal-accent hover:text-white transition-colors cursor-pointer"
                     >
@@ -2045,9 +2120,118 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
               </div>
 
-              {groupedFilteredProducts.length > 0 ? (
+              {productEventCards.length > 0 ? (
                 <div className="space-y-8">
-                  {groupedFilteredProducts.map(({ eventName, products: groupProducts }) => (
+                  <div className="space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
+                      <div>
+                        <div className="flex items-center gap-3 mb-3">
+                          <div className="w-12 h-0.5 bg-brutal-accent" />
+                          <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent font-bold">
+                            Escolha o evento
+                          </p>
+                        </div>
+                        <h3 className="font-sans font-black text-3xl md:text-5xl uppercase text-white">Eventos</h3>
+                        <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mt-2">
+                          Fotos e videos organizados por cobertura, igual a vitrine do cliente.
+                        </p>
+                      </div>
+                      {selectedProductEventName && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedProductEventName('')}
+                          className="min-h-10 px-4 border border-white/15 text-gray-300 font-mono text-[10px] uppercase font-bold hover:text-white hover:border-brutal-accent"
+                        >
+                          Ver todos eventos
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+                      {productEventCards.map((eventItem) => {
+                        const isActive = selectedProductEventName === eventItem.name;
+                        return (
+                          <div
+                            key={eventItem.name}
+                            role="button"
+                            tabIndex={0}
+                            onClick={() => setSelectedProductEventName((current) => current === eventItem.name ? '' : eventItem.name)}
+                            onKeyDown={(event) => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                event.preventDefault();
+                                setSelectedProductEventName((current) => current === eventItem.name ? '' : eventItem.name);
+                              }
+                            }}
+                            className={`group bg-white text-brutal-black border-2 overflow-hidden text-left transition-all ${isActive ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-brutal-black hover:border-brutal-accent'
+                              }`}
+                          >
+                            <div className="relative aspect-4/3 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
+                              {eventItem.coverUrl ? (
+                                eventItem.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                                  <video src={eventItem.coverUrl} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" muted preload="metadata" />
+                                ) : (
+                                  <img src={eventItem.coverUrl} alt={eventItem.name} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" />
+                                )
+                              ) : (
+                                <div className="w-full h-full bg-gray-100 flex items-center justify-center">
+                                  <CalendarDays className="w-14 h-14 text-gray-300" />
+                                </div>
+                              )}
+                              <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent" />
+                              <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 border-2 border-brutal-black font-mono text-[10px] uppercase font-bold tracking-widest">
+                                {eventItem.dateLabel}
+                              </div>
+                              <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
+                                <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 border-2 border-brutal-black font-mono text-[10px] uppercase font-bold">
+                                  <ImageIcon className="w-3 h-3" />
+                                  {eventItem.photos}
+                                </span>
+                                <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 border-2 border-brutal-black font-mono text-[10px] uppercase font-bold">
+                                  <VideoIcon className="w-3 h-3" />
+                                  {eventItem.videos}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="p-5">
+                              <div className="flex items-center gap-2 text-gray-500 mb-3">
+                                <MapPin className="w-4 h-4 text-brutal-accent shrink-0" />
+                                <p className="font-mono text-[10px] uppercase tracking-widest truncate">
+                                  {eventItem.checkpoint}
+                                </p>
+                              </div>
+                              <h4 className="font-display text-xl uppercase leading-tight min-h-12">
+                                {eventItem.name}
+                              </h4>
+                              <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col gap-3">
+                                <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                                  {eventItem.items} midias
+                                </p>
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={(clickEvent) => {
+                                      clickEvent.stopPropagation();
+                                      openUploadForEvent(eventItem.name);
+                                    }}
+                                    className="inline-flex min-h-9 items-center gap-2 bg-brutal-black px-3 text-white border-2 border-brutal-black font-mono text-[10px] uppercase font-bold hover:bg-brutal-accent hover:border-brutal-accent transition-colors"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    Adicionar fotos
+                                  </button>
+                                  <span className="font-display text-sm uppercase text-brutal-accent">
+                                    {isActive ? 'Selecionado' : 'Ver evento'}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {visibleGroupedProducts.map(({ eventName, products: groupProducts }) => (
                     <div key={eventName} className="space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 p-4 bg-[#0b1016] border border-white/10">
                         <div>

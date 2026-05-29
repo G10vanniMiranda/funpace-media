@@ -119,7 +119,11 @@ function getFrontendUrl() {
   return String(process.env.FRONTEND_URL || 'https://funpace.media').replace(/\/+$/, '');
 }
 
-async function sendResendEmail(input: { to: string; subject: string; html: string }) {
+function getNotificationEmail() {
+  return process.env.NOTIFICATION_EMAIL || process.env.CONTACT_EMAIL || process.env.SUPPORT_EMAIL || 'funpacerunclub@gmail.com';
+}
+
+async function sendResendEmail(input: { to: string; subject: string; html: string; bcc?: string }) {
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) return { skipped: true, reason: 'RESEND_API_KEY ausente' };
 
@@ -133,6 +137,7 @@ async function sendResendEmail(input: { to: string; subject: string; html: strin
     body: JSON.stringify({
       from,
       to: input.to,
+      ...(input.bcc ? { bcc: input.bcc } : {}),
       subject: input.subject,
       html: input.html,
     }),
@@ -162,7 +167,7 @@ export async function sendPaidOrderEmailOnce(orderId: string) {
 
   const email = buildPaidOrderEmail(order);
   try {
-    await sendResendEmail({ to: order.buyerEmail, ...email });
+    await sendResendEmail({ to: order.buyerEmail, bcc: getNotificationEmail(), ...email });
     await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paidEmailSentAt=is.null`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },

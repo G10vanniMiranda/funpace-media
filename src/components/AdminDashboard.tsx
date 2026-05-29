@@ -36,6 +36,7 @@ import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, Payment
 import { adminService, eventService, photographerService, platformSettingsService, productService, withdrawalService, orderService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { getCurrentAccessToken } from '../lib/supabase';
+import { FUNPACE_CONTACT_EMAIL } from '../lib/contact';
 
 interface AdminDashboardProps {
   photographers: Photographer[];
@@ -451,7 +452,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     autoBlockSuspicious: true,
     paymentProvider: 'infinitepay',
     brandName: 'Funpace Media',
-    supportEmail: '',
+    supportEmail: FUNPACE_CONTACT_EMAIL,
     maxUploadBytes: 314572800,
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
@@ -1045,7 +1046,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           autoBlockSuspicious: Boolean(settings.autoBlockSuspicious),
           paymentProvider: settings.paymentProvider || 'infinitepay',
           brandName: settings.brandName || 'Funpace Media',
-          supportEmail: settings.supportEmail || '',
+          supportEmail: settings.supportEmail || FUNPACE_CONTACT_EMAIL,
           maxUploadBytes: Number(settings.maxUploadBytes || 314572800),
         });
       } catch (error) {

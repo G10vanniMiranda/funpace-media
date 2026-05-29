@@ -1,10 +1,30 @@
-import { ArrowLeft, Mail, MessageCircle, Send, UserRound } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Send, UserRound } from 'lucide-react';
+import type { FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Footer } from '../components/Footer';
 import { Navbar } from '../components/Navbar';
+import { FUNPACE_WHATSAPP_DISPLAY, buildWhatsappUrl } from '../lib/contact';
 
 export function Contato() {
   const navigate = useNavigate();
+  const handleContactSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const formData = new FormData(event.currentTarget);
+    const name = String(formData.get('name') || '').trim();
+    const email = String(formData.get('email') || '').trim();
+    const subject = String(formData.get('subject') || 'Contato Funpace').trim();
+    const message = String(formData.get('message') || '').trim();
+    const whatsappMessage = [
+      `Contato Funpace - ${subject}`,
+      '',
+      name ? `Nome: ${name}` : '',
+      email ? `Email: ${email}` : '',
+      '',
+      message,
+    ].filter(Boolean).join('\n');
+
+    window.location.href = buildWhatsappUrl(whatsappMessage);
+  };
 
   return (
     <div className="min-h-screen bg-brutal-white text-brutal-black">
@@ -41,7 +61,7 @@ export function Contato() {
               </p>
 
               <form
-                onSubmit={(event) => event.preventDefault()}
+                onSubmit={handleContactSubmit}
                 className="mt-8 grid gap-4"
               >
                 <div className="grid gap-4 md:grid-cols-2">
@@ -49,6 +69,7 @@ export function Contato() {
                     <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Nome</span>
                     <input
                       type="text"
+                      name="name"
                       className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm outline-none focus:bg-white"
                       placeholder="Seu nome"
                     />
@@ -57,6 +78,7 @@ export function Contato() {
                     <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Email</span>
                     <input
                       type="email"
+                      name="email"
                       className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm outline-none focus:bg-white"
                       placeholder="voce@email.com"
                     />
@@ -65,7 +87,7 @@ export function Contato() {
 
                 <label className="block">
                   <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Assunto</span>
-                  <select className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm uppercase outline-none focus:bg-white">
+                  <select name="subject" className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm uppercase outline-none focus:bg-white">
                     <option>Compra ou pagamento</option>
                     <option>Download de midia</option>
                     <option>Cadastro de fotografo</option>
@@ -77,6 +99,7 @@ export function Contato() {
                 <label className="block">
                   <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Mensagem</span>
                   <textarea
+                    name="message"
                     className="min-h-36 w-full resize-y bg-gray-50 brutal-border p-4 font-mono text-sm outline-none focus:bg-white"
                     placeholder="Descreva o que aconteceu..."
                   />
@@ -95,22 +118,25 @@ export function Contato() {
             <aside className="space-y-5">
               {[
                 {
-                  icon: Mail,
-                  title: 'Email',
+                  icon: MessageCircle,
+                  title: 'WhatsApp',
                   text: 'Atendimento para compras, pagamentos e suporte geral.',
-                  action: 'contato@funpace.media',
+                  action: FUNPACE_WHATSAPP_DISPLAY,
+                  href: buildWhatsappUrl('Ola, Funpace. Preciso de atendimento.'),
                 },
                 {
                   icon: MessageCircle,
                   title: 'Compradores',
                   text: 'Informe o email da compra e o pedido, se tiver.',
                   action: 'Minha Conta',
+                  href: '',
                 },
                 {
                   icon: UserRound,
                   title: 'Fotografos',
                   text: 'Para envio, cadastro e vendas, acesse o painel.',
                   action: 'Painel do Fotografo',
+                  href: '',
                 },
               ].map((item) => (
                 <article key={item.title} className="bg-white brutal-border brutal-shadow-hover p-6">
@@ -119,7 +145,13 @@ export function Contato() {
                   </div>
                   <h2 className="font-display text-2xl uppercase tracking-normal mb-2">{item.title}</h2>
                   <p className="font-mono text-xs uppercase leading-relaxed text-gray-600 mb-4">{item.text}</p>
-                  <p className="font-mono text-xs uppercase tracking-widest text-brutal-accent font-bold">{item.action}</p>
+                  {item.href ? (
+                    <a href={item.href} className="font-mono text-xs uppercase tracking-widest text-brutal-accent font-bold hover:underline">
+                      {item.action}
+                    </a>
+                  ) : (
+                    <p className="font-mono text-xs uppercase tracking-widest text-brutal-accent font-bold">{item.action}</p>
+                  )}
                 </article>
               ))}
             </aside>

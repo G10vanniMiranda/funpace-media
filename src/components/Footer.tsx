@@ -1,4 +1,5 @@
-import { Instagram, Mail, Twitter } from 'lucide-react';
+import { Instagram, Mail } from 'lucide-react';
+import { buildMailtoUrl, buildWhatsappUrl } from '../lib/contact';
 
 export function Footer() {
   return (
@@ -19,12 +20,13 @@ export function Footer() {
             >
               <Instagram className="w-5 h-5" />
             </a>
-            <button className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer">
-              <Twitter className="w-5 h-5" />
-            </button>
-            <button className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer">
+            <a
+              href={buildMailtoUrl({ subject: 'Contato Funpace' })}
+              aria-label="E-mail da Funpace Media"
+              className="w-12 h-12 bg-brutal-black text-white flex items-center justify-center brutal-border hover:bg-brutal-accent transition-colors brutal-shadow cursor-pointer"
+            >
               <Mail className="w-5 h-5" />
-            </button>
+            </a>
           </div>
         </div>
 
@@ -42,7 +44,7 @@ export function Footer() {
           <h4 className="font-mono font-bold uppercase tracking-widest mb-6">Suporte</h4>
           <ul className="space-y-4 font-mono text-sm uppercase">
             <li><a href="/faq" className="hover:text-brutal-accent transition-colors">Duvidas Frequentes</a></li>
-            <li><a href="/contato" className="hover:text-brutal-accent transition-colors">Fale Conosco</a></li>
+            <li><a href={buildWhatsappUrl('Ola, Funpace. Preciso de atendimento.')} target="_blank" rel="noopener noreferrer" className="hover:text-brutal-accent transition-colors">Fale Conosco</a></li>
             <li><a href="/termos" className="hover:text-brutal-accent transition-colors">Termos de Servico</a></li>
             <li><a href="/privacidade" className="hover:text-brutal-accent transition-colors">Politica de Privacidade</a></li>
           </ul>

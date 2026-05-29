@@ -19,6 +19,7 @@ import {
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
 import { getCurrentAccessToken, getCurrentUser, supabaseRest } from './supabase';
+import { FUNPACE_CONTACT_EMAIL } from './contact';
 
 type SupabaseRow<T> = T & { id: string };
 
@@ -1118,6 +1119,7 @@ export const platformSettingsService = {
         platformFeePercent: 30,
         withdrawalFee: 5,
         autoBlockSuspicious: true,
+        supportEmail: FUNPACE_CONTACT_EMAIL,
       };
     }
 
@@ -1132,7 +1134,10 @@ export const platformSettingsService = {
     );
 
     if (!settings) throw new Error('Configuracoes da plataforma nao encontradas.');
-    return settings;
+    return {
+      ...settings,
+      supportEmail: settings.supportEmail || FUNPACE_CONTACT_EMAIL,
+    };
   },
 
   async updateSettings(settings: Partial<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>): Promise<PlatformSettings> {

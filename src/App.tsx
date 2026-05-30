@@ -51,7 +51,7 @@ interface DataErrorInfo {
 }
 
 const cartStorageKey = 'funpace:cart';
-const storefrontProductLimit = 1000;
+const storefrontProductLimit = 5000;
 
 function isValidCartProductId(value: unknown) {
   return typeof value === 'string' &&

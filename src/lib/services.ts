@@ -135,6 +135,29 @@ function postgrestIn(values: string[]) {
   return `in.(${values.map(quotePostgrestString).join(',')})`;
 }
 
+async function getPagedRows<T>(
+  path: string,
+  count: number,
+  useAuth = false,
+  pageSize = 1000,
+): Promise<T[]> {
+  const rows: T[] = [];
+  const safeLimit = Math.max(1, count);
+  const safePageSize = Math.max(1, Math.min(pageSize, safeLimit));
+
+  for (let offset = 0; rows.length < safeLimit; offset += safePageSize) {
+    const separator = path.includes('?') ? '&' : '?';
+    const page = await supabaseRest.get<T[]>(
+      `${path}${separator}limit=${safePageSize}&offset=${offset}`,
+      useAuth,
+    );
+    rows.push(...page);
+    if (page.length < safePageSize) break;
+  }
+
+  return rows.slice(0, safeLimit);
+}
+
 function mediaPathKey(value?: string | null) {
   return value || '';
 }
@@ -319,9 +342,8 @@ export const productService = {
       select: '*',
       status: 'eq.published',
       order: 'createdAt.desc',
-      limit: String(count),
     });
-    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
+    const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
     return signMediaUrls(products);
   },
 
@@ -333,9 +355,8 @@ export const productService = {
     const params = new URLSearchParams({
       select: '*',
       order: 'createdAt.desc',
-      limit: String(count),
     });
-    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+    const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count, true);
     return signMediaUrls(products);
   },
 
@@ -361,8 +382,9 @@ export const productService = {
     const params = new URLSearchParams({
       select: '*',
       vendedorId: `eq.${vendedorId}`,
+      order: 'createdAt.desc',
     });
-    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+    const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, 5000, true);
     return signMediaUrls(products);
   },
 

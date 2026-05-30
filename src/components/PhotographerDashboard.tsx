@@ -933,29 +933,51 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     : 0;
   const canPublishSelectedFiles = selectedFiles.length > 0 && !isLoading && !isPreparingFiles && !isPublishing;
 
-  React.useEffect(() => {
-    async function loadPhotographerContent() {
-      setIsLoading(true);
-      try {
-        const pProducts = await productService.getVendedorProducts(photographer.id);
-        const visibleProducts = pProducts.filter((product) => (product.status ?? 'published') !== 'removed');
-        setProducts(visibleProducts);
-        const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
-        const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
-        const events = await eventService.getPhotographerEvents(photographer.id);
-        setDashboardMetrics(dashboard.metrics);
-        setRecentSales(dashboard.recentSales);
-        setProductPerformance(dashboard.productPerformance);
-        setWithdrawals(pWithdrawals);
-        setAvailableEvents(events);
-      } catch (error) {
-        console.error("Error loading photographer content:", error);
-      } finally {
-        setIsLoading(false);
-      }
+  const loadPhotographerContent = React.useCallback(async (showLoader = false) => {
+    if (showLoader) setIsLoading(true);
+    try {
+      const pProducts = await productService.getVendedorProducts(photographer.id);
+      const visibleProducts = pProducts.filter((product) => (product.status ?? 'published') !== 'removed');
+      setProducts(visibleProducts);
+      const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
+      const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
+      const events = await eventService.getPhotographerEvents(photographer.id);
+      setDashboardMetrics(dashboard.metrics);
+      setRecentSales(dashboard.recentSales);
+      setProductPerformance(dashboard.productPerformance);
+      setWithdrawals(pWithdrawals);
+      setAvailableEvents(events);
+    } catch (error) {
+      console.error("Error loading photographer content:", error);
+    } finally {
+      if (showLoader) setIsLoading(false);
     }
-    loadPhotographerContent();
   }, [photographer.id]);
+
+  React.useEffect(() => {
+    loadPhotographerContent(true);
+  }, [loadPhotographerContent]);
+
+  React.useEffect(() => {
+    const refreshMs = 30_000;
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'visible') {
+        loadPhotographerContent(false);
+      }
+    }, refreshMs);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        loadPhotographerContent(false);
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, [loadPhotographerContent]);
 
   React.useEffect(() => {
     if (selectedEventId || publishableEvents.length !== 1) return;

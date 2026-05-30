@@ -26,9 +26,10 @@ import { Contato } from './routes/Contato';
 import { Termos } from './routes/Termos';
 import { Privacidade } from './routes/Privacidade';
 import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, Customer, PaymentRecord, PaymentEventLog, Coupon, AdminActivityLog } from './types';
+import type { Event } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService } from './lib/services';
+import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService, eventService } from './lib/services';
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
@@ -122,6 +123,7 @@ function Storefront() {
   const [loggedInPhotographer, setLoggedInPhotographer] = useState<Photographer | null>(null);
   const [photos, setPhotos] = useState<Product[]>([]);
   const [videos, setVideos] = useState<Product[]>([]);
+  const [registeredEvents, setRegisteredEvents] = useState<Event[]>([]);
   const [selectedEventName, setSelectedEventName] = useState<string | null>(null);
   const [eventQuery, setEventQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -145,9 +147,16 @@ function Storefront() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const products = await productService.getLatestProducts(storefrontProductLimit);
+        const [products, eventRows] = await Promise.all([
+          productService.getLatestProducts(storefrontProductLimit),
+          eventService.getActiveEvents(300).catch((error) => {
+            console.warn('Eventos cadastrados indisponiveis na vitrine; usando apenas midias publicadas.', error);
+            return [] as Event[];
+          }),
+        ]);
         setPhotos(products.filter(p => p.type === 'IMG'));
         setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
+        setRegisteredEvents(eventRows);
       } catch (error) {
         console.error("Error loading initial data:", error);
       } finally {
@@ -273,21 +282,37 @@ function Storefront() {
   const allDisplayProducts = React.useMemo(() => [...photos, ...videos], [photos, videos]);
   const eventNames = React.useMemo(() => (
     Array.from(new Map(
-      allDisplayProducts.map((product) => {
-        const eventName = String(product.event || 'Evento sem nome').trim();
-        return [normalizeEventName(eventName), eventName] as const;
-      }),
+      [
+        ...registeredEvents
+          .filter((eventItem) => eventItem.isPublished !== false)
+          .map((eventItem) => {
+            const eventName = String(eventItem.name || 'Evento sem nome').trim();
+            return [normalizeEventName(eventName), eventName] as const;
+          }),
+        ...allDisplayProducts.map((product) => {
+          const eventName = String(product.event || 'Evento sem nome').trim();
+          return [normalizeEventName(eventName), eventName] as const;
+        }),
+      ],
     ).values())
-  ), [allDisplayProducts]);
+  ), [allDisplayProducts, registeredEvents]);
+  const selectedRegisteredEvent = React.useMemo(() => (
+    selectedEventName
+      ? registeredEvents.find((eventItem) => normalizeEventName(eventItem.name) === normalizeEventName(selectedEventName)) ?? null
+      : null
+  ), [registeredEvents, selectedEventName]);
   const selectedEventCheckpoints = Array.from(new Set(
-    [...displayPhotos, ...displayVideos]
-      .map((item) => item.checkpoint)
+    [
+      selectedRegisteredEvent?.checkpoint || selectedRegisteredEvent?.location || '',
+      ...[...displayPhotos, ...displayVideos].map((item) => item.checkpoint),
+    ]
       .filter(Boolean),
   ));
-  const selectedEventCover = displayPhotos.find((photo) => photo.thumbnailUrl)?.thumbnailUrl ||
+  const selectedEventCover = selectedRegisteredEvent?.coverImage ||
+    displayPhotos.find((photo) => photo.thumbnailUrl)?.thumbnailUrl ||
     displayVideos.find((video) => video.thumbnailUrl)?.thumbnailUrl ||
     '';
-  const selectedEventDate = [...displayPhotos, ...displayVideos]
+  const selectedEventDate = selectedRegisteredEvent?.date || [...displayPhotos, ...displayVideos]
     .map((item) => item.createdAt)
     .filter(Boolean)
     .sort()
@@ -666,6 +691,7 @@ function Storefront() {
           {!isLoading && !searchBib && !searchType && !selectedEventName && (
             <EventGrid
               products={allDisplayProducts}
+              registeredEvents={registeredEvents}
               query={eventQuery}
               onSelectEvent={(eventName) => {
                 setSelectedEventName(eventName);

@@ -1,10 +1,11 @@
 import React from 'react';
 import { CalendarDays, Camera, MapPin, Video } from 'lucide-react';
-import { Product } from '../types';
+import { Event, Product } from '../types';
 import { ProtectedMedia } from './ProtectedMedia';
 
 interface EventGridProps {
   products: Product[];
+  registeredEvents?: Event[];
   query: string;
   onSelectEvent: (eventName: string) => void;
 }
@@ -13,6 +14,7 @@ interface MediaEvent {
   name: string;
   checkpoint: string;
   coverUrl: string | null;
+  date?: string;
   createdAt?: string;
   photos: number;
   videos: number;
@@ -39,8 +41,25 @@ function formatDate(value?: string) {
   }).format(date).replace('.', '').toUpperCase();
 }
 
-function buildEvents(products: Product[]) {
+function buildEvents(products: Product[], registeredEvents: Event[] = []) {
   const events = new Map<string, MediaEvent>();
+
+  for (const eventItem of registeredEvents) {
+    if (eventItem.isPublished === false) continue;
+
+    const name = String(eventItem.name || 'Evento sem nome').trim();
+    const key = normalizeText(name);
+    events.set(key, {
+      name,
+      checkpoint: eventItem.checkpoint || eventItem.location || 'Local a confirmar',
+      coverUrl: eventItem.coverImage || null,
+      date: eventItem.date,
+      createdAt: eventItem.createdAt,
+      photos: 0,
+      videos: 0,
+      items: 0,
+    });
+  }
 
   for (const product of products) {
     const name = String(product.event || 'Evento sem nome').trim();
@@ -66,6 +85,7 @@ function buildEvents(products: Product[]) {
     if (product.type === 'IMG') current.photos += 1;
     if (isVideo) current.videos += 1;
     if (!current.coverUrl && coverUrl) current.coverUrl = coverUrl;
+    if (!current.checkpoint && product.checkpoint) current.checkpoint = product.checkpoint;
     if (!current.createdAt || (product.createdAt && product.createdAt > current.createdAt)) {
       current.createdAt = product.createdAt;
     }
@@ -78,8 +98,8 @@ function buildEvents(products: Product[]) {
   });
 }
 
-export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
-  const events = React.useMemo(() => buildEvents(products), [products]);
+export function EventGrid({ products, registeredEvents = [], query, onSelectEvent }: EventGridProps) {
+  const events = React.useMemo(() => buildEvents(products, registeredEvents), [products, registeredEvents]);
   const filteredEvents = React.useMemo(() => {
     const normalizedQuery = normalizeText(query.trim());
     if (!normalizedQuery) return events;
@@ -142,7 +162,7 @@ export function EventGrid({ products, query, onSelectEvent }: EventGridProps) {
                 )}
                 <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent" />
                 <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest">
-                  {formatDate(event.createdAt)}
+                  {formatDate(event.date || event.createdAt)}
                 </div>
                 <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[10px] uppercase font-bold">

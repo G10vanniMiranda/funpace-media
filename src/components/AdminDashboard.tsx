@@ -448,6 +448,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     location: '',
     checkpoint: 'Ponto Principal',
     status: 'active' as Event['status'],
+    coverImage: '',
   });
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>({
     platformFeePercent: 30,
@@ -787,6 +788,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     const grouped = new Map<string, {
       name: string;
       checkpoint: string;
+      coverImage: string;
       date: string;
       photoCount: number;
       videoCount: number;
@@ -806,6 +808,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         grouped.set(key, {
           name,
           checkpoint: product.checkpoint || 'Ponto principal',
+          coverImage: product.thumbnailUrl || product.url || '',
           date: createdAt ? createdAt.slice(0, 10) : formatDateInput(new Date()),
           photoCount: product.type === 'IMG' ? 1 : 0,
           videoCount: isVideo ? 1 : 0,
@@ -817,6 +820,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       if (product.type === 'IMG') current.photoCount += 1;
       if (isVideo) current.videoCount += 1;
       if (!current.checkpoint && product.checkpoint) current.checkpoint = product.checkpoint;
+      if (!current.coverImage && (product.thumbnailUrl || product.url)) {
+        current.coverImage = product.thumbnailUrl || product.url || '';
+      }
       if (createdAt && (!current.latestCreatedAt || createdAt > current.latestCreatedAt)) {
         current.latestCreatedAt = createdAt;
         current.date = createdAt.slice(0, 10);
@@ -837,6 +843,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         checkpoint: eventItem.checkpoint || 'Ponto padrao',
         date: eventItem.date,
         status: eventItem.status,
+        coverImage: eventItem.coverImage || '',
         source: 'Cadastro',
         mediaLabel: '',
         canEdit: true,
@@ -850,12 +857,25 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           checkpoint: eventItem.checkpoint,
           date: eventItem.date,
           status: 'active' as const,
+          coverImage: eventItem.coverImage,
           source: 'Midias',
           mediaLabel: `${eventItem.photoCount} foto(s) / ${eventItem.videoCount} video(s)`,
-          canEdit: false,
+          canEdit: true,
         })),
     ];
   }, [events, mediaEvents]);
+  const eventCoverCandidates = React.useMemo(() => {
+    const normalizedName = normalizeEventKey(eventForm.name);
+    if (!normalizedName) return [];
+
+    return allMedia
+      .filter((product) => (
+        (product.status ?? 'published') !== 'removed' &&
+        normalizeEventKey(product.event || '') === normalizedName &&
+        Boolean(product.thumbnailUrl || product.url)
+      ))
+      .slice(0, 24);
+  }, [allMedia, eventForm.name]);
   const reportItemsByPaidOrder = React.useMemo(() => {
     const allProducts = [...photos, ...videos].filter((product) => (product.status ?? 'published') !== 'removed');
 
@@ -1180,6 +1200,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       location: '',
       checkpoint: 'Ponto Principal',
       status: 'active',
+      coverImage: '',
     });
   };
 
@@ -1191,11 +1212,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       location: '',
       checkpoint: 'Ponto Principal',
       status: 'active',
+      coverImage: '',
     });
     setShowEventModal(true);
   };
 
-  const openEditEvent = (eventItem: Pick<Event, 'id' | 'name' | 'date' | 'location' | 'checkpoint' | 'status'>) => {
+  const openEditEvent = (eventItem: Pick<Event, 'id' | 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & { coverImage?: string | null }) => {
     setEditingEventId(eventItem.id);
     setEventForm({
       name: eventItem.name,
@@ -1203,6 +1225,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       location: eventItem.location ?? '',
       checkpoint: eventItem.checkpoint ?? 'Ponto Principal',
       status: eventItem.status,
+      coverImage: eventItem.coverImage ?? '',
     });
     setShowEventModal(true);
   };
@@ -1223,9 +1246,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         location: eventForm.location.trim() || null,
         checkpoint: eventForm.checkpoint.trim() || null,
         status: eventForm.status,
+        coverImage: eventForm.coverImage.trim() || null,
       };
 
-      if (editingEventId) {
+      if (editingEventId && !editingEventId.startsWith('media-')) {
         const updated = await eventService.updateEvent(editingEventId, payload);
         setEvents((current) => current.map((eventItem) => (eventItem.id === updated.id ? updated : eventItem)));
         resetEventForm();
@@ -3009,6 +3033,76 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
                     />
                   </div>
+                </div>
+
+                <div className="bg-[#080d14] border border-white/10 p-4">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-2">Capa do evento</label>
+                      <p className="font-mono text-[10px] uppercase text-gray-600">
+                        Escolha uma foto ou preview ja enviado neste evento.
+                      </p>
+                    </div>
+                    {eventForm.coverImage && (
+                      <button
+                        type="button"
+                        onClick={() => setEventForm((current) => ({ ...current, coverImage: '' }))}
+                        className="shrink-0 h-9 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white hover:border-brutal-accent"
+                      >
+                        Remover capa
+                      </button>
+                    )}
+                  </div>
+
+                  {eventForm.coverImage && (
+                    <div className="mb-4">
+                      <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
+                      <div className="aspect-video max-w-sm bg-[#05080d] border border-brutal-accent overflow-hidden">
+                        {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                          <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
+                        ) : (
+                          <img src={eventForm.coverImage} alt="Capa atual do evento" className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {eventCoverCandidates.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {eventCoverCandidates.map((product) => {
+                        const coverUrl = product.thumbnailUrl || product.url;
+                        const isSelected = eventForm.coverImage === coverUrl;
+                        return (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => setEventForm((current) => ({ ...current, coverImage: coverUrl }))}
+                            className={`group text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
+                              }`}
+                          >
+                            <div className="aspect-video bg-black overflow-hidden">
+                              {coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                                <video src={coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" muted preload="metadata" />
+                              ) : (
+                                <img src={coverUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                              )}
+                            </div>
+                            <div className="p-2">
+                              <p className="font-mono text-[9px] uppercase text-gray-400 truncate">{product.name}</p>
+                              <p className="font-mono text-[8px] uppercase text-gray-600">{isSelected ? 'Capa selecionada' : 'Usar como capa'}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-white/10 p-5 text-center">
+                      <Camera className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                      <p className="font-mono text-[10px] uppercase text-gray-500">
+                        Envie fotos para este evento e depois escolha uma capa aqui.
+                      </p>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-[#080d14] border border-white/10 p-4 flex items-start gap-3">

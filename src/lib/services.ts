@@ -676,7 +676,7 @@ export const eventService = {
       limit: String(count),
     });
     try {
-      return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
+      return supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`);
     } catch (error) {
       if (isMissingEventsTableError(error)) {
         return loadLocalEvents().filter((event) => event.status === 'scheduled' || event.status === 'active');

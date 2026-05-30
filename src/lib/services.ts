@@ -963,6 +963,161 @@ export const photographerDashboardService = {
 
     const settings = await platformSettingsService.getPublicSettings();
     const feePercent = Number(settings.platformFeePercent);
+
+    type PhotographerTransactionRow = {
+      id: string;
+      photographerId: string;
+      orderId: string | null;
+      orderItemId: string | null;
+      grossAmount: number;
+      platformFee: number;
+      netAmount: number;
+      status: 'pending' | 'available' | 'paid' | 'cancelled';
+      createdAt: string;
+    };
+
+    async function getReservedWithdrawalAmount() {
+      const withdrawalParams = new URLSearchParams({
+        select: 'amount,status',
+        photographerId: `eq.${vendedorId}`,
+        status: 'in.(pending,approved,paid)',
+        limit: '10000',
+      });
+      const reservedWithdrawals = await supabaseRest.get<Pick<WithdrawalRequest, 'amount' | 'status'>[]>(
+        `/rest/v1/withdrawal_requests?${withdrawalParams.toString()}`,
+        true,
+      );
+      return reservedWithdrawals.reduce((total, withdrawal) => (
+        total + Number(withdrawal.amount || 0)
+      ), 0);
+    }
+
+    const downloadParams = new URLSearchParams({
+      select: 'id,productId',
+      vendedorId: `eq.${vendedorId}`,
+      limit: '10000',
+    });
+    const downloadEvents = await supabaseRest.get<{ id: string; productId: string }[]>(
+      `/rest/v1/download_events?${downloadParams.toString()}`,
+      true,
+    ).catch(() => []);
+    const downloadsByProductId = new Map<string, number>();
+    for (const event of downloadEvents) {
+      downloadsByProductId.set(event.productId, (downloadsByProductId.get(event.productId) ?? 0) + 1);
+    }
+
+    try {
+      const transactionParams = new URLSearchParams({
+        select: 'id,photographerId,orderId,orderItemId,grossAmount,platformFee,netAmount,status,createdAt',
+        photographerId: `eq.${vendedorId}`,
+        status: 'in.(pending,available,paid)',
+        order: 'createdAt.desc',
+        limit: '1000',
+      });
+      const transactions = await supabaseRest.get<PhotographerTransactionRow[]>(
+        `/rest/v1/photographer_transactions?${transactionParams.toString()}`,
+        true,
+      );
+
+      if (transactions.length > 0) {
+        const orderItemIds = Array.from(new Set(transactions.map((transaction) => transaction.orderItemId).filter(Boolean))) as string[];
+        const orderItems = orderItemIds.length > 0
+          ? await supabaseRest.get<SupabaseRow<OrderItem>[]>(
+            `/rest/v1/order_items?select=*&id=${postgrestIn(orderItemIds)}&limit=1000`,
+            true,
+          ).catch(() => [])
+          : [];
+        const signedOrderItems = await signMediaUrls(orderItems);
+        const orderItemById = new Map(signedOrderItems.map((item) => [item.id, item]));
+        const productById = new Map(products.map((product) => [product.id, product]));
+
+        const sales = transactions
+          .filter((transaction) => transaction.status !== 'cancelled')
+          .map((transaction): PhotographerSale => {
+            const item = transaction.orderItemId ? orderItemById.get(transaction.orderItemId) : undefined;
+            const product = item?.productId ? productById.get(item.productId) : undefined;
+            return {
+              id: item?.id ?? transaction.orderItemId ?? transaction.id,
+              orderId: transaction.orderId ?? '',
+              productId: item?.productId ?? product?.id ?? '',
+              name: item?.name ?? product?.name ?? 'Midia vendida',
+              type: item?.type ?? product?.type ?? 'IMG',
+              price: Number(transaction.grossAmount || item?.price || product?.price || 0),
+              url: item?.url ?? product?.url ?? '',
+              vendedorId,
+              bib: item?.bib ?? product?.bib ?? '',
+              event: item?.event ?? product?.event ?? '',
+              checkpoint: item?.checkpoint ?? product?.checkpoint ?? '',
+              thumbnailUrl: item?.thumbnailUrl ?? product?.thumbnailUrl ?? null,
+              createdAt: item?.createdAt ?? transaction.createdAt,
+              orderCreatedAt: transaction.createdAt,
+              orderStatus: 'paid',
+              netAmount: Number(transaction.netAmount || 0),
+            } satisfies PhotographerSale;
+          })
+          .sort((a, b) => new Date(b.orderCreatedAt).getTime() - new Date(a.orderCreatedAt).getTime());
+
+        const releaseWindowMs = 7 * 24 * 60 * 60 * 1000;
+        const totalEarnings = sales.reduce((total, sale) => total + Number(sale.netAmount || 0), 0);
+        const pendingEarnings = transactions
+          .filter((transaction) => transaction.status === 'pending' && Date.now() - new Date(transaction.createdAt).getTime() < releaseWindowMs)
+          .reduce((total, transaction) => total + Number(transaction.netAmount || 0), 0);
+        const currentMonthKey = new Date().toISOString().slice(0, 7);
+        const monthlyEarnings = sales
+          .filter((sale) => sale.orderCreatedAt.slice(0, 7) === currentMonthKey)
+          .reduce((total, sale) => total + Number(sale.netAmount || 0), 0);
+        const reservedWithdrawalAmount = await getReservedWithdrawalAmount();
+        const availableBalance = Math.max(0, totalEarnings - pendingEarnings - reservedWithdrawalAmount);
+
+        const performanceByProductId = new Map<string, PhotographerProductPerformance>();
+        for (const sale of sales) {
+          if (!sale.productId) continue;
+          const current = performanceByProductId.get(sale.productId) ?? {
+            productId: sale.productId,
+            name: sale.name,
+            type: sale.type,
+            event: sale.event,
+            bib: sale.bib,
+            thumbnailUrl: sale.thumbnailUrl,
+            salesCount: 0,
+            downloads: 0,
+            grossRevenue: 0,
+            netRevenue: 0,
+          };
+          current.salesCount += 1;
+          current.grossRevenue += Number(sale.price || 0);
+          current.netRevenue += Number(sale.netAmount || 0);
+          current.downloads = downloadsByProductId.get(sale.productId) ?? 0;
+          performanceByProductId.set(sale.productId, current);
+        }
+
+        const todayKey = new Date().toISOString().slice(0, 10);
+        return {
+          metrics: {
+            totalEarnings,
+            pendingEarnings,
+            salesCount: sales.length,
+            todaySalesCount: sales.filter((sale) => sale.orderCreatedAt.slice(0, 10) === todayKey).length,
+            publishedMediaCount: publishedProducts.length,
+            photoCount: publishedProducts.filter((product) => product.type === 'IMG').length,
+            videoCount: publishedProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+            rating: 5,
+            downloads: downloadEvents.length,
+            platformFeePercent: feePercent,
+            monthlyEarnings,
+            availableBalance,
+            monthlyGoal: 5000,
+          },
+          recentSales: sales,
+          productPerformance: Array.from(performanceByProductId.values())
+            .sort((a, b) => b.netRevenue - a.netRevenue || b.downloads - a.downloads)
+            .slice(0, 8),
+        };
+      }
+    } catch (error) {
+      console.warn('Transacoes do fotografo indisponiveis; usando fallback por pedidos.', error);
+    }
+
     const params = new URLSearchParams({
       select: '*',
       vendedorId: `eq.${vendedorId}`,
@@ -1038,19 +1193,6 @@ export const photographerDashboardService = {
     const monthlyEarnings = paidSales
       .filter((sale) => sale.orderCreatedAt.slice(0, 7) === currentMonthKey)
       .reduce((total, sale) => total + sale.netAmount, 0);
-    const downloadParams = new URLSearchParams({
-      select: 'id,productId',
-      vendedorId: `eq.${vendedorId}`,
-      limit: '10000',
-    });
-    const downloadEvents = await supabaseRest.get<{ id: string; productId: string }[]>(
-      `/rest/v1/download_events?${downloadParams.toString()}`,
-      true,
-    );
-    const downloadsByProductId = new Map<string, number>();
-    for (const event of downloadEvents) {
-      downloadsByProductId.set(event.productId, (downloadsByProductId.get(event.productId) ?? 0) + 1);
-    }
     const performanceByProductId = new Map<string, PhotographerProductPerformance>();
     for (const sale of paidSales) {
       const current = performanceByProductId.get(sale.productId) ?? {
@@ -1074,19 +1216,7 @@ export const photographerDashboardService = {
     const productPerformance = Array.from(performanceByProductId.values())
       .sort((a, b) => b.netRevenue - a.netRevenue || b.downloads - a.downloads)
       .slice(0, 8);
-    const withdrawalParams = new URLSearchParams({
-      select: 'amount,status',
-      photographerId: `eq.${vendedorId}`,
-      status: 'in.(pending,approved,paid)',
-      limit: '10000',
-    });
-    const reservedWithdrawals = await supabaseRest.get<Pick<WithdrawalRequest, 'amount' | 'status'>[]>(
-      `/rest/v1/withdrawal_requests?${withdrawalParams.toString()}`,
-      true,
-    );
-    const reservedWithdrawalAmount = reservedWithdrawals.reduce((total, withdrawal) => (
-      total + Number(withdrawal.amount || 0)
-    ), 0);
+    const reservedWithdrawalAmount = await getReservedWithdrawalAmount();
     const availableBalance = Math.max(0, totalEarnings - pendingEarnings - reservedWithdrawalAmount);
 
     return {

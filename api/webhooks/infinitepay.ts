@@ -4,10 +4,10 @@ import {
   isUuid,
   setCors,
   supabaseRequest,
-} from '../shared/utils.ts';
+} from '../../server/shared/utils.ts';
 import { createHmac, timingSafeEqual } from 'crypto';
-import { infinitePayProvider } from '../payments/providers/infinitepay.ts';
-import { fulfillPaidOrder, recordPayment } from '../shared/checkoutFulfillment.ts';
+import { infinitePayProvider } from '../../server/payments/providers/infinitepay.ts';
+import { fulfillPaidOrder, recordPayment } from '../../server/shared/checkoutFulfillment.ts';
 
 function normalizeKey(value: string) {
   return value.replace(/[^a-z0-9]/gi, '').toLowerCase();

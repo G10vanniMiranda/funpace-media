@@ -1,4 +1,4 @@
-import { getJsonBody, handleOptions, setCors, supabaseRequest } from '../shared/utils.ts';
+import { getJsonBody, handleOptions, setCors, supabaseRequest } from '../../server/shared/utils.ts';
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;

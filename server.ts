@@ -7,9 +7,9 @@ import pg from "pg";
 import cors from "cors";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
-import { getActivePaymentProvider } from "./api/payments/paymentProvider";
-import { fulfillPaidOrder, recordPayment } from "./api/shared/checkoutFulfillment";
-import type { PaymentMethod } from "./api/payments/providers/types";
+import { getActivePaymentProvider } from "./server/payments/paymentProvider";
+import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
+import type { PaymentMethod } from "./server/payments/providers/types";
 
 dotenv.config();
 

@@ -39,6 +39,11 @@ export interface Product {
   watermarkUrl?: string | null;
   duration?: string;
   storagePath?: string;
+  fileHash?: string | null;
+  fileSize?: number | null;
+  originalFileName?: string | null;
+  thumbnailHash?: string | null;
+  uploadBatchId?: string | null;
   status?: 'draft' | 'pending' | 'processing' | 'published' | 'sold' | 'hidden' | 'removed';
   createdAt?: string;
   favoriteCount?: number;

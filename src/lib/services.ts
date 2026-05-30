@@ -209,7 +209,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
   }
 }
 
-async function uploadMediaFile(path: string, file: File) {
+async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?: string; uploadBatchId?: string }) {
   let accessToken = await getCurrentAccessToken();
   if (!accessToken) {
     throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
@@ -230,6 +230,8 @@ async function uploadMediaFile(path: string, file: File) {
           'Content-Type': file.type || 'application/octet-stream',
           'X-File-Name': encodeURIComponent(file.name),
           'X-Storage-Path': encodeURIComponent(path),
+          ...(metadata?.fileHash ? { 'X-File-Hash': metadata.fileHash } : {}),
+          ...(metadata?.uploadBatchId ? { 'X-Upload-Batch-Id': metadata.uploadBatchId } : {}),
         },
         body: file,
       });
@@ -284,8 +286,17 @@ async function uploadMediaFile(path: string, file: File) {
     return {
       path: String(payload.path || payload.publicUrl || path),
       publicUrl: String(payload.publicUrl || payload.url || payload.path || ''),
+      reused: Boolean(payload.reused),
     };
   }
+}
+
+export async function calculateFileSha256(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+  return Array.from(new Uint8Array(hashBuffer))
+    .map((byte) => byte.toString(16).padStart(2, '0'))
+    .join('');
 }
 
 function sanitizeStorageFileName(fileName: string) {
@@ -408,6 +419,34 @@ export const productService = {
     return created.id;
   },
 
+  async findExistingProductByFileHash(vendedorId: string, fileHash: string, eventName?: string): Promise<Product | null> {
+    if (!fileHash || isMockMode) return null;
+
+    const params = new URLSearchParams({
+      select: '*',
+      vendedorId: `eq.${vendedorId}`,
+      fileHash: `eq.${fileHash}`,
+      status: 'neq.removed',
+      order: 'createdAt.desc',
+      limit: '5',
+    });
+
+    try {
+      const rows = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+      const normalizedEvent = eventName?.trim().toLowerCase();
+      const match = normalizedEvent
+        ? rows.find((product) => (product.event || '').trim().toLowerCase() === normalizedEvent) || rows[0]
+        : rows[0];
+      return match ? (await signMediaUrls([match]))[0] : null;
+    } catch (error) {
+      if (/fileHash|schema cache|does not exist|column/i.test(String(error instanceof Error ? error.message : error))) {
+        console.warn('Campos de deduplicacao ausentes no banco; upload seguira sem consulta por hash.');
+        return null;
+      }
+      throw error;
+    }
+  },
+
   async updateProduct(id: string, product: Pick<Product, 'name' | 'price' | 'event' | 'checkpoint' | 'bib' | 'status'>): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
@@ -491,7 +530,7 @@ export const productService = {
     return updated;
   },
 
-  async uploadProductFile(vendedorId: string, file: File) {
+  async uploadProductFile(vendedorId: string, file: File, metadata?: { fileHash?: string; uploadBatchId?: string }) {
     if (isMockMode) {
       return {
         path: `mock/${vendedorId}/${file.name}`,
@@ -501,10 +540,10 @@ export const productService = {
 
     const safeName = sanitizeStorageFileName(file.name);
     const path = `${vendedorId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-    return uploadMediaFile(path, file);
+    return uploadMediaFile(path, file, metadata);
   },
 
-  async uploadProductThumbnail(vendedorId: string, file: File) {
+  async uploadProductThumbnail(vendedorId: string, file: File, metadata?: { fileHash?: string; uploadBatchId?: string }) {
     if (isMockMode) {
       return {
         path: `mock/${vendedorId}/thumbs/${file.name}`,
@@ -514,7 +553,7 @@ export const productService = {
 
     const safeName = sanitizeStorageFileName(file.name);
     const path = `${vendedorId}/thumbs/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-    return uploadMediaFile(path, file);
+    return uploadMediaFile(path, file, metadata);
   },
 };
 

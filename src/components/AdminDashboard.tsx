@@ -30,7 +30,8 @@ import {
   FileText,
   Activity,
   EyeOff,
-  ReceiptText
+  ReceiptText,
+  Pencil
 } from 'lucide-react';
 import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
 import { adminService, eventService, photographerService, platformSettingsService, productService, withdrawalService, orderService } from '../lib/services';
@@ -439,6 +440,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
+  const [showEventModal, setShowEventModal] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
   const [eventForm, setEventForm] = useState({
     name: '',
     date: formatDateInput(new Date()),
@@ -836,6 +839,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         status: eventItem.status,
         source: 'Cadastro',
         mediaLabel: '',
+        canEdit: true,
       })),
       ...mediaEvents
         .filter((eventItem) => !manualKeys.has(normalizeEventKey(eventItem.name)))
@@ -848,6 +852,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           status: 'active' as const,
           source: 'Midias',
           mediaLabel: `${eventItem.photoCount} foto(s) / ${eventItem.videoCount} video(s)`,
+          canEdit: false,
         })),
     ];
   }, [events, mediaEvents]);
@@ -1166,7 +1171,43 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
   };
 
-  const handleCreateEvent = async (e: React.FormEvent) => {
+  const resetEventForm = () => {
+    setEditingEventId(null);
+    setShowEventModal(false);
+    setEventForm({
+      name: '',
+      date: formatDateInput(new Date()),
+      location: '',
+      checkpoint: 'Ponto Principal',
+      status: 'active',
+    });
+  };
+
+  const openCreateEvent = () => {
+    setEditingEventId(null);
+    setEventForm({
+      name: '',
+      date: formatDateInput(new Date()),
+      location: '',
+      checkpoint: 'Ponto Principal',
+      status: 'active',
+    });
+    setShowEventModal(true);
+  };
+
+  const openEditEvent = (eventItem: Pick<Event, 'id' | 'name' | 'date' | 'location' | 'checkpoint' | 'status'>) => {
+    setEditingEventId(eventItem.id);
+    setEventForm({
+      name: eventItem.name,
+      date: eventItem.date,
+      location: eventItem.location ?? '',
+      checkpoint: eventItem.checkpoint ?? 'Ponto Principal',
+      status: eventItem.status,
+    });
+    setShowEventModal(true);
+  };
+
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     const name = eventForm.name.trim();
     if (!name) {
@@ -1176,27 +1217,31 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
     setIsCreatingEvent(true);
     try {
-      const created = await eventService.createEvent({
+      const payload = {
         name,
         date: eventForm.date,
         location: eventForm.location.trim() || null,
         checkpoint: eventForm.checkpoint.trim() || null,
         status: eventForm.status,
-      });
+      };
+
+      if (editingEventId) {
+        const updated = await eventService.updateEvent(editingEventId, payload);
+        setEvents((current) => current.map((eventItem) => (eventItem.id === updated.id ? updated : eventItem)));
+        resetEventForm();
+        alert('Evento atualizado com sucesso.');
+        return;
+      }
+
+      const created = await eventService.createEvent(payload);
       setEvents((current) => [created, ...current]);
-      setEventForm({
-        name: '',
-        date: formatDateInput(new Date()),
-        location: '',
-        checkpoint: 'Ponto Principal',
-        status: 'active',
-      });
+      resetEventForm();
       alert(created.id.startsWith('local-event-')
         ? 'Evento salvo localmente. A tabela public.events ainda precisa ser criada no Supabase para sincronizar entre usuarios.'
         : 'Evento criado com sucesso.');
     } catch (error) {
-      console.error('Erro ao criar evento:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel criar o evento.');
+      console.error('Erro ao salvar evento:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel salvar o evento.');
     } finally {
       setIsCreatingEvent(false);
     }
@@ -2289,63 +2334,21 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               animate={{ opacity: 1, y: 0 }}
               className="space-y-5"
             >
-              <form onSubmit={handleCreateEvent} className="bg-[#0d131c] border border-white/10 p-5 grid gap-4 lg:grid-cols-[1.2fr_160px_1fr_1fr_150px_auto] lg:items-end">
+              <div className="bg-[#0d131c] border border-white/10 p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
-                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Nome do evento</label>
-                  <input
-                    value={eventForm.name}
-                    onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
-                    placeholder="Corrida Funpace"
-                    className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Data</label>
-                  <input
-                    type="date"
-                    value={eventForm.date}
-                    onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
-                    className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Local</label>
-                  <input
-                    value={eventForm.location}
-                    onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
-                    placeholder="Parque / Cidade"
-                    className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Ponto padrao</label>
-                  <input
-                    value={eventForm.checkpoint}
-                    onChange={(event) => setEventForm((current) => ({ ...current, checkpoint: event.target.value }))}
-                    placeholder="Chegada"
-                    className="w-full h-12 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
-                  />
-                </div>
-                <div>
-                  <label className="block font-mono text-[10px] uppercase text-gray-500 mb-2">Status</label>
-                  <select
-                    value={eventForm.status}
-                    onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value as Event['status'] }))}
-                    className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
-                  >
-                    <option value="active">Ativo</option>
-                    <option value="scheduled">Agendado</option>
-                    <option value="closed">Encerrado</option>
-                  </select>
+                  <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-2">Gestao de eventos</p>
+                  <h3 className="font-sans font-black text-xl uppercase text-white">Cadastro e edicao</h3>
+                  <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">Crie eventos oficiais ou edite dados de eventos ja cadastrados.</p>
                 </div>
                 <button
-                  type="submit"
-                  disabled={isCreatingEvent}
-                  className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:opacity-60"
+                  type="button"
+                  onClick={openCreateEvent}
+                  className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
                 >
-                  {isCreatingEvent ? 'Salvando...' : 'Criar Evento'}
+                  <Plus className="w-4 h-4" />
+                  Criar Evento
                 </button>
-              </form>
+              </div>
 
               <div className="bg-[#0d131c] border border-white/10">
                 <div className="p-5 border-b border-white/10 flex items-center justify-between">
@@ -2369,7 +2372,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   ) : adminEventRows.length === 0 ? (
                     <div className="p-8 text-center font-mono text-xs uppercase text-gray-500">Nenhum evento cadastrado.</div>
                   ) : adminEventRows.map((eventItem) => (
-                    <div key={eventItem.id} className="p-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
+                    <div key={eventItem.id} className="p-5 grid gap-3 md:grid-cols-[1fr_auto_auto_auto] md:items-center">
                       <div className="min-w-0">
                         <p className="font-sans font-black text-lg uppercase text-white truncate">{eventItem.name}</p>
                         <p className="font-mono text-[10px] uppercase text-gray-500 truncate">
@@ -2385,6 +2388,18 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       <span className="w-fit px-2 py-1 border border-white/10 bg-white/5 font-mono text-[10px] uppercase text-brutal-accent">
                         {eventItem.source} - {eventItem.status}
                       </span>
+                      {eventItem.canEdit ? (
+                        <button
+                          type="button"
+                          onClick={() => openEditEvent(eventItem)}
+                          className="h-8 px-3 border border-white/15 font-mono text-[10px] uppercase text-gray-300 hover:text-white hover:border-brutal-accent inline-flex items-center justify-center gap-2"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Editar
+                        </button>
+                      ) : (
+                        <span className="hidden md:block w-20" />
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2891,6 +2906,139 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           )}
         </AnimatePresence>
       </main>
+
+      {/* Event Modal */}
+      <AnimatePresence>
+        {showEventModal && (
+          <div className="fixed inset-0 z-150 flex items-center justify-center p-4 md:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={resetEventForm}
+              className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.96, y: 18 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 18 }}
+              className="relative w-full max-w-3xl max-h-[92vh] overflow-y-auto bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.6)] text-white"
+            >
+              <div className="h-1.5 bg-brutal-accent" />
+              <button
+                type="button"
+                onClick={resetEventForm}
+                className="absolute top-5 right-5 p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar modal"
+              >
+                <X className="w-6 h-6" />
+              </button>
+
+              <div className="p-7 md:p-9 border-b border-white/10">
+                <div className="flex flex-col md:flex-row md:items-center gap-5 pr-10">
+                  <div className="w-16 h-16 bg-brutal-accent/10 border border-brutal-accent/30 text-brutal-accent flex items-center justify-center shrink-0">
+                    <CalendarDays className="w-8 h-8" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-2">
+                      {editingEventId ? 'Editar cadastro' : 'Novo cadastro'}
+                    </p>
+                    <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal">
+                      {editingEventId ? 'Editar Evento' : 'Criar Evento'}
+                    </h3>
+                    <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
+                      Dados exibidos no marketplace e nos fluxos de midia
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveEvent} className="p-7 md:p-9 space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Nome do evento</label>
+                    <input
+                      required
+                      value={eventForm.name}
+                      onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
+                      placeholder="Corrida Funpace"
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Data</label>
+                    <input
+                      required
+                      type="date"
+                      value={eventForm.date}
+                      onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Status</label>
+                    <select
+                      value={eventForm.status}
+                      onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value as Event['status'] }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors"
+                    >
+                      <option value="active">Ativo</option>
+                      <option value="scheduled">Agendado</option>
+                      <option value="closed">Encerrado</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Local</label>
+                    <input
+                      value={eventForm.location}
+                      onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                      placeholder="Parque / Cidade"
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Ponto padrao</label>
+                    <input
+                      value={eventForm.checkpoint}
+                      onChange={(event) => setEventForm((current) => ({ ...current, checkpoint: event.target.value }))}
+                      placeholder="Chegada"
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-[#080d14] border border-white/10 p-4 flex items-start gap-3">
+                  <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
+                  <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
+                    Eventos cadastrados aqui podem ser reutilizados pelos fotografos e aparecem organizados nas areas de busca e gestao de midia.
+                  </p>
+                </div>
+
+                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={resetEventForm}
+                    className="h-13 sm:h-14 flex-1 border border-white/15 text-gray-300 font-mono text-xs uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    disabled={isCreatingEvent}
+                    type="submit"
+                    className="h-13 sm:h-14 flex-1 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isCreatingEvent ? 'Salvando...' : editingEventId ? 'Salvar alteracoes' : 'Criar evento'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       {/* Add Photographer Modal */}
       <AnimatePresence>

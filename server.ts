@@ -444,6 +444,65 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   };
 }
 
+let bucketFileChecksumCache: { expiresAt: number; files: any[] } | null = null;
+
+async function listExternalBucketFilesCached() {
+  const now = Date.now();
+  if (bucketFileChecksumCache && bucketFileChecksumCache.expiresAt > now) {
+    return bucketFileChecksumCache.files;
+  }
+
+  const { baseUrl, token, bucket } = getExternalBucketConfig();
+  const files: any[] = [];
+  let page = 1;
+  let totalPages = 1;
+
+  do {
+    const response = await fetch(`${baseUrl}/files?bucket=${encodeURIComponent(bucket)}&page=${page}&per_page=100`, {
+      headers: {
+        "X-API-Token": token,
+      },
+    });
+    const raw = await response.text();
+    let payload: any = {};
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = { raw };
+    }
+    if (!response.ok) {
+      const providerMessage = payload?.error || payload?.message || payload?.raw || raw;
+      throw new Error(cleanProviderErrorMessage(String(providerMessage || ""), `Consulta do bucket falhou com status ${response.status}.`));
+    }
+    files.push(...(Array.isArray(payload?.files) ? payload.files : []));
+    totalPages = Number(payload?.pagination?.total_pages || 1);
+    page += 1;
+  } while (page <= totalPages);
+
+  const activeFiles = files.filter((file: any) => !file?.deleted_at && file?.status !== "deleted" && file?.storage_exists !== false);
+  bucketFileChecksumCache = {
+    expiresAt: now + 30_000,
+    files: activeFiles,
+  };
+  return activeFiles;
+}
+
+async function findExistingBucketFileByChecksum(fileHash: string, contentType: string) {
+  if (!fileHash || fileHash.length !== 64) return null;
+  const activeFiles = await listExternalBucketFilesCached();
+  const normalizedContentType = contentType.toLowerCase();
+  return activeFiles
+    .filter((file: any) => String(file?.checksum_sha256 || "").toLowerCase() === fileHash)
+    .filter((file: any) => {
+      const mimeType = String(file?.mime_type || "").toLowerCase();
+      if (!mimeType || !normalizedContentType) return true;
+      if (normalizedContentType.startsWith("image/")) return mimeType.startsWith("image/");
+      if (normalizedContentType.startsWith("video/")) return mimeType.startsWith("video/");
+      return true;
+    })
+    .sort((left: any, right: any) => String(left.created_at || "").localeCompare(String(right.created_at || "")))[0] || null;
+}
+
 function getStorageQuotaBytes() {
   return Number(process.env.BUCKET_STORAGE_QUOTA_BYTES || 250 * 1024 * 1024 * 1024);
 }
@@ -1451,6 +1510,8 @@ app.post("/api/media/upload", express.raw({
   const authUser = await getAuthenticatedRequestUser(req);
   const storagePath = decodeHeaderValue(req.header("x-storage-path"));
   const fileName = decodeHeaderValue(req.header("x-file-name")) || storagePath.split("/").pop() || "arquivo";
+  const fileHash = String(req.header("x-file-hash") || "").trim().toLowerCase();
+  const uploadBatchId = String(req.header("x-upload-batch-id") || "").trim();
   const contentType = String(req.header("content-type") || "application/octet-stream");
   const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
 
@@ -1471,6 +1532,19 @@ app.post("/api/media/upload", express.raw({
   }
 
   try {
+    if (fileHash) {
+      const existingFile = await findExistingBucketFileByChecksum(fileHash, contentType);
+      if (existingFile?.url) {
+        return res.json({
+          path: existingFile.url,
+          publicUrl: existingFile.url,
+          fileHash,
+          uploadBatchId: uploadBatchId || undefined,
+          reused: true,
+        });
+      }
+    }
+
     const uploaded = usesExternalBucket()
       ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
       : (() => {
@@ -1480,6 +1554,9 @@ app.post("/api/media/upload", express.raw({
     return res.json({
       path: uploaded.publicUrl || uploaded.path,
       publicUrl: uploaded.publicUrl || uploaded.path,
+      fileHash: fileHash || undefined,
+      uploadBatchId: uploadBatchId || undefined,
+      reused: false,
     });
   } catch (error: any) {
     console.error("Erro ao enviar midia:", error);

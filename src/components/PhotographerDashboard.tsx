@@ -27,7 +27,7 @@ import {
   X
 } from 'lucide-react';
 import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
-import { eventService, photographerDashboardService, productService, withdrawalService } from '../lib/services';
+import { calculateFileSha256, eventService, photographerDashboardService, productService, withdrawalService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
 
@@ -581,6 +581,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
   const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
+  const [showEventModal, setShowEventModal] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(() => ({
     id: null,
     name: '',
@@ -769,12 +770,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     if (!selectedProductEventName) return groupedFilteredProducts;
     return groupedFilteredProducts.filter(({ eventName }) => eventName === selectedProductEventName);
   }, [groupedFilteredProducts, selectedProductEventName]);
+  const selectedProductEventCard = React.useMemo(
+    () => productEventCards.find((eventItem) => eventItem.name === selectedProductEventName) || null,
+    [productEventCards, selectedProductEventName],
+  );
+  const scopedFilteredProducts = React.useMemo(
+    () => visibleGroupedProducts.flatMap(({ products: groupProducts }) => groupProducts),
+    [visibleGroupedProducts],
+  );
   const selectedProducts = React.useMemo(
     () => products.filter((product) => selectedProductIds.has(product.id) && (product.status ?? 'published') !== 'removed'),
     [products, selectedProductIds],
   );
-  const allFilteredProductsSelected = filteredProducts.length > 0 &&
-    filteredProducts.every((product) => selectedProductIds.has(product.id));
+  const allFilteredProductsSelected = scopedFilteredProducts.length > 0 &&
+    scopedFilteredProducts.every((product) => selectedProductIds.has(product.id));
   const upcomingEvents = React.useMemo(() => {
     return availableEvents
       .filter((eventItem) => eventItem.status !== 'closed')
@@ -1025,6 +1034,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const resetEventForm = () => {
+    setShowEventModal(false);
     setEventForm({
       id: null,
       name: '',
@@ -1040,6 +1050,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setEventError('');
   };
 
+  const openNewEventModal = () => {
+    setEventForm({
+      id: null,
+      name: '',
+      date: formatDateInput(new Date()),
+      location: '',
+      checkpoint: 'Ponto Principal',
+      description: '',
+      status: 'scheduled',
+      isPublished: true,
+      coverImage: '',
+      bannerImage: '',
+    });
+    setEventError('');
+    setShowEventModal(true);
+  };
+
   const handleEditEvent = (eventItem: Event) => {
     setEventForm({
       id: eventItem.id,
@@ -1053,7 +1080,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       coverImage: eventItem.coverImage || '',
       bannerImage: eventItem.bannerImage || '',
     });
+    setEventError('');
     setActiveTab('events');
+    setShowEventModal(true);
   };
 
   const handleSaveEvent = async () => {
@@ -1322,9 +1351,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setSelectedProductIds((current) => {
       const next = new Set(current);
       if (allFilteredProductsSelected) {
-        filteredProducts.forEach((product) => next.delete(product.id));
+        scopedFilteredProducts.forEach((product) => next.delete(product.id));
       } else {
-        filteredProducts.forEach((product) => next.add(product.id));
+        scopedFilteredProducts.forEach((product) => next.add(product.id));
       }
       return next;
     });
@@ -1403,16 +1432,36 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       }
 
       let publishedCount = 0;
+      let skippedDuplicateCount = 0;
+      const uploadBatchId = crypto.randomUUID();
+      const currentBatchHashes = new Set<string>();
       const failedUploads: Array<{ index: number; name: string; message: string }> = [];
 
       for (const [index, item] of selectedFiles.entries()) {
         try {
           const uploadFile = await prepareImageForUpload(item.file);
           assertFileFitsUploadLimit(uploadFile);
-          const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile);
+          const fileHash = await calculateFileSha256(uploadFile);
+
+          if (currentBatchHashes.has(fileHash)) {
+            skippedDuplicateCount += 1;
+            setPublishProgress({ done: index + 1, total: selectedFiles.length });
+            continue;
+          }
+          currentBatchHashes.add(fileHash);
+
+          const existingProduct = await productService.findExistingProductByFileHash(photographer.id, fileHash, normalizedEvent);
+          if (existingProduct) {
+            skippedDuplicateCount += 1;
+            setPublishProgress({ done: index + 1, total: selectedFiles.length });
+            continue;
+          }
+
+          const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile, { fileHash, uploadBatchId });
           const thumbnailFile = await generateMediaThumbnail(uploadFile);
+          const thumbnailHash = thumbnailFile ? await calculateFileSha256(thumbnailFile) : null;
           const uploadedThumbnail = thumbnailFile
-            ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile)
+            ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
             : null;
 
           await productService.addProduct({
@@ -1427,6 +1476,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             thumbnailUrl: uploadedThumbnail?.path,
             watermarkUrl: uploadedThumbnail?.path,
             storagePath: uploadedFile.path,
+            fileHash,
+            fileSize: uploadFile.size,
+            originalFileName: item.file.name,
+            thumbnailHash,
+            uploadBatchId,
             status: 'published'
           });
           publishedCount += 1;
@@ -1460,12 +1514,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const failedIndexes = new Set(failedUploads.map((failure) => failure.index));
         setSelectedFiles((current) => current.filter((_, index) => failedIndexes.has(index)));
         setPreviewIndex(0);
-        alert(`Upload parcial: ${publishedCount} publicado(s), ${failedUploads.length} falharam. Os arquivos com falha ficaram selecionados para tentar novamente. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
+        alert(`Upload parcial: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s), ${failedUploads.length} falharam. Os arquivos com falha ficaram selecionados para tentar novamente. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);
         setShowUploadModal(false);
-        alert(`Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s).`);
+        alert(skippedDuplicateCount > 0
+          ? `Upload concluido: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).`
+          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s).`);
       }
     } catch (error) {
       console.error("Erro no upload:", error);
@@ -1873,190 +1929,44 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               className="space-y-5"
             >
               <div className="grid grid-cols-1 xl:grid-cols-[0.9fr_1.1fr] gap-5">
-                <div className="bg-[#0d131c] border border-white/10 p-5 md:p-6">
-                  <div className="flex items-start justify-between gap-4 mb-6">
-                    <div>
-                      <h3 className="font-sans font-black text-base uppercase text-white">
-                        {eventForm.id ? 'Editar evento' : 'Novo evento'}
-                      </h3>
-                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">
-                        Eventos organizam uploads, precos e publicacao.
-                      </p>
-                    </div>
-                    {eventForm.id && (
-                      <button
-                        type="button"
-                        onClick={resetEventForm}
-                        className="h-10 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white"
-                      >
-                        Novo
-                      </button>
-                    )}
+                <div className="bg-[#0d131c] border border-white/10 overflow-hidden">
+                  <div className="p-6 border-b border-white/10">
+                    <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-3">Eventos</p>
+                    <h3 className="font-sans font-black text-2xl uppercase text-white leading-none">Organize sua operacao</h3>
+                    <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500 mt-3">
+                      Crie paginas por prova, defina publicacao e escolha uma capa para destacar o catalogo.
+                    </p>
                   </div>
 
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do evento</label>
-                      <input
-                        type="text"
-                        value={eventForm.name}
-                        onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
-                        placeholder="Ex: Maratona Manaus 2026"
-                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
-                      />
+                  <div className="grid grid-cols-2 border-b border-white/10">
+                    <div className="p-5 border-r border-white/10">
+                      <p className="font-mono text-[9px] uppercase text-gray-500">Eventos</p>
+                      <p className="font-sans font-black text-3xl text-white mt-1">{availableEvents.length}</p>
                     </div>
-
-                    <div>
-                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Data</label>
-                      <input
-                        type="date"
-                        value={eventForm.date}
-                        onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
-                        className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
-                      />
+                    <div className="p-5">
+                      <p className="font-mono text-[9px] uppercase text-gray-500">Publicados</p>
+                      <p className="font-sans font-black text-3xl text-green-400 mt-1">
+                        {availableEvents.filter((eventItem) => eventItem.isPublished !== false).length}
+                      </p>
                     </div>
+                  </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Local</label>
-                        <input
-                          type="text"
-                          value={eventForm.location}
-                          onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
-                          placeholder="Cidade / local"
-                          className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
-                        />
-                      </div>
-                      <div>
-                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint padrao</label>
-                        <input
-                          type="text"
-                          value={eventForm.checkpoint}
-                          onChange={(event) => setEventForm((current) => ({ ...current, checkpoint: event.target.value }))}
-                          placeholder="Chegada, KM 10..."
-                          className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Descricao</label>
-                      <textarea
-                        value={eventForm.description}
-                        onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
-                        rows={3}
-                        placeholder="Resumo para equipe e publicacao"
-                        className="w-full px-4 py-3 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-xs uppercase outline-none focus:border-brutal-accent resize-none"
-                      />
-                    </div>
-
-                    <div className="bg-[#080d14] border border-white/10 p-4">
-                      <div className="flex items-start justify-between gap-4 mb-4">
-                        <div>
-                          <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Capa do evento</label>
-                          <p className="font-mono text-[10px] uppercase text-gray-600">
-                            Escolha uma midia ja enviada neste evento.
-                          </p>
-                        </div>
-                        {eventForm.coverImage && (
-                          <button
-                            type="button"
-                            onClick={() => setEventForm((current) => ({ ...current, coverImage: '' }))}
-                            className="shrink-0 h-9 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white hover:border-brutal-accent"
-                          >
-                            Remover capa
-                          </button>
-                        )}
-                      </div>
-
-                      {eventForm.coverImage && (
-                        <div className="mb-4">
-                          <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
-                          <div className="aspect-video max-w-sm bg-[#05080d] border border-brutal-accent overflow-hidden">
-                            {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                              <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
-                            ) : (
-                              <img src={eventForm.coverImage} alt="Capa atual do evento" className="w-full h-full object-cover" />
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {eventCoverCandidates.length > 0 ? (
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          {eventCoverCandidates.map((product) => {
-                            const coverUrl = product.thumbnailUrl || product.url;
-                            const isSelected = eventForm.coverImage === coverUrl;
-                            return (
-                              <button
-                                key={product.id}
-                                type="button"
-                                onClick={() => setEventForm((current) => ({ ...current, coverImage: coverUrl }))}
-                                className={`group text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
-                                  }`}
-                              >
-                                <div className="aspect-video bg-black overflow-hidden">
-                                  {coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                                    <video src={coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" muted preload="metadata" />
-                                  ) : (
-                                    <img src={coverUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                                  )}
-                                </div>
-                                <div className="p-2">
-                                  <p className="font-mono text-[9px] uppercase text-gray-400 truncate">{product.name}</p>
-                                  <p className="font-mono text-[8px] uppercase text-gray-600">{isSelected ? 'Capa selecionada' : 'Usar como capa'}</p>
-                                </div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      ) : (
-                        <div className="border border-dashed border-white/10 p-4 text-center">
-                          <ImageIcon className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                          <p className="font-mono text-[10px] uppercase text-gray-500">
-                            Envie fotos para este evento e depois escolha uma capa aqui.
-                          </p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Status operacional</label>
-                        <select
-                          value={eventForm.status}
-                          onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value as Event['status'] }))}
-                          className="w-full h-12 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
-                        >
-                          <option value="scheduled">Agendado</option>
-                          <option value="active">Ativo</option>
-                          <option value="closed">Fechado</option>
-                        </select>
-                      </div>
-                      <label className="h-12 mt-6 px-4 bg-[#05080d] border border-white/15 flex items-center justify-between gap-3 cursor-pointer">
-                        <span className="font-mono text-[10px] uppercase text-gray-300">Publicado na operacao</span>
-                        <input
-                          type="checkbox"
-                          checked={eventForm.isPublished}
-                          onChange={(event) => setEventForm((current) => ({ ...current, isPublished: event.target.checked }))}
-                          className="h-5 w-5 accent-brutal-accent"
-                        />
-                      </label>
-                    </div>
-
-                    {eventError && (
-                      <div className="border border-red-400/30 bg-red-500/10 p-3 font-mono text-[10px] uppercase text-red-200">
-                        {eventError}
-                      </div>
-                    )}
-
+                  <div className="p-6 space-y-3">
                     <button
                       type="button"
-                      onClick={handleSaveEvent}
-                      disabled={isSavingEvent}
-                      className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400"
+                      onClick={openNewEventModal}
+                      className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
                     >
-                      {isSavingEvent ? 'Salvando...' : eventForm.id ? 'Salvar evento' : 'Criar evento'}
+                      <Plus className="w-5 h-5" />
+                      Novo Evento
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowUploadModal(true)}
+                      className="w-full h-12 border border-white/15 text-gray-300 font-mono text-[10px] uppercase tracking-widest hover:text-white hover:border-white/30 transition-colors cursor-pointer inline-flex items-center justify-center gap-2"
+                    >
+                      <Upload className="w-4 h-4" />
+                      Enviar capturas
                     </button>
                   </div>
                 </div>
@@ -2084,8 +1994,22 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                           .filter((sale) => sale.event === eventItem.name)
                           .reduce((total, sale) => total + Number(sale.netAmount || 0), 0);
                         return (
-                          <div key={eventItem.id} className="p-5 grid gap-4">
-                            <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
+                          <div key={eventItem.id} className="p-5 grid gap-4 hover:bg-white/[0.02] transition-colors">
+                            <div className="grid gap-4 lg:grid-cols-[120px_1fr_auto] lg:items-start">
+                              <div className="aspect-video lg:aspect-square bg-[#080d14] border border-white/10 overflow-hidden">
+                                {eventItem.coverImage ? (
+                                  eventItem.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                                    <video src={eventItem.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
+                                  ) : (
+                                    <img src={eventItem.coverImage} alt={eventItem.name} className="w-full h-full object-cover" />
+                                  )
+                                ) : (
+                                  <div className="w-full h-full flex items-center justify-center">
+                                    <CalendarDays className="w-7 h-7 text-gray-600" />
+                                  </div>
+                                )}
+                              </div>
+
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2 mb-2">
                                   <span className={`px-2 py-1 font-mono text-[8px] uppercase border ${eventItem.isPublished === false ? 'border-yellow-400/30 bg-yellow-400/10 text-yellow-200' : 'border-green-400/30 bg-green-400/10 text-green-200'}`}>
@@ -2103,7 +2027,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   <p className="font-sans text-sm text-gray-400 mt-2 line-clamp-2">{eventItem.description}</p>
                                 )}
                               </div>
-                              <div className="flex md:flex-col gap-2 shrink-0">
+                              <div className="flex lg:flex-col gap-2 shrink-0">
                                 <button
                                   type="button"
                                   onClick={() => handleEditEvent(eventItem)}
@@ -2222,16 +2146,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
                 <div>
-                  <h3 className="font-sans font-black text-base uppercase text-white">Catalogo publicado</h3>
+                  <h3 className="font-sans font-black text-base uppercase text-white">
+                    {selectedProductEventName ? 'Produtos do evento' : 'Eventos publicados'}
+                  </h3>
                   <p className="font-mono text-[10px] uppercase text-gray-500">
-                    {filteredProducts.length} de {products.length} produtos encontrados
+                    {selectedProductEventName
+                      ? `${scopedFilteredProducts.length} produto(s) neste evento`
+                      : `${productEventCards.length} evento(s) com ${filteredProducts.length} midia(s)`}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
                   <button
                     type="button"
                     onClick={toggleAllFilteredProducts}
-                    disabled={filteredProducts.length === 0 || isBulkRemovingProducts}
+                    disabled={scopedFilteredProducts.length === 0 || isBulkRemovingProducts}
                     className="min-h-10 px-4 border border-white/15 bg-[#0d131c] text-white font-mono text-[10px] uppercase font-bold hover:border-brutal-accent disabled:text-gray-600 disabled:cursor-not-allowed"
                   >
                     {allFilteredProductsSelected ? 'Desmarcar filtrados' : 'Selecionar filtrados'}
@@ -2262,7 +2190,6 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         setProductSearch('');
                         setProductTypeFilter('all');
                         setProductStatusFilter('all');
-                        setSelectedProductEventName('');
                       }}
                       className="font-mono text-[10px] uppercase font-bold text-brutal-accent hover:text-white transition-colors cursor-pointer"
                     >
@@ -2272,8 +2199,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
               </div>
 
-              {productEventCards.length > 0 ? (
+              {productEventCards.length > 0 || selectedProductEventName ? (
                 <div className="space-y-8">
+                  {!selectedProductEventName ? (
                   <div className="space-y-4">
                     <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
                       <div>
@@ -2307,11 +2235,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             key={eventItem.name}
                             role="button"
                             tabIndex={0}
-                            onClick={() => setSelectedProductEventName((current) => current === eventItem.name ? '' : eventItem.name)}
+                            onClick={() => {
+                              setSelectedProductIds(new Set());
+                              setSelectedProductEventName(eventItem.name);
+                            }}
                             onKeyDown={(event) => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                 event.preventDefault();
-                                setSelectedProductEventName((current) => current === eventItem.name ? '' : eventItem.name);
+                                setSelectedProductIds(new Set());
+                                setSelectedProductEventName(eventItem.name);
                               }
                             }}
                             className={`group bg-white text-brutal-black border-2 overflow-hidden text-left transition-all ${isActive ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-brutal-black hover:border-brutal-accent'
@@ -2385,8 +2317,80 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       })}
                     </div>
                   </div>
+                  ) : (
+                    <div className="bg-[#0d131c] border border-white/10 overflow-hidden">
+                      <div className="grid lg:grid-cols-[360px_1fr]">
+                        <div className="relative min-h-60 bg-[#080d14] overflow-hidden">
+                          {selectedProductEventCard?.coverUrl ? (
+                            selectedProductEventCard.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                              <video src={selectedProductEventCard.coverUrl} className="absolute inset-0 w-full h-full object-cover opacity-80" muted preload="metadata" />
+                            ) : (
+                              <img src={selectedProductEventCard.coverUrl} alt={selectedProductEventCard.name} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                            )
+                          ) : (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <CalendarDays className="w-16 h-16 text-gray-700" />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-linear-to-t from-[#0d131c] via-[#0d131c]/20 to-transparent" />
+                          <div className="absolute left-5 top-5 bg-brutal-accent text-white px-3 py-1 font-mono text-[10px] uppercase font-bold tracking-widest">
+                            {selectedProductEventCard?.dateLabel || 'Evento'}
+                          </div>
+                        </div>
 
-                  {visibleGroupedProducts.map(({ eventName, products: groupProducts }) => (
+                        <div className="p-6 md:p-8 flex flex-col justify-between gap-6">
+                          <div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedProductIds(new Set());
+                                setSelectedProductEventName('');
+                              }}
+                              className="mb-5 inline-flex h-10 items-center gap-2 border border-white/15 px-3 font-mono text-[10px] uppercase text-gray-300 hover:text-white hover:border-brutal-accent"
+                            >
+                              <ChevronRight className="w-4 h-4 rotate-180" />
+                              Voltar para eventos
+                            </button>
+                            <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
+                              Evento selecionado
+                            </p>
+                            <h3 className="font-sans font-black text-3xl md:text-5xl uppercase text-white leading-none">
+                              {selectedProductEventName}
+                            </h3>
+                            <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mt-4">
+                              {selectedProductEventCard?.checkpoint || 'Local a confirmar'}
+                            </p>
+                          </div>
+
+                          <div className="grid grid-cols-3 gap-3">
+                            <div className="bg-[#080d14] border border-white/10 p-3">
+                              <p className="font-mono text-[9px] uppercase text-gray-500">Midias</p>
+                              <p className="font-sans font-black text-2xl text-white">{selectedProductEventCard?.items || scopedFilteredProducts.length}</p>
+                            </div>
+                            <div className="bg-[#080d14] border border-white/10 p-3">
+                              <p className="font-mono text-[9px] uppercase text-gray-500">Fotos</p>
+                              <p className="font-sans font-black text-2xl text-brutal-accent">{selectedProductEventCard?.photos || 0}</p>
+                            </div>
+                            <div className="bg-[#080d14] border border-white/10 p-3">
+                              <p className="font-mono text-[9px] uppercase text-gray-500">Videos</p>
+                              <p className="font-sans font-black text-2xl text-yellow-400">{selectedProductEventCard?.videos || 0}</p>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => openUploadForEvent(selectedProductEventName)}
+                            className="h-12 w-full sm:w-fit px-5 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-xs uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
+                          >
+                            <Plus className="w-4 h-4" />
+                            Adicionar fotos
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedProductEventName && visibleGroupedProducts.map(({ eventName, products: groupProducts }) => (
                     <div key={eventName} className="space-y-4">
                       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 p-4 bg-[#0b1016] border border-white/10">
                         <div>
@@ -2482,6 +2486,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       </div>
                     </div>
                   ))}
+                  {selectedProductEventName && visibleGroupedProducts.length === 0 && (
+                    <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
+                      <Search className="w-10 h-10 text-gray-600 mx-auto mb-4" />
+                      <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhuma midia neste filtro</h3>
+                      <p className="font-mono text-xs uppercase text-gray-500">Limpe a busca ou ajuste os filtros para ver os produtos deste evento.</p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
@@ -2501,8 +2512,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               exit={{ opacity: 0, y: -10 }}
               className="space-y-5"
             >
-              <div className="bg-[#0d131c] text-white border border-white/10 p-5 md:p-7 flex flex-col xl:flex-row justify-between gap-6">
+              <div className="bg-[#0d131c] text-white border border-white/10 p-5 md:p-7 flex flex-col xl:flex-row justify-between gap-6 shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
                 <div>
+                  <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-400/10 border border-green-400/20 text-green-300 font-mono text-[10px] uppercase tracking-widest mb-5">
+                    <DollarSign className="w-3.5 h-3.5" />
+                    Carteira do fotografo
+                  </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saldo disponivel para repasse</p>
                   <p className="font-sans font-black text-5xl md:text-6xl text-brutal-accent leading-none">
                     {formatCurrency(dashboardMetrics.availableBalance)}
@@ -2516,35 +2531,61 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     </p>
                   )}
                 </div>
-                <div className="w-full xl:w-[320px] bg-[#080d14] border border-white/10 p-4">
+                <div className="w-full xl:w-[340px] bg-[#080d14] border border-white/10 p-5 flex flex-col gap-4">
+                  <div className="bg-[#05080d] border border-white/10 p-4 flex items-center justify-between gap-4">
+                    <div>
+                      <p className="font-mono text-[9px] uppercase tracking-widest text-gray-500">Vendas no periodo</p>
+                      <p className="font-sans font-black text-4xl text-white leading-none mt-2">{periodMetrics.salesCount}</p>
+                    </div>
+                    <div className="w-12 h-12 bg-green-400/10 border border-green-400/20 flex items-center justify-center shrink-0">
+                      <CheckCircle2 className="w-6 h-6 text-green-400" />
+                    </div>
+                  </div>
                   <button
                     disabled={dashboardMetrics.availableBalance <= 0}
                     onClick={() => setShowWithdrawalModal(true)}
-                    className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                    className="w-full h-14 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-white/10 disabled:border-white/10 disabled:text-gray-400 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
                   >
+                    <DollarSign className="w-4 h-4" />
                     Solicitar Saque
                   </button>
-                  <p className="font-mono text-center text-[10px] text-gray-500 mt-4 uppercase tracking-widest">Vendas recentes liberam apos 7 dias</p>
+                  <div className="border border-white/10 bg-[#05080d] px-4 py-3">
+                    <p className="font-mono text-center text-[10px] text-gray-500 uppercase tracking-widest leading-relaxed">
+                      Vendas recentes liberam apos 7 dias
+                    </p>
+                  </div>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                <div className="bg-[#0d131c] border border-white/10 p-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5 hover:border-white/20 transition-colors">
+                  <div className="w-10 h-10 bg-white/5 border border-white/10 flex items-center justify-center mb-4">
+                    <TrendingUp className="w-5 h-5 text-green-400" />
+                  </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Ganhos totais</p>
                   <p className="font-sans font-black text-3xl text-white">{formatCurrency(periodMetrics.totalEarnings)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{periodMetrics.salesCount} venda(s)</p>
                 </div>
-                <div className="bg-[#0d131c] border border-white/10 p-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5 hover:border-white/20 transition-colors">
+                  <div className="w-10 h-10 bg-white/5 border border-white/10 flex items-center justify-center mb-4">
+                    <AlertCircle className="w-5 h-5 text-yellow-400" />
+                  </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">A liberar</p>
                   <p className="font-sans font-black text-3xl text-yellow-400">{formatCurrency(periodMetrics.pendingEarnings)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Janela de 7 dias</p>
                 </div>
-                <div className="bg-[#0d131c] border border-white/10 p-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5 hover:border-white/20 transition-colors">
+                  <div className="w-10 h-10 bg-white/5 border border-white/10 flex items-center justify-center mb-4">
+                    <Upload className="w-5 h-5 text-brutal-accent" />
+                  </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saques em aberto</p>
                   <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(pendingWithdrawalTotal)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Pendentes/aprovados</p>
                 </div>
-                <div className="bg-[#0d131c] border border-white/10 p-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5 hover:border-white/20 transition-colors">
+                  <div className="w-10 h-10 bg-white/5 border border-white/10 flex items-center justify-center mb-4">
+                    <CheckCircle2 className="w-5 h-5 text-green-400" />
+                  </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Ja pago</p>
                   <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidWithdrawalTotal)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Historico recebido</p>
@@ -2565,7 +2606,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <div className="space-y-3">
                         <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Solicitacoes de saque</p>
                         {periodWithdrawals.slice(0, 4).map((withdrawal) => (
-                          <div key={withdrawal.id} className="flex justify-between items-center gap-4 p-3 bg-[#080d14] border border-white/10">
+                          <div key={withdrawal.id} className="flex justify-between items-center gap-4 p-4 bg-[#080d14] border border-white/10 hover:border-white/20 transition-colors">
                             <div className="min-w-0">
                               <p className="font-sans font-black text-sm uppercase text-white truncate">Saque {withdrawalStatusLabels[withdrawal.status]}</p>
                               <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate">
@@ -2588,9 +2629,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </p>
                       </div>
                     ) : periodSales.map((sale) => (
-                      <div key={sale.id} className="flex justify-between items-center gap-4 py-4 border-b border-white/10 last:border-0">
+                      <div key={sale.id} className="grid grid-cols-[40px_1fr_auto] items-center gap-4 p-4 bg-[#080d14] border border-white/10 hover:border-green-400/25 transition-colors">
+                        <div className="w-10 h-10 bg-green-400/10 border border-green-400/20 flex items-center justify-center">
+                          <CheckCircle2 className="w-5 h-5 text-green-400" />
+                        </div>
                         <div className="min-w-0">
-                          <p className="font-sans font-black text-sm uppercase text-white truncate">Venda Confirmada</p>
+                          <p className="font-sans font-black text-sm uppercase text-white truncate">Venda confirmada</p>
                           <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
                             Pedido #{sale.orderId.substring(0, 8)} - {sale.event}
                           </p>
@@ -2604,18 +2648,24 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                 </div>
 
-                <div className="bg-[#0d131c] border border-white/10 p-6 flex flex-col justify-center text-center">
-                  <div className="mx-auto w-14 h-14 bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center mb-5">
+                <div className="bg-[#0d131c] border border-white/10 p-6 flex flex-col justify-center">
+                  <div className="w-14 h-14 bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center mb-5">
                     <TrendingUp className="w-7 h-7 text-brutal-accent" />
                   </div>
-                  <h3 className="font-sans font-black text-xl uppercase text-white mb-4">Meta Mensal</h3>
-                  <div className="w-full h-3 bg-[#080d14] border border-white/10 mb-4 overflow-hidden">
+                  <div className="flex items-end justify-between gap-4 mb-4">
+                    <div>
+                      <h3 className="font-sans font-black text-xl uppercase text-white">Meta Mensal</h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">Acompanhamento do mes atual</p>
+                    </div>
+                    <p className="font-sans font-black text-3xl text-brutal-accent">{monthlyGoalPercent}%</p>
+                  </div>
+                  <div className="w-full h-4 bg-[#080d14] border border-white/10 mb-4 overflow-hidden">
                     <div
                       className="h-full bg-brutal-accent"
                       style={{ width: `${monthlyGoalPercent}%` }}
                     />
                   </div>
-                  <p className="font-mono text-sm text-gray-400">
+                  <p className="font-mono text-sm text-gray-400 leading-relaxed">
                     Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(periodMetrics.monthlyGoal)}</span>
                   </p>
                   <p className="font-mono text-[10px] uppercase text-gray-500 tracking-widest mt-3">
@@ -2724,6 +2774,233 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           )}
         </AnimatePresence>
       </main>
+
+      {/* Event Modal */}
+      <AnimatePresence>
+        {showEventModal && (
+          <div className="fixed inset-0 z-100 flex items-center justify-center p-4 md:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={resetEventForm}
+              className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ scale: 0.94, y: 18 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 18 }}
+              className="relative w-full max-w-4xl max-h-[92vh] overflow-y-auto bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.6)] text-white"
+            >
+              <div className="h-1.5 bg-brutal-accent" />
+              <button
+                type="button"
+                onClick={resetEventForm}
+                className="absolute right-4 top-4 z-10 p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                aria-label="Fechar modal"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="p-6 md:p-8 border-b border-white/10">
+                <div className="inline-flex items-center gap-2 px-3 py-1 bg-brutal-accent/10 border border-brutal-accent/30 text-brutal-accent font-mono text-[10px] uppercase tracking-widest mb-4">
+                  <CalendarDays className="w-3.5 h-3.5" />
+                  {eventForm.id ? 'Editar evento' : 'Novo evento'}
+                </div>
+                <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal">
+                  {eventForm.id ? 'Atualizar Evento' : 'Criar Evento'}
+                </h3>
+                <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
+                  Eventos organizam uploads, capas, precos e publicacao.
+                </p>
+              </div>
+
+              <form
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  handleSaveEvent();
+                }}
+                className="p-6 md:p-8 space-y-6"
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div className="md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do evento</label>
+                    <input
+                      required
+                      type="text"
+                      value={eventForm.name}
+                      onChange={(event) => setEventForm((current) => ({ ...current, name: event.target.value }))}
+                      placeholder="Ex: Maratona Manaus 2026"
+                      className="w-full h-14 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Data</label>
+                    <input
+                      required
+                      type="date"
+                      value={eventForm.date}
+                      onChange={(event) => setEventForm((current) => ({ ...current, date: event.target.value }))}
+                      className="w-full h-14 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Status operacional</label>
+                    <select
+                      value={eventForm.status}
+                      onChange={(event) => setEventForm((current) => ({ ...current, status: event.target.value as Event['status'] }))}
+                      className="w-full h-14 px-4 bg-[#05080d] border border-white/15 text-white font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors"
+                    >
+                      <option value="scheduled">Agendado</option>
+                      <option value="active">Ativo</option>
+                      <option value="closed">Fechado</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Local</label>
+                    <input
+                      type="text"
+                      value={eventForm.location}
+                      onChange={(event) => setEventForm((current) => ({ ...current, location: event.target.value }))}
+                      placeholder="Cidade / local"
+                      className="w-full h-14 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint padrao</label>
+                    <input
+                      type="text"
+                      value={eventForm.checkpoint}
+                      onChange={(event) => setEventForm((current) => ({ ...current, checkpoint: event.target.value }))}
+                      placeholder="Chegada, KM 10..."
+                      className="w-full h-14 px-4 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors"
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Descricao</label>
+                    <textarea
+                      value={eventForm.description}
+                      onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
+                      rows={3}
+                      placeholder="Resumo para equipe e publicacao"
+                      className="w-full px-4 py-3 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors resize-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-[#080d14] border border-white/10 p-4">
+                  <div className="flex items-start justify-between gap-4 mb-4">
+                    <div>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Capa do evento</label>
+                      <p className="font-mono text-[10px] uppercase text-gray-600">
+                        Escolha uma midia ja enviada neste evento.
+                      </p>
+                    </div>
+                    {eventForm.coverImage && (
+                      <button
+                        type="button"
+                        onClick={() => setEventForm((current) => ({ ...current, coverImage: '' }))}
+                        className="shrink-0 h-9 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white hover:border-brutal-accent"
+                      >
+                        Remover capa
+                      </button>
+                    )}
+                  </div>
+
+                  {eventForm.coverImage && (
+                    <div className="mb-4">
+                      <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
+                      <div className="aspect-video max-w-sm bg-[#05080d] border border-brutal-accent overflow-hidden">
+                        {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                          <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
+                        ) : (
+                          <img src={eventForm.coverImage} alt="Capa atual do evento" className="w-full h-full object-cover" />
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {eventCoverCandidates.length > 0 ? (
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                      {eventCoverCandidates.map((product) => {
+                        const coverUrl = product.thumbnailUrl || product.url;
+                        const isSelected = eventForm.coverImage === coverUrl;
+                        return (
+                          <button
+                            key={product.id}
+                            type="button"
+                            onClick={() => setEventForm((current) => ({ ...current, coverImage: coverUrl }))}
+                            className={`group text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
+                              }`}
+                          >
+                            <div className="aspect-video bg-black overflow-hidden">
+                              {coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
+                                <video src={coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" muted preload="metadata" />
+                              ) : (
+                                <img src={coverUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                              )}
+                            </div>
+                            <div className="p-2">
+                              <p className="font-mono text-[9px] uppercase text-gray-400 truncate">{product.name}</p>
+                              <p className="font-mono text-[8px] uppercase text-gray-600">{isSelected ? 'Capa selecionada' : 'Usar como capa'}</p>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="border border-dashed border-white/10 p-5 text-center">
+                      <ImageIcon className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                      <p className="font-mono text-[10px] uppercase text-gray-500">
+                        Envie fotos para este evento e depois escolha uma capa aqui.
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <label className="h-14 px-4 bg-[#05080d] border border-white/15 flex items-center justify-between gap-3 cursor-pointer">
+                  <span className="font-mono text-[10px] uppercase text-gray-300">Publicado na operacao</span>
+                  <input
+                    type="checkbox"
+                    checked={eventForm.isPublished}
+                    onChange={(event) => setEventForm((current) => ({ ...current, isPublished: event.target.checked }))}
+                    className="h-5 w-5 accent-brutal-accent"
+                  />
+                </label>
+
+                {eventError && (
+                  <div className="border border-red-400/30 bg-red-500/10 p-3 font-mono text-[10px] uppercase text-red-200">
+                    {eventError}
+                  </div>
+                )}
+
+                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={resetEventForm}
+                    className="h-14 flex-1 border border-white/15 text-gray-300 font-mono text-xs uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSavingEvent}
+                    className="h-14 flex-1 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  >
+                    {isSavingEvent ? 'Salvando...' : eventForm.id ? 'Salvar evento' : 'Criar evento'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {showWithdrawalModal && (

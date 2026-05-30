@@ -141,6 +141,11 @@ create table if not exists public.products (
   "watermarkUrl" text,
   duration text,
   "storagePath" text,
+  "fileHash" text,
+  "fileSize" bigint,
+  "originalFileName" text,
+  "thumbnailHash" text,
+  "uploadBatchId" text,
   status text not null default 'published' check (status in ('draft', 'pending', 'processing', 'published', 'sold', 'hidden', 'removed')),
   "viewCount" integer not null default 0 check ("viewCount" >= 0),
   "salesCount" integer not null default 0 check ("salesCount" >= 0),
@@ -151,6 +156,11 @@ create table if not exists public.products (
 alter table public.products add column if not exists "watermarkUrl" text;
 alter table public.products add column if not exists "viewCount" integer not null default 0;
 alter table public.products add column if not exists "salesCount" integer not null default 0;
+alter table public.products add column if not exists "fileHash" text;
+alter table public.products add column if not exists "fileSize" bigint;
+alter table public.products add column if not exists "originalFileName" text;
+alter table public.products add column if not exists "thumbnailHash" text;
+alter table public.products add column if not exists "uploadBatchId" text;
 
 do $$
 begin
@@ -431,6 +441,8 @@ create index if not exists products_vendedor_id_idx on public.products ("vendedo
 create index if not exists products_created_at_idx on public.products ("createdAt" desc);
 create index if not exists products_status_idx on public.products (status);
 create index if not exists products_event_idx on public.products (event);
+create index if not exists products_file_hash_vendedor_idx on public.products ("vendedorId", "fileHash") where "fileHash" is not null and coalesce(status, 'published') <> 'removed';
+create index if not exists products_upload_batch_idx on public.products ("uploadBatchId") where "uploadBatchId" is not null;
 create index if not exists events_date_idx on public.events (date);
 create index if not exists events_status_idx on public.events (status);
 create index if not exists events_photographer_id_idx on public.events ("photographerId");

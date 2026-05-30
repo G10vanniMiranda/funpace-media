@@ -237,7 +237,7 @@ export function Navbar({ cartItemCount, onOpenCart, onNavigateHome, onOpenAuth, 
                       <form onSubmit={handleSearchSubmit} className="flex items-stretch">
                         <input
                           type="text"
-                          placeholder="Nº DO PEITO"
+                          placeholder="BUSCAR .."
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           className="min-w-0 flex-1 bg-white text-brutal-black px-4 h-12 font-mono text-sm brutal-border border-r-0 focus:outline-none focus:bg-gray-50 placeholder:text-gray-400"

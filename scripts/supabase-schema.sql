@@ -61,6 +61,25 @@ revoke all on function public.is_verified_photographer() from public;
 grant execute on function public.is_verified_photographer() to authenticated;
 grant execute on function public.is_verified_photographer() to service_role;
 
+create or replace function public.order_has_vendor(order_id uuid, vendor_id text)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.order_items oi
+    where oi."orderId" = order_id
+      and oi."vendedorId" = vendor_id
+  )
+$$;
+
+revoke all on function public.order_has_vendor(uuid, text) from public;
+grant execute on function public.order_has_vendor(uuid, text) to authenticated;
+grant execute on function public.order_has_vendor(uuid, text) to service_role;
+
 create table if not exists public.photographers (
   id text primary key,
   name text not null check (char_length(name) between 1 and 100),
@@ -741,12 +760,7 @@ using (
   public.is_admin()
   or ("userId" is not null and "userId" = auth.uid()::text)
   or ("buyerEmail" = (auth.jwt() ->> 'email'))
-  or exists (
-    select 1
-    from public.order_items oi
-    where oi."orderId" = public.orders.id
-      and oi."vendedorId" = auth.uid()::text
-  )
+  or public.order_has_vendor(id, auth.uid()::text)
 );
 
 drop policy if exists "orders_update_admin_only" on public.orders;

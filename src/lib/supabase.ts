@@ -237,6 +237,13 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
       const msgUpper = msg.toUpperCase();
 
       if (
+        msgUpper.includes('INFINITE RECURSION DETECTED IN POLICY') &&
+        msgUpper.includes('ORDERS')
+      ) {
+        throw new Error('A politica de seguranca dos pedidos precisa ser atualizada. Aplique scripts/fix-order-rls-recursion.sql no Supabase e tente novamente.');
+      }
+
+      if (
         errorCode === 'INVALID_API_KEY' ||
         msgUpper.includes('INVALID API KEY') ||
         msgUpper.includes('SUPABASE_ANON') ||

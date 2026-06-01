@@ -74,6 +74,12 @@ function createEventSlug(value: string) {
     .replace(/^-+|-+$/g, '') || 'evento';
 }
 
+function getStorefrontTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const timestamp = new Date(value.includes('T') ? value : `${value}T12:00:00`).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
 function getEventSlugFromPath(pathname: string) {
   const match = pathname.match(/^\/eventos\/([^/?#]+)/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -149,7 +155,7 @@ function Storefront() {
       try {
         const [products, eventRows] = await Promise.all([
           productService.getLatestProducts(storefrontProductLimit),
-          eventService.getActiveEvents(300).catch((error) => {
+          eventService.getPublishedEvents(300).catch((error) => {
             console.warn('Eventos cadastrados indisponiveis na vitrine; usando apenas midias publicadas.', error);
             return [] as Event[];
           }),
@@ -298,9 +304,26 @@ function Storefront() {
   ), [allDisplayProducts, registeredEvents]);
   const selectedRegisteredEvent = React.useMemo(() => (
     selectedEventName
-      ? registeredEvents.find((eventItem) => normalizeEventName(eventItem.name) === normalizeEventName(selectedEventName)) ?? null
+      ? (() => {
+        const matchingEvents = registeredEvents.filter((eventItem) =>
+          eventItem.isPublished !== false && normalizeEventName(eventItem.name) === normalizeEventName(selectedEventName),
+        );
+        if (matchingEvents.length <= 1) return matchingEvents[0] ?? null;
+
+        const sellerIds = new Set([...displayPhotos, ...displayVideos].map((product) => product.vendedorId).filter(Boolean));
+        const sellerEvent = matchingEvents.find((eventItem) =>
+          eventItem.photographerId && sellerIds.has(eventItem.photographerId),
+        );
+        if (sellerEvent) return sellerEvent;
+
+        return [...matchingEvents].sort((left, right) => {
+          const leftTime = getStorefrontTimestamp(left.createdAt) || getStorefrontTimestamp(left.date);
+          const rightTime = getStorefrontTimestamp(right.createdAt) || getStorefrontTimestamp(right.date);
+          return rightTime - leftTime;
+        })[0] ?? null;
+      })()
       : null
-  ), [registeredEvents, selectedEventName]);
+  ), [displayPhotos, displayVideos, registeredEvents, selectedEventName]);
   const selectedEventCheckpoints = Array.from(new Set(
     [
       selectedRegisteredEvent?.checkpoint || selectedRegisteredEvent?.location || '',
@@ -318,7 +341,7 @@ function Storefront() {
     .sort()
     .at(-1);
   const selectedEventDateLabel = selectedEventDate
-    ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(selectedEventDate))
+    ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(selectedEventDate.includes('T') ? selectedEventDate : `${selectedEventDate}T12:00:00`))
     : 'Data a confirmar';
   const isEventsRoute = location.pathname === '/eventos';
   const isCustomerOrdersRoute = location.pathname === '/minhas-compras';

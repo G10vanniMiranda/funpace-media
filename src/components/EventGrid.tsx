@@ -16,6 +16,7 @@ interface MediaEvent {
   coverUrl: string | null;
   date?: string;
   createdAt?: string;
+  sortTime: number;
   photos: number;
   videos: number;
   items: number;
@@ -31,7 +32,7 @@ function normalizeText(value: string) {
 function formatDate(value?: string) {
   if (!value) return 'DATA A CONFIRMAR';
 
-  const date = new Date(value);
+  const date = new Date(value.includes('T') ? value : `${value}T12:00:00`);
   if (Number.isNaN(date.getTime())) return 'DATA A CONFIRMAR';
 
   return new Intl.DateTimeFormat('pt-BR', {
@@ -41,60 +42,98 @@ function formatDate(value?: string) {
   }).format(date).replace('.', '').toUpperCase();
 }
 
+function getTimestamp(value?: string | null) {
+  if (!value) return 0;
+  const timestamp = new Date(value.includes('T') ? value : `${value}T12:00:00`).getTime();
+  return Number.isFinite(timestamp) ? timestamp : 0;
+}
+
+function findEventDetail(eventName: string, products: Product[], registeredEvents: Event[]) {
+  const normalizedName = normalizeText(eventName);
+  const matchingEvents = registeredEvents.filter((eventItem) =>
+    eventItem.isPublished !== false && normalizeText(eventItem.name || '') === normalizedName,
+  );
+  if (matchingEvents.length <= 1) return matchingEvents[0] || null;
+
+  const sellerIds = new Set(products.map((product) => product.vendedorId).filter(Boolean));
+  const sellerEvent = matchingEvents.find((eventItem) =>
+    eventItem.photographerId && sellerIds.has(eventItem.photographerId),
+  );
+  if (sellerEvent) return sellerEvent;
+
+  return [...matchingEvents].sort((left, right) => {
+    const leftTime = getTimestamp(left.createdAt) || getTimestamp(left.date);
+    const rightTime = getTimestamp(right.createdAt) || getTimestamp(right.date);
+    return rightTime - leftTime;
+  })[0] || null;
+}
+
 function buildEvents(products: Product[], registeredEvents: Event[] = []) {
   const events = new Map<string, MediaEvent>();
+  const productGroups = new Map<string, Product[]>();
+
+  products.forEach((product) => {
+    const name = String(product.event || 'Evento sem nome').trim();
+    const key = normalizeText(name);
+    const group = productGroups.get(key) ?? [];
+    group.push(product);
+    productGroups.set(key, group);
+  });
+
+  for (const groupProducts of productGroups.values()) {
+    const name = String(groupProducts[0]?.event || 'Evento sem nome').trim();
+    const eventDetail = findEventDetail(name, groupProducts, registeredEvents);
+    const coverProduct = groupProducts.find((product) => product.thumbnailUrl || product.url);
+    const fallbackDate = groupProducts.reduce<string | undefined>((latest, product) => {
+      if (!product.createdAt) return latest;
+      if (!latest) return product.createdAt;
+      return product.createdAt > latest ? product.createdAt : latest;
+    }, undefined);
+    const fallbackSortTime = groupProducts.reduce((earliest, product) => {
+      const timestamp = getTimestamp(product.createdAt);
+      return timestamp && (!earliest || timestamp < earliest) ? timestamp : earliest;
+    }, 0);
+    const createdAt = eventDetail?.createdAt || fallbackDate;
+
+    events.set(normalizeText(name), {
+      name,
+      checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
+      coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || coverProduct?.url || null,
+      date: eventDetail?.date || fallbackDate,
+      createdAt,
+      sortTime: getTimestamp(eventDetail?.createdAt) || fallbackSortTime,
+      photos: groupProducts.filter((product) => product.type === 'IMG').length,
+      videos: groupProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+      items: groupProducts.length,
+    });
+  }
 
   for (const eventItem of registeredEvents) {
     if (eventItem.isPublished === false) continue;
 
     const name = String(eventItem.name || 'Evento sem nome').trim();
     const key = normalizeText(name);
+    if (events.has(key)) {
+      continue;
+    }
+
     events.set(key, {
       name,
       checkpoint: eventItem.checkpoint || eventItem.location || 'Local a confirmar',
       coverUrl: eventItem.coverImage || null,
       date: eventItem.date,
       createdAt: eventItem.createdAt,
+      sortTime: getTimestamp(eventItem.createdAt) || getTimestamp(eventItem.date),
       photos: 0,
       videos: 0,
       items: 0,
     });
   }
 
-  for (const product of products) {
-    const name = String(product.event || 'Evento sem nome').trim();
-    const key = normalizeText(name);
-    const current = events.get(key);
-    const coverUrl = product.thumbnailUrl || null;
-    const isVideo = product.type === 'VIDEO' || product.type === 'VIEW';
-
-    if (!current) {
-      events.set(key, {
-        name,
-        checkpoint: product.checkpoint || 'Local a confirmar',
-        coverUrl,
-        createdAt: product.createdAt,
-        photos: product.type === 'IMG' ? 1 : 0,
-        videos: isVideo ? 1 : 0,
-        items: 1,
-      });
-      continue;
-    }
-
-    current.items += 1;
-    if (product.type === 'IMG') current.photos += 1;
-    if (isVideo) current.videos += 1;
-    if (!current.coverUrl && coverUrl) current.coverUrl = coverUrl;
-    if (!current.checkpoint && product.checkpoint) current.checkpoint = product.checkpoint;
-    if (!current.createdAt || (product.createdAt && product.createdAt > current.createdAt)) {
-      current.createdAt = product.createdAt;
-    }
-  }
-
   return Array.from(events.values()).sort((left, right) => {
-    const rightTime = right.createdAt ? new Date(right.createdAt).getTime() : 0;
-    const leftTime = left.createdAt ? new Date(left.createdAt).getTime() : 0;
-    return rightTime - leftTime || left.name.localeCompare(right.name);
+    if (left.items === 0 && right.items > 0) return 1;
+    if (right.items === 0 && left.items > 0) return -1;
+    return right.sortTime - left.sortTime || left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base' });
   });
 }
 

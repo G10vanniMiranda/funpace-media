@@ -685,6 +685,27 @@ export const eventService = {
     }
   },
 
+  async getPublishedEvents(count = 300): Promise<Event[]> {
+    if (isMockMode) {
+      return [];
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'date.asc,createdAt.desc',
+      limit: String(count),
+    });
+    try {
+      const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`);
+      return sortEvents(events.filter((event) => event.isPublished !== false)).slice(0, count);
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        return sortEvents(loadLocalEvents().filter((event) => event.isPublished !== false)).slice(0, count);
+      }
+      throw error;
+    }
+  },
+
   async getPhotographerEvents(photographerId: string, count = 200): Promise<Event[]> {
     if (isMockMode) {
       return loadLocalEvents()

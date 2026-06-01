@@ -634,13 +634,21 @@ export const orderService = {
       throw new Error('Atualizacao manual de pedido esta disponivel apenas no modo producao.');
     }
 
-    const params = new URLSearchParams({ id: `eq.${id}` });
-    const [updated] = await supabaseRest.patch<SupabaseRow<Order>[]>(
-      `/rest/v1/orders?${params.toString()}&${selectAll}`,
-      { status },
-      true,
-    );
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessao admin expirada.');
 
+    const response = await fetch(apiUrl('/api/admin/orders/status'), {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ orderId: id, status }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
+    const updated = payload?.order as Order | undefined;
     if (!updated) throw new Error('Pedido nao encontrado.');
     return updated;
   },

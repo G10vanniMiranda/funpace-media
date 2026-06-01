@@ -56,7 +56,7 @@ type ProductEditForm = {
 
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
-type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'custom';
+type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'year' | 'custom';
 type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings';
 
 type PhotographerCatalogEvent = {
@@ -87,6 +87,7 @@ const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: st
   { key: 'today', label: 'Hoje' },
   { key: 'week', label: 'Esta semana' },
   { key: 'month', label: 'Este mes' },
+  { key: 'year', label: 'Este ano' },
   { key: 'custom', label: 'Personalizado' },
 ];
 
@@ -233,6 +234,11 @@ function getPhotographerPeriodRange(period: PhotographerPeriodKey, customStart: 
   if (period === 'month') {
     start = startOfDay(new Date(now.getFullYear(), now.getMonth(), 1));
     end = endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0));
+  }
+
+  if (period === 'year') {
+    start = startOfDay(new Date(now.getFullYear(), 0, 1));
+    end = endOfDay(new Date(now.getFullYear(), 11, 31));
   }
 
   if (period === 'custom') {
@@ -644,7 +650,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [selectedProductEventName, setSelectedProductEventName] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState<Set<string>>(() => new Set());
   const [isBulkRemovingProducts, setIsBulkRemovingProducts] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<PhotographerPeriodKey>('week');
+  const [selectedPeriod, setSelectedPeriod] = useState<PhotographerPeriodKey>('year');
   const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
@@ -1875,7 +1881,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5">
                 <StatCard
                   label="Ganhos Totais"
-                  value={formatCurrency(periodMetrics.totalEarnings)}
+                  value={formatCurrency(dashboardMetrics.totalEarnings)}
                   icon={<DollarSign />}
                   trend={`${periodMetrics.platformFeePercent}% taxa plataforma`}
                   accent
@@ -1888,13 +1894,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 />
                 <StatCard
                   label="Fotos No Ar"
-                  value={periodMetrics.publishedMediaCount}
+                  value={visibleProductStats.total}
                   icon={<ImageIcon />}
-                  trend={`${periodMetrics.photoCount} fotos / ${periodMetrics.videoCount} videos`}
+                  trend={`${visibleProductStats.photos} fotos / ${visibleProductStats.videos} videos`}
                 />
                 <StatCard
                   label="Aguardando Resgate"
-                  value={formatCurrency(periodMetrics.pendingEarnings)}
+                  value={formatCurrency(dashboardMetrics.pendingEarnings)}
                   icon={<AlertCircle />}
                   trend="Liberação em 7 dias"
                   warning

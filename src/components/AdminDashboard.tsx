@@ -472,7 +472,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     isActive: true,
   });
   const [isCreatingCoupon, setIsCreatingCoupon] = useState(false);
-  const [selectedPeriod, setSelectedPeriod] = useState<AdminPeriodKey>('week');
+  const [selectedPeriod, setSelectedPeriod] = useState<AdminPeriodKey>('year');
   const [customPeriodStart, setCustomPeriodStart] = useState(() => formatDateInput(startOfDay(new Date())));
   const [customPeriodEnd, setCustomPeriodEnd] = useState(() => formatDateInput(endOfDay(new Date())));
   const [showNotifications, setShowNotifications] = useState(false);
@@ -1982,11 +1982,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 />
                 <AdminStatCardReal
                   label="Total Vídeos"
-                  value={periodMetrics.videoCount}
+                  value={metrics.videoCount}
                   icon={<Camera />}
                   sub="Replays em 4k"
                   trend={adminStatTrends.videos}
-                  previousValue={previousPeriodMetrics.videoCount}
+                  previousValue={metrics.videoCount}
                   bars={adminStatSparklines.videos}
                 />
               </div>

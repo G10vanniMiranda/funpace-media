@@ -2,257 +2,159 @@
 
 ## 1. Visao Geral
 
-O FunPace e uma plataforma para venda de fotos e videos de eventos esportivos, conectando atletas, fotografos e administradores em um fluxo unico. A vitrine publica permite que atletas encontrem suas capturas por numero de peito ou selfie, adicionem produtos ao carrinho e finalizem a compra. O fotografo gerencia suas capturas, acompanha seus ganhos e publica novos produtos. O administrador aprova fotografos, acompanha metricas gerais e controla configuracoes da plataforma.
+O FunPace Media e uma plataforma para comercializacao de fotos e videos de eventos esportivos. A aplicacao conecta atletas, fotografos e administradores em um fluxo unico: publicacao de midias, vitrine publica, carrinho, checkout, confirmacao de pagamento, downloads protegidos e gestao financeira.
 
-Neste momento, o frontend ja possui uma base funcional com dados mocados, simulacao de upload local e interfaces principais para os tres perfis: publico, fotografo e administrador.
+O projeto deixou de ser apenas uma base visual com mocks. A versao atual ja possui integracoes reais com Supabase, storage externo, checkout InfinitePay, painel do cliente, painel do fotografo e painel administrativo. O modo mock continua existindo para desenvolvimento e testes visuais.
 
-## 2. Objetivo do Projeto
+## 2. Estado Atual
 
-Construir uma plataforma digital escalavel para comercializacao de midias esportivas, com foco em:
+### Vitrine Publica
 
-- facilitar a busca de fotos e videos pelos atletas;
-- permitir que fotografos publiquem e gerenciem suas capturas;
-- centralizar o controle administrativo da operacao;
-- preparar a aplicacao para integracao com storage, banco de dados e checkout real;
-- separar claramente o ambiente de testes com mocks do ambiente de producao.
+- Lista fotos e videos publicados no modelo unificado `Product`.
+- Busca por numero de peito.
+- Busca visual por selfie ainda simulada.
+- Carrinho persistido no navegador.
+- Favoritos e likes no navegador, com suporte parcial a favoritos remotos para usuario autenticado.
+- Compartilhamento por link de vitrine.
+- Checkout exige cliente autenticado e dados de compra validos.
 
-## 3. Base Atual do Frontend
+### Checkout E Pagamento
 
-O frontend esta organizado em tres fluxos principais.
+- Checkout principal usa `/api/checkout/create-session`.
+- O backend busca produtos no banco, valida status publicado e recalcula total no servidor.
+- Pedidos nascem em `orders` com itens em `order_items`.
+- InfinitePay cria o link externo de pagamento.
+- Retorno de pagamento usa `/api/checkout/confirm`.
+- Webhook InfinitePay existe em `/api/webhooks/infinitepay`.
+- Downloads sao liberados por `fulfillPaidOrder` depois de pagamento confirmado.
 
-### 3.1 Vitrine Publica
+### Cliente
 
-Arquivo principal: `src/App.tsx`
+- `/minhas-compras` lista pedidos, itens, status, recibo minimo, favoritos e downloads.
+- Pedido pago libera download protegido.
+- Pedido pendente pode exibir link para retomar pagamento.
+- Compartilhamento de item comprado aponta para a vitrine publica, nao para o arquivo privado.
 
-Funcionalidades atuais:
+### Fotografo
 
-- listagem de fotos e videos no formato `Product`;
-- busca por numero de peito;
-- busca por selfie com simulacao visual;
-- carrinho de compras;
-- cadastro de cliente com CPF opcional;
-- checkout com CPF obrigatorio e validacao basica antes de iniciar pagamento;
-- criacao de pedido real em `orders` e itens em `order_items` antes do redirecionamento de pagamento;
-- fluxo de checkout via `/api/checkout/create-session`.
+- Login/cadastro com Supabase Auth e aprovacao.
+- Upload de imagens e videos via `/api/media/upload`.
+- Storage final usa provider externo quando `MEDIA_STORAGE_PROVIDER=external_bucket`.
+- Produto salva URL publica, `storagePath`, thumbnail e metadados.
+- Dashboard mostra produtos, vendas, downloads, saldo e solicitacoes de saque.
+- Saques ficam pendentes para processamento manual pelo admin.
 
-Este fluxo representa a experiencia principal do atleta: encontrar suas midias, selecionar os produtos desejados e iniciar a compra.
+### Administrador
 
-### 3.2 Painel do Fotografo
+- Login exige usuario com `app_metadata.role = admin`.
+- Painel mostra fotografos, pedidos, produtos, metricas, pagamentos, saques, storage e configuracoes.
+- Configuracoes ficam em `platform_settings`.
+- Admin pode confirmar/cancelar pedidos pendentes e marcar saques como pagos/rejeitados.
+- Ainda falta auditoria persistente detalhada das acoes administrativas.
 
-Arquivo principal: `src/components/PhotographerDashboard.tsx`
+## 3. Modelo De Dados Principal
 
-Funcionalidades atuais:
+O modelo vendavel e `Product`, persistido na tabela `products`.
 
-- login e cadastro de fotografo com necessidade de aprovacao;
-- cadastro de fotografo com CPF obrigatorio;
-- acesso ao dashboard do fotografo;
-- visualizacao de produtos e ganhos;
-- cadastro de produto pelo modal **Nova Captura**;
-- upload local de imagens e videos;
-- preview grande da imagem ou video antes da publicacao.
+Campos relevantes:
 
-O painel do fotografo ja contempla o fluxo essencial de publicacao de midias, mas ainda depende de URLs temporarias do navegador enquanto o storage definitivo nao estiver implementado.
+- `id`
+- `name`
+- `price`
+- `url`
+- `type`: `IMG`, `VIDEO` ou `VIEW`
+- `vendedorId`
+- `bib`
+- `event`
+- `checkpoint`
+- `thumbnailUrl`
+- `watermarkUrl`
+- `storagePath`
+- `fileHash`
+- `fileSize`
+- `originalFileName`
+- `status`
+- `favoriteCount`
+- `viewCount`
+- `salesCount`
 
-### 3.3 Painel do Administrador
+Tabelas operacionais importantes:
 
-Arquivo principal: `src/components/AdminDashboard.tsx`
+- `orders`
+- `order_items`
+- `payments`
+- `payment_events`
+- `download_access`
+- `download_events`
+- `downloads`
+- `product_likes`
+- `customer_favorites`
+- `withdrawal_requests`
+- `platform_settings`
 
-Funcionalidades atuais:
+## 4. Validacoes Ja Executadas
 
-- aprovacao de fotografos;
-- consulta de metricas gerais;
-- simulacao de informacoes financeiras;
-- simulacao de configuracoes da plataforma.
+Em 01/06/2026:
 
-O painel administrativo funciona como base para a gestao operacional da plataforma, mas ainda precisa evoluir para dados reais, controles financeiros efetivos e configuracoes persistentes.
+- `npm run lint`: passou.
+- `npm test`: passou com 16 testes.
+- `npm run build`: passou.
+- `npm audit fix`: aplicado; `npm audit` ficou sem vulnerabilidades conhecidas.
+- `npm run supabase:schema:validate`: passou com `ok: true`, sem colunas faltantes, RLS desativado ou policies ausentes.
+- `npm run payments:reconcile`: disponivel em modo dry-run por padrao; use `-- --apply` para aplicar alteracoes.
+- Dry-run da reconciliacao encontrou 24 pedidos pendentes antigos sem `transaction_nsu`/`slug`; estes nao podem ser confirmados automaticamente pelo `payment_check` e precisam de conferencia manual no admin.
+- `npm run backup:db` e `npm run backup:bucket`: comandos operacionais criados para exportar banco em JSON e manifesto do bucket.
 
-## 4. Estrutura de Dados Mocados
+## 5. O Que Falta Para Concluir
 
-Enquanto o storage definitivo e a persistencia real nao estiverem prontos, a aplicacao utiliza dados mocados para desenvolvimento e validacao visual.
+### Prioridade Alta
 
-Arquivo principal: `src/data.ts`
+1. Testar em producao o fluxo completo: cadastro, upload, compra, pagamento, download, venda no fotografo e receita no admin.
+2. Confirmar `INFINITEPAY_WEBHOOK_SECRET` no deploy e testar webhook real.
+3. Agendar o job de reconciliacao de pedidos pendentes consultando InfinitePay para pedidos com `transaction_nsu` e `slug`.
+4. Agendar backup automatizado do banco e do bucket.
+5. Testar restauracao em ambiente separado usando `docs/backup-restauracao.md`.
+6. Registrar auditoria persistente de acoes administrativas.
+7. Manter validacao de schema/RLS no checklist antes de deploy.
 
-Dados disponiveis:
+### Prioridade Media
 
-- `MOCK_PHOTOGRAPHERS`;
-- `MOCK_PHOTOS`;
-- `MOCK_VIDEOS`.
+1. Criar recibo imprimivel em `/pedidos/:id/recibo`.
+2. Criar rota dedicada `/media/:id` para compartilhamento.
+3. Melhorar o retorno de pagamento quando o usuario estiver deslogado.
+4. Persistir likes/favoritos de forma completa por usuario e exibir estatisticas no fotografo/admin.
+5. Adicionar rate limit especifico para upload, download, checkout e acoes sensiveis.
+6. Criar testes de negacao para RLS e permissoes.
 
-O modo de dados e controlado por variavel de ambiente:
-
-- `VITE_DATA_MODE=production`: usa Supabase Auth, Supabase REST e a API de storage configurada por `MEDIA_STORAGE_PROVIDER`.
-- `VITE_DATA_MODE=mock`: usa os dados de `src/data.ts`, sem depender de Supabase para carregar vitrine e paines.
-
-No `PhotographerDashboard`, o preview local ainda utiliza `URL.createObjectURL(file)` para exibir a midia antes da publicacao. Ao publicar, o arquivo e enviado para `/api/media/upload`, que usa o provider definido em `MEDIA_STORAGE_PROVIDER`, e a tabela `products` recebe a URL permanente e o `storagePath`.
-
-Essa abordagem permite testar:
-
-- selecao de imagem;
-- selecao de video;
-- preview do arquivo;
-- listagem visual do produto;
-- cadastro visual antes do envio definitivo.
-
-Observacao importante: URLs criadas com `URL.createObjectURL(file)` continuam sendo temporarias e devem ser usadas apenas para preview. O armazenamento final deve usar a URL gerada pela API de storage configurada no backend.
-
-## 5. Fluxo de Cadastro de Produto
-
-O fluxo atual de cadastro de produto pelo fotografo segue as etapas abaixo:
-
-1. O fotografo acessa o painel.
-2. Clica em **Nova Captura**.
-3. Seleciona uma ou mais imagens ou videos.
-4. Cada arquivo selecionado aparece em uma lista com:
-   - miniatura;
-   - nome do arquivo;
-   - preco individual;
-   - opcao de selecao para preview.
-5. O painel lateral exibe o preview antes da publicacao:
-   - imagens sao renderizadas com `img`;
-   - videos sao renderizados com `video` e controles nativos.
-6. O fotografo preenche as informacoes complementares:
-   - evento ou colecao;
-   - checkpoint ou localizacao.
-   - numero de peito.
-7. Clica em **Publicar Produtos**.
-8. O produto e salvo por meio de `productService.addProduct`.
-
-Esse fluxo ja valida a experiencia principal de publicacao, mas ainda precisa receber campos adicionais e persistencia real para estar pronto para producao.
-
-## 6. Modelo Atual do Produto
-
-O modelo oficial da midia vendavel e a entidade unificada `Product`, definida em `src/types.ts` e persistida na tabela `products` do Supabase. Fotos e videos nao devem ser salvos em tabelas separadas; a diferenca entre eles deve ser controlada pelo campo `type`.
-
-Campos principais:
-
-- `id`;
-- `name`;
-- `price`;
-- `url`;
-- `type`: `IMG`, `VIDEO` ou `VIEW`;
-- `vendedorId`;
-- `bib`;
-- `event`;
-- `checkpoint`;
-- `thumbnailUrl`;
-- `duration`.
-- `storagePath`;
-- `status`: `draft`, `published` ou `removed`.
-
-Convencoes do modelo:
-
-- fotos usam `type: IMG`;
-- videos usam `type: VIDEO`;
-- visualizacoes especiais usam `type: VIEW`;
-- a vitrine separa fotos e videos apenas por filtro de `type`;
-- `vendedorId` representa o fotografo dono do produto;
-- `event` representa o nome do evento ou colecao;
-- `checkpoint` representa o ponto de captura ou localizacao;
-- `bib` representa o numero de peito do atleta.
-
-Esse modelo cobre os dados basicos de uma midia vendavel. Para producao, recomenda-se validar se serao necessarios campos adicionais, como status de publicacao, data de criacao, identificador do storage, metadados do evento e controle de propriedade da midia.
-
-## 7. Analise Tecnica
-
-### Pontos Positivos
-
-- A aplicacao ja esta dividida por perfil de usuario: publico, fotografo e administrador.
-- O fluxo de publicacao de produtos ja possui uma experiencia visual testavel.
-- A estrutura de mocks permite evoluir a interface sem bloquear o desenvolvimento por falta de backend.
-- O modelo `Product` ja contempla imagens, videos e dados de evento.
-- A presenca de carrinho e checkout indica que a jornada de compra ja esta desenhada.
-- As tabelas Supabase `products` e `photographers` ja foram criadas com colunas compativeis com o frontend.
-- As policies RLS basicas para `products` e `photographers` ja foram aplicadas e validadas.
-- O upload de produto passa pelo endpoint `/api/media/upload`, mantendo o token do storage apenas no backend.
-- O upload de produto ja envia arquivos reais para o storage configurado e salva `url`/`storagePath` permanentes em `products`.
-- Videos publicados pelo painel do fotografo ja geram thumbnail JPEG automaticamente e salvam `thumbnailUrl`.
-- O modo mock e o modo producao ja foram separados por `VITE_DATA_MODE`.
-- O modal de cadastro ja possui campo de numero de peito e salva o valor em `Product.bib`.
-- O checkout ja valida produtos reais no banco, recalcula total no servidor e registra pedido pendente antes do pagamento.
-- A estrutura tecnica para eventos de pagamento existe, mas o webhook nao sera usado como requisito nesta fase.
-- O painel do fotografo ja permite editar dados de produtos publicados, incluindo nome, preco, evento, checkpoint, numero de peito e status.
-- O painel do fotografo ja permite remover produtos da vitrine por status `removed`, preservando historico e referencias de pedidos.
-- O painel administrativo ja carrega metricas reais de pedidos e produtos: GMV pago, fees da plataforma, pedidos pendentes, total de pedidos, produtos publicados/removidos e logs financeiros recentes.
-- Clientes autenticados ja conseguem abrir **Minhas Compras** para visualizar historico de pedidos, status, total e retomar pagamento pendente quando houver `checkoutUrl`.
-- O painel do fotografo ja possui busca e filtros por texto, tipo de midia e status na listagem de produtos.
-- O painel administrativo ja permite confirmar manualmente pagamentos pendentes ou cancelar pedidos quando nao houver webhook.
-- Pedidos agora carregam seus itens comprados (`order_items`) e exibem detalhes no historico do cliente e no painel financeiro do administrador.
-- As configuracoes administrativas da plataforma ja sao persistidas no Supabase em `platform_settings`.
-- O painel administrativo ja possui relatorios reais de receita por evento e por fotografo com base nos pedidos pagos.
-
-### Pontos de Atencao
-
-- Parte do financeiro do administrador ainda precisa evoluir para acoes reais de repasse e relatorios.
-- Ainda faltam testes automatizados cobrindo os principais fluxos do frontend.
-- O fluxo de login/cadastro de fotografo ja foi conectado ao Supabase Auth.
-- O login administrativo ja usa Supabase Auth e exige `app_metadata.role = admin`.
-- O usuario administrador real ja deve ter a claim `app_metadata.role = admin` aplicada no Supabase.
-
-## 8. Proximas Etapas
-
-### 8.1 Prioridade Alta
-
-1. Compra real de ponta a ponta com link de pagamento da InfinitePay: concluida em 20/05/2026.
-2. Confirmacao operacional sem depender de webhook nesta fase: usar a verificacao automatica no retorno do checkout quando disponivel e, como fallback operacional, o painel administrativo em **Fluxo de Caixa > Pagamentos Pendentes** para confirmar manualmente pedidos pagos ou cancelar pedidos nao pagos.
-
-### 8.2 Prioridade Media
-
-1. Validar em producao o fluxo completo apos pagamento confirmado: pedido pago, download protegido em **Minhas Compras**, venda no painel do fotografo e receita no admin.
-2. Criar ou revisar testes automatizados para checkout, confirmacao de pagamento, historico de compras, historico financeiro do fotografo e download protegido.
-3. Evoluir o fluxo de repasse/saque para fotografos com regras operacionais finais.
-
-### 8.3 Prioridade Baixa
+### Prioridade Baixa
 
 1. Melhorar filtros da vitrine publica.
-2. Adicionar historico de vendas para o fotografo.
-3. Adicionar relatorios administrativos.
-4. Melhorar configuracoes operacionais da plataforma.
+2. Adicionar recomendacoes com base em favoritos e likes.
+3. Melhorar code splitting para reduzir bundle inicial.
+4. Criar painel de saude operacional.
 
-## 9. Plano de Testes
+## 6. Plano De Testes Recomendado
 
-Os testes de frontend devem cobrir os principais fluxos de uso:
+### Automatizados
 
-- selecionar imagem;
-- selecionar video;
-- trocar item no preview;
-- publicar produto;
-- bloquear publicacao sem arquivo;
-- validar preenchimento de evento ou colecao;
-- validar preenchimento de checkpoint ou localizacao;
-- validar busca por numero de peito;
-- validar comportamento do carrinho;
-- validar inicio do checkout.
+- Unitarios para CPF, telefone, paths de compartilhamento e fluxo de cliente.
+- Testes de backend para checkout, confirmacao, webhook, download e permissoes.
+- Testes de negacao para leitura cruzada de pedidos e edicao de produtos de outro fotografo.
+- E2E com Playwright para cadastro, upload, compra simulada, retorno de pagamento e download.
 
-Com a evolucao para producao, tambem sera necessario testar upload real, persistencia no banco, geracao de thumbnails e integracao com checkout.
+### Manuais Antes De Deploy
 
-## 10. Painel do Administrador
+1. Cadastrar cliente.
+2. Cadastrar/aprovar fotografo.
+3. Publicar foto e video.
+4. Comprar midia pela vitrine.
+5. Confirmar pagamento InfinitePay.
+6. Abrir `/minhas-compras`.
+7. Baixar arquivo comprado.
+8. Conferir venda no painel do fotografo.
+9. Conferir receita e pedido no admin.
+10. Solicitar e processar saque.
 
-O painel do administrador deve evoluir para centralizar a gestao da plataforma. As principais responsabilidades previstas sao:
+## 7. Conclusao
 
-- aprovar ou reprovar fotografos;
-- acompanhar quantidade de produtos publicados;
-- acompanhar vendas e receita;
-- consultar metricas por evento;
-- gerenciar configuracoes da plataforma;
-- acompanhar indicadores financeiros;
-- visualizar possiveis inconsistencias operacionais.
-
-## 11. Painel do Fotografo
-
-O painel do fotografo deve ser o ambiente principal de trabalho para quem publica midias. As principais responsabilidades previstas sao:
-
-- cadastrar fotos e videos;
-- cadastrar CPF do fotografo no credenciamento;
-- informar evento, checkpoint e numero de peito;
-- visualizar produtos publicados;
-- editar produtos;
-- remover produtos;
-- acompanhar ganhos;
-- consultar historico de vendas;
-- acompanhar status de aprovacao do proprio cadastro.
-
-## 12. Conclusao
-
-O projeto FunPace ja possui uma base inicial consistente para validar a jornada principal da plataforma: busca de midias, publicacao por fotografos, carrinho, checkout e administracao. A proxima fase deve concentrar esforcos na substituicao dos mocks por integracoes reais, especialmente storage, banco de dados, thumbnails, checkout e regras administrativas.
-
-Com essas evolucoes, a aplicacao deixara de ser apenas uma simulacao funcional de frontend e passara a operar como uma plataforma preparada para uso real em eventos esportivos.
+O FunPace Media esta funcional como produto em fase pre-operacional. A maior parte da jornada principal ja existe no codigo. O trabalho restante esta concentrado em validacao real de producao, seguranca operacional, backups, auditoria, reconciliacao de pagamentos e cobertura E2E.

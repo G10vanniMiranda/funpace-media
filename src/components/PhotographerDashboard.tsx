@@ -797,7 +797,19 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       }));
   }, [availableEvents]);
   const publishableEvents = React.useMemo(() => (
-    availableEvents.filter((eventItem) => eventItem.status !== 'closed' && eventItem.isPublished !== false)
+    availableEvents
+      .filter((eventItem) => eventItem.status !== 'closed' && eventItem.isPublished !== false)
+      .sort((left, right) => {
+        const leftDate = getTimestamp(left.date);
+        const rightDate = getTimestamp(right.date);
+        if (leftDate !== rightDate) return rightDate - leftDate;
+
+        const leftCreated = getTimestamp(left.createdAt);
+        const rightCreated = getTimestamp(right.createdAt);
+        if (leftCreated !== rightCreated) return rightCreated - leftCreated;
+
+        return left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base' });
+      })
   ), [availableEvents]);
   const visibleProductStats = React.useMemo(() => {
     const activeProducts = products.filter((product) => (product.status ?? 'published') !== 'removed');

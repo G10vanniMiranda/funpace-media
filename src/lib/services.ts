@@ -468,6 +468,37 @@ export const productService = {
     return updated;
   },
 
+  async renameEventProducts(vendedorId: string, previousEventName: string, nextEventName: string): Promise<Product[]> {
+    const previousName = previousEventName.trim();
+    const nextName = nextEventName.trim();
+    if (!vendedorId || !previousName || !nextName || previousName === nextName) {
+      return [];
+    }
+
+    if (isMockMode) {
+      const updatedProducts: Product[] = [];
+      mockProducts = mockProducts.map((item) => {
+        if (item.vendedorId !== vendedorId || item.event !== previousName) return item;
+        const updatedProduct = { ...item, event: nextName };
+        updatedProducts.push(updatedProduct);
+        return updatedProduct;
+      });
+      return updatedProducts;
+    }
+
+    const params = new URLSearchParams({
+      vendedorId: `eq.${vendedorId}`,
+      event: `eq.${previousName}`,
+    });
+    const updated = await supabaseRest.patch<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${params.toString()}&${selectAll}`,
+      { event: nextName },
+      true,
+    );
+
+    return updated;
+  },
+
   async updateProductThumbnail(id: string, thumbnailUrl: string): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);

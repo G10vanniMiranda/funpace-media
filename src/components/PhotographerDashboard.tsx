@@ -1109,6 +1109,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     setIsSavingEvent(true);
     try {
+      const previousEventName = eventForm.id
+        ? availableEvents.find((eventItem) => eventItem.id === eventForm.id)?.name || ''
+        : '';
       const payload = {
         photographerId: photographer.id,
         name: normalizedName,
@@ -1124,6 +1127,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const saved = eventForm.id
         ? await eventService.updateEvent(eventForm.id, payload)
         : await eventService.createEvent(payload);
+
+      if (previousEventName && normalizeCatalogText(previousEventName) !== normalizeCatalogText(saved.name)) {
+        const updatedProducts = await productService.renameEventProducts(photographer.id, previousEventName, saved.name);
+        if (updatedProducts.length > 0) {
+          const updatedById = new Map(updatedProducts.map((product) => [product.id, product]));
+          setProducts((current) => current.map((product) => updatedById.get(product.id) || product));
+        }
+      }
 
       setAvailableEvents((current) => {
         const exists = current.some((eventItem) => eventItem.id === saved.id);

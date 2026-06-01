@@ -70,7 +70,8 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
   for (const groupProducts of productGroups.values()) {
     const name = String(groupProducts[0]?.event || 'Evento sem nome').trim();
     const eventDetail = findEventDetail(name, groupProducts, registeredEvents);
-    const coverProduct = groupProducts.find((product) => product.thumbnailUrl || product.url);
+    const coverProduct = groupProducts.find((product) => product.thumbnailUrl) ||
+      groupProducts.find((product) => product.type === 'IMG' && product.url);
     const fallbackDate = groupProducts.reduce<string | undefined>((latest, product) => {
       if (!product.createdAt) return latest;
       if (!latest) return product.createdAt;
@@ -85,7 +86,7 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
     events.set(normalizeText(name), {
       name,
       checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
-      coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || coverProduct?.url || null,
+      coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || (coverProduct?.type === 'IMG' ? coverProduct.url : null) || null,
       date: eventDetail?.date || fallbackDate,
       createdAt,
       sortTime: getTimestamp(eventDetail?.createdAt) || fallbackSortTime,

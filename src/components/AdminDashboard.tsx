@@ -319,6 +319,7 @@ function buildReportBarChart(title: string, rows: Array<{ label: string; value: 
 async function createThumbnailFromMedia(product: Product): Promise<File> {
   const sourceUrl = product.thumbnailUrl || product.url;
   if (!sourceUrl) throw new Error('Midia sem URL para gerar preview.');
+  const maxPreviewSide = 960;
 
   const response = await fetch(sourceUrl, { mode: 'cors' }).catch((error) => {
     throw new Error(`Nao foi possivel acessar a midia. Verifique CORS/URL publica. ${error?.message || ''}`.trim());
@@ -332,7 +333,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
       return await new Promise<File>((resolve, reject) => {
         const image = new Image();
         image.onload = () => {
-          const maxSide = 520;
+          const maxSide = maxPreviewSide;
           const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
           const width = Math.max(1, Math.round(image.width * scale));
           const height = Math.max(1, Math.round(image.height * scale));
@@ -344,6 +345,8 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
             reject(new Error('Canvas indisponivel.'));
             return;
           }
+          context.imageSmoothingEnabled = true;
+          context.imageSmoothingQuality = 'high';
           context.drawImage(image, 0, 0, width, height);
           canvas.toBlob((thumbBlob) => {
             if (!thumbBlob) {
@@ -351,7 +354,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
               return;
             }
             resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
-          }, 'image/jpeg', 0.68);
+          }, 'image/jpeg', 0.84);
         };
         image.onerror = () => reject(new Error('Imagem invalida.'));
         image.src = objectUrl;
@@ -360,36 +363,76 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
 
     return await new Promise<File>((resolve, reject) => {
       const video = document.createElement('video');
-      video.preload = 'metadata';
-      video.muted = true;
-      video.playsInline = true;
-      video.src = objectUrl;
-      video.onerror = () => reject(new Error('Video invalido.'));
-      video.onloadedmetadata = () => {
-        video.currentTime = Math.min(1, Math.max(0, (video.duration || 1) / 4));
+      let settled = false;
+      let seekRequested = false;
+      const timeout = window.setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        reject(new Error('Tempo esgotado ao gerar preview do video.'));
+      }, 15000);
+      const finish = (callback: () => void) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        callback();
       };
-      video.onseeked = () => {
+      const captureFrame = () => {
         const canvas = document.createElement('canvas');
-        const maxSide = 640;
         const videoWidth = video.videoWidth || 1280;
         const videoHeight = video.videoHeight || 720;
-        const scale = Math.min(1, maxSide / Math.max(videoWidth, videoHeight));
+        const scale = Math.min(1, maxPreviewSide / Math.max(videoWidth, videoHeight));
         canvas.width = Math.max(1, Math.round(videoWidth * scale));
         canvas.height = Math.max(1, Math.round(videoHeight * scale));
         const context = canvas.getContext('2d');
         if (!context) {
-          reject(new Error('Canvas indisponivel.'));
+          finish(() => reject(new Error('Canvas indisponivel.')));
           return;
         }
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         canvas.toBlob((thumbBlob) => {
           if (!thumbBlob) {
-            reject(new Error('Nao foi possivel gerar preview.'));
+            finish(() => reject(new Error('Nao foi possivel gerar preview.')));
             return;
           }
-          resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
-        }, 'image/jpeg', 0.7);
+          finish(() => resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' })));
+        }, 'image/jpeg', 0.82);
       };
+      const seekAndCapture = () => {
+        if (settled || seekRequested) return;
+        seekRequested = true;
+        const duration = Number.isFinite(video.duration) ? video.duration : 0;
+        const targetTime = duration > 0
+          ? Math.min(Math.max(0.25, duration * 0.15), Math.max(0.25, duration - 0.1))
+          : 0;
+        try {
+          if (targetTime > 0) {
+            video.currentTime = targetTime;
+            return;
+          }
+        } catch {
+          // Fallback to the first decodable frame.
+        }
+        captureFrame();
+      };
+      video.preload = 'metadata';
+      video.muted = true;
+      video.playsInline = true;
+      video.setAttribute('muted', '');
+      video.setAttribute('playsinline', '');
+      video.setAttribute('webkit-playsinline', '');
+      video.src = objectUrl;
+      video.onerror = () => finish(() => reject(new Error('Video invalido.')));
+      video.onloadedmetadata = seekAndCapture;
+      video.onloadeddata = () => {
+        if (!seekRequested) seekAndCapture();
+      };
+      video.oncanplay = () => {
+        if (!seekRequested) seekAndCapture();
+      };
+      video.onseeked = captureFrame;
+      video.load();
     });
   } finally {
     URL.revokeObjectURL(objectUrl);

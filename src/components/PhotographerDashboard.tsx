@@ -96,6 +96,10 @@ const imageCompressionMaxBytes = 900 * 1024;
 const imageCompressionMaxSide = 2200;
 const minImageCompressionSide = 900;
 const imageCompressionQualities = [0.82, 0.74, 0.66, 0.58, 0.5, 0.42];
+const imagePreviewMaxSide = 960;
+const imagePreviewQuality = 0.84;
+const videoPreviewMaxSide = 960;
+const videoPreviewQuality = 0.82;
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
@@ -291,57 +295,88 @@ async function generateVideoThumbnail(file: File): Promise<File | null> {
   return new Promise((resolve) => {
     const video = document.createElement('video');
     const objectUrl = URL.createObjectURL(file);
+    let settled = false;
+    let seekRequested = false;
+    let timeout = 0;
 
-    const cleanup = () => {
+    const finish = (thumbnail: File | null) => {
+      if (settled) return;
+      settled = true;
+      if (timeout) window.clearTimeout(timeout);
       URL.revokeObjectURL(objectUrl);
       video.removeAttribute('src');
       video.load();
+      resolve(thumbnail);
     };
 
-    video.preload = 'metadata';
-    video.muted = true;
-    video.playsInline = true;
-    video.src = objectUrl;
-
-    video.onerror = () => {
-      cleanup();
-      resolve(null);
-    };
-
-    video.onloadedmetadata = () => {
-      const targetTime = Math.min(1, Math.max(0, (video.duration || 1) / 4));
-      video.currentTime = targetTime;
-    };
-
-    video.onseeked = () => {
+    const captureFrame = () => {
       const canvas = document.createElement('canvas');
-      const maxSide = 640;
       const videoWidth = video.videoWidth || 1280;
       const videoHeight = video.videoHeight || 720;
-      const scale = Math.min(1, maxSide / Math.max(videoWidth, videoHeight));
+      const scale = Math.min(1, videoPreviewMaxSide / Math.max(videoWidth, videoHeight));
       canvas.width = Math.max(1, Math.round(videoWidth * scale));
       canvas.height = Math.max(1, Math.round(videoHeight * scale));
       const context = canvas.getContext('2d');
 
       if (!context) {
-        cleanup();
-        resolve(null);
+        finish(null);
         return;
       }
 
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       canvas.toBlob((blob) => {
-        cleanup();
-
         if (!blob) {
-          resolve(null);
+          finish(null);
           return;
         }
 
         const thumbnailName = file.name.replace(/\.[^.]+$/, '') || 'video';
-        resolve(new File([blob], `${thumbnailName}-thumb.jpg`, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.7);
+        finish(new File([blob], `${thumbnailName}-thumb.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', videoPreviewQuality);
     };
+
+    const seekAndCapture = () => {
+      if (settled || seekRequested) return;
+      seekRequested = true;
+
+      const duration = Number.isFinite(video.duration) ? video.duration : 0;
+      const targetTime = duration > 0
+        ? Math.min(Math.max(0.25, duration * 0.15), Math.max(0.25, duration - 0.1))
+        : 0;
+
+      try {
+        if (targetTime > 0) {
+          video.currentTime = targetTime;
+          return;
+        }
+      } catch {
+        // Some mobile browsers disallow seeking before enough data is decoded.
+      }
+
+      captureFrame();
+    };
+
+    video.preload = 'metadata';
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+    video.src = objectUrl;
+
+    timeout = window.setTimeout(() => finish(null), 15000);
+    video.onerror = () => finish(null);
+    video.onloadedmetadata = seekAndCapture;
+    video.onloadeddata = () => {
+      if (!seekRequested) seekAndCapture();
+    };
+    video.oncanplay = () => {
+      if (!seekRequested) seekAndCapture();
+    };
+    video.onseeked = captureFrame;
+    video.load();
   });
 }
 
@@ -355,7 +390,7 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
 
-      const maxSide = 520;
+      const maxSide = imagePreviewMaxSide;
       const scale = Math.min(1, maxSide / Math.max(image.width, image.height));
       const width = Math.max(1, Math.round(image.width * scale));
       const height = Math.max(1, Math.round(image.height * scale));
@@ -369,6 +404,8 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
         return;
       }
 
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
       context.drawImage(image, 0, 0, width, height);
       context.save();
       context.translate(width / 2, height / 2);
@@ -390,7 +427,7 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
 
         const thumbnailName = file.name.replace(/\.[^.]+$/, '') || 'foto';
         resolve(new File([blob], `${thumbnailName}-preview.jpg`, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.68);
+      }, 'image/jpeg', imagePreviewQuality);
     };
 
     image.onerror = () => {
@@ -747,7 +784,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     return groupedFilteredProducts.map(({ eventName, products: groupProducts }) => {
       const eventDetail = eventDetails.get(normalizeCatalogText(eventName));
-      const coverProduct = groupProducts.find((product) => product.thumbnailUrl || product.url);
+      const coverProduct = groupProducts.find((product) => product.thumbnailUrl) ||
+        groupProducts.find((product) => product.type === 'IMG' && product.url);
       const fallbackDate = groupProducts.reduce<string | undefined>((latest, product) => {
         if (!product.createdAt) return latest;
         if (!latest) return product.createdAt;
@@ -757,7 +795,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       return {
         name: eventName,
         checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
-        coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || coverProduct?.url || null,
+        coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || (coverProduct?.type === 'IMG' ? coverProduct.url : null) || null,
         dateLabel: formatCatalogDate(eventDetail?.date || fallbackDate),
         createdAtLabel: formatCreatedOrderLabel(eventDetail?.createdAt || fallbackDate),
         photos: groupProducts.filter((product) => product.type === 'IMG').length,
@@ -1459,6 +1497,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const uploadBatchId = crypto.randomUUID();
       const currentBatchHashes = new Set<string>();
       const failedUploads: Array<{ index: number; name: string; message: string }> = [];
+      const previewWarnings: Array<{ name: string; message: string }> = [];
 
       for (const [index, item] of selectedFiles.entries()) {
         try {
@@ -1481,7 +1520,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           }
 
           const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile, { fileHash, uploadBatchId });
-          const thumbnailFile = await generateMediaThumbnail(uploadFile);
+          let thumbnailFile: File | null = null;
+          try {
+            thumbnailFile = await generateMediaThumbnail(uploadFile);
+          } catch (thumbnailError) {
+            console.warn(`Preview nao gerado para ${item.name}:`, thumbnailError);
+          }
+          if (!thumbnailFile) {
+            previewWarnings.push({
+              name: item.name,
+              message: uploadFile.type.startsWith('video')
+                ? 'Preview do video nao foi gerado; o card usara fallback visual ate o reparo.'
+                : 'Preview da foto nao foi gerado; o card usara a midia original protegida como fallback.',
+            });
+          }
           const thumbnailHash = thumbnailFile ? await calculateFileSha256(thumbnailFile) : null;
           const uploadedThumbnail = thumbnailFile
             ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
@@ -1537,14 +1589,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const failedIndexes = new Set(failedUploads.map((failure) => failure.index));
         setSelectedFiles((current) => current.filter((_, index) => failedIndexes.has(index)));
         setPreviewIndex(0);
-        alert(`Upload parcial: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s), ${failedUploads.length} falharam. Os arquivos com falha ficaram selecionados para tentar novamente. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
+        const previewWarningText = previewWarnings.length > 0
+          ? ` ${previewWarnings.length} preview(s) dos arquivos publicados ficaram com fallback visual.`
+          : '';
+        alert(`Upload parcial: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s), ${failedUploads.length} falharam.${previewWarningText} Os arquivos com falha ficaram selecionados para tentar novamente. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);
         setShowUploadModal(false);
+        const previewWarningText = previewWarnings.length > 0
+          ? ` ${previewWarnings.length} preview(s) nao foram gerados e ficaram com fallback visual.`
+          : '';
         alert(skippedDuplicateCount > 0
-          ? `Upload concluido: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).`
-          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s).`);
+          ? `Upload concluido: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
+          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s).${previewWarningText}`);
       }
     } catch (error) {
       console.error("Erro no upload:", error);

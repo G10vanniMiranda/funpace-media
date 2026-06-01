@@ -25,9 +25,12 @@ export function ProtectedVideoPreview({
   const [isActive, setIsActive] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
   const [canPreview, setCanPreview] = React.useState(Boolean(src));
+  const hasPoster = Boolean(poster);
 
   React.useEffect(() => {
     setCanPreview(Boolean(src));
+    setIsActive(false);
+    setIsLoading(false);
   }, [src]);
 
   const stopPreview = React.useCallback(() => {
@@ -65,7 +68,7 @@ export function ProtectedVideoPreview({
 
   return (
     <ProtectedMedia
-      src={poster || src}
+      src={poster || null}
       alt={alt}
       type="VIDEO"
       watermark={watermark}
@@ -85,6 +88,7 @@ export function ProtectedVideoPreview({
           controlsList="nodownload noplaybackrate noremoteplayback"
           draggable={false}
           onContextMenu={(event) => event.preventDefault()}
+          onLoadedMetadata={() => setIsLoading(false)}
           onLoadedData={() => setIsLoading(false)}
           onCanPlay={() => setIsLoading(false)}
           onError={() => {
@@ -94,6 +98,10 @@ export function ProtectedVideoPreview({
           onTimeUpdate={handleTimeUpdate}
           className={`protected-media__asset absolute inset-0 h-full w-full object-cover transition-opacity duration-300 ${isActive ? 'opacity-100' : 'opacity-0'}`}
         />
+      )}
+
+      {!hasPoster && !isActive && canPreview && (
+        <div className="pointer-events-none absolute inset-0 bg-linear-to-t from-brutal-black/70 via-brutal-black/15 to-transparent" />
       )}
 
       <button

@@ -29,19 +29,6 @@ function normalizeText(value: string) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
-function formatDate(value?: string) {
-  if (!value) return 'DATA A CONFIRMAR';
-
-  const date = new Date(value.includes('T') ? value : `${value}T12:00:00`);
-  if (Number.isNaN(date.getTime())) return 'DATA A CONFIRMAR';
-
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-  }).format(date).replace('.', '').toUpperCase();
-}
-
 function getTimestamp(value?: string | null) {
   if (!value) return 0;
   const timestamp = new Date(value.includes('T') ? value : `${value}T12:00:00`).getTime();
@@ -181,9 +168,9 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
               key={event.name}
               type="button"
               onClick={() => onSelectEvent(event.name)}
-              className="group bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
+              className="group flex h-full flex-col bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
             >
-              <div className="relative aspect-4/3 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
+              <div className="relative aspect-[4/3] w-full shrink-0 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
                 {event.coverUrl ? (
                   <ProtectedMedia
                     src={event.coverUrl}
@@ -192,7 +179,7 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                     loading="lazy"
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
-                    imgClassName="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500"
+                    imgClassName="block w-full h-full object-cover object-center opacity-85 group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -200,9 +187,6 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                   </div>
                 )}
                 <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent" />
-                <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest">
-                  {formatDate(event.date || event.createdAt)}
-                </div>
                 <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[10px] uppercase font-bold">
                     <Camera className="w-3 h-3" />
@@ -215,17 +199,17 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                 </div>
               </div>
 
-              <div className="p-5">
+              <div className="flex flex-1 flex-col p-5">
                 <div className="flex items-center gap-2 text-gray-500 mb-3">
                   <MapPin className="w-4 h-4 text-brutal-accent shrink-0" />
                   <p className="font-mono text-[10px] uppercase tracking-widest truncate">
                     {event.checkpoint}
                   </p>
                 </div>
-                <h3 className="font-display text-xl uppercase leading-tight min-h-12">
+                <h3 className="font-display text-xl uppercase leading-tight min-h-[4.5rem]">
                   {event.name}
                 </h3>
-                <div className="mt-5 pt-4 border-t border-gray-100 flex items-center justify-between">
+                <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
                     {event.items} midias
                   </p>

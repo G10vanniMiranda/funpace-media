@@ -1578,7 +1578,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       await onRefresh();
     } catch (error) {
       console.error(error);
-      alert('Nao foi possivel atualizar o pedido.');
+      const message = error instanceof Error ? error.message : String(error || '');
+      alert(message || 'Nao foi possivel atualizar o pedido.');
     } finally {
       setUpdatingOrderId(null);
     }

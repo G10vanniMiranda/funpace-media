@@ -100,9 +100,14 @@ function getWebhookToken(req: any) {
 }
 
 function isValidWebhookSignature(req: any, payload: any) {
+  const requireAuth = process.env.INFINITEPAY_WEBHOOK_REQUIRE_AUTH === 'true';
   const secret = process.env.INFINITEPAY_WEBHOOK_SECRET || process.env.INFINITEPAY_WEBHOOK_TOKEN || '';
+  if (!requireAuth) {
+    return true;
+  }
+
   if (!secret) {
-    return process.env.NODE_ENV !== 'production' || process.env.INFINITEPAY_ALLOW_UNSIGNED_WEBHOOKS === 'true';
+    return process.env.NODE_ENV !== 'production';
   }
 
   const token = getWebhookToken(req);
@@ -166,7 +171,7 @@ export default async function handler(req: any, res: any) {
 
   const payload = getJsonBody(req);
   if (!isValidWebhookSignature(req, payload)) {
-    return res.status(401).json({ error: 'Assinatura do webhook invalida.' });
+    return res.status(401).json({ error: 'Assinatura do webhook invalida.', received: false });
   }
 
   const orderId = getPayloadValue(payload, [
@@ -194,7 +199,7 @@ export default async function handler(req: any, res: any) {
   ]);
 
   if (!isUuid(orderId)) {
-    return res.status(400).json({ error: 'Pedido invalido no webhook.' });
+    return res.status(400).json({ error: 'Pedido invalido no webhook.', received: false });
   }
 
   if (!transactionNsu || !slug) {
@@ -213,6 +218,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(400).json({
       success: false,
+      received: false,
       orderId,
       status: 'pending',
       message: 'Dados de pagamento incompletos no webhook.',
@@ -237,7 +243,13 @@ export default async function handler(req: any, res: any) {
       payload: { ...payload, payment_check_error: error?.message || 'payment_check_failed' },
     });
 
-    return res.status(502).json({ error: error?.message || 'Falha ao validar webhook na InfinitePay.' });
+    return res.status(400).json({
+      success: false,
+      received: false,
+      orderId,
+      status: 'pending',
+      error: error?.message || 'Falha ao validar webhook na InfinitePay.',
+    });
   }
 
   const eventId = getWebhookEventId(payload, orderId, status, transactionNsu);

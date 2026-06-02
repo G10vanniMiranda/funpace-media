@@ -67,7 +67,12 @@ async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise
     },
   });
   const raw = await response.text();
-  const data = raw ? JSON.parse(raw) : null;
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = raw;
+  }
   if (!response.ok) throw new Error(data?.message || data?.hint || raw || `Supabase HTTP ${response.status}`);
   return data as T;
 }
@@ -91,13 +96,22 @@ export default async function handler(req: any, res: any) {
     const orderId = String(body.orderId || '').trim();
     const status = String(body.status || '').trim();
     if (!orderId || !status) return res.status(400).json({ error: 'Pedido e status sao obrigatorios.' });
+    if (!['pending', 'paid', 'failed', 'cancelled', 'canceled', 'refused', 'refunded'].includes(status)) {
+      return res.status(400).json({ error: 'Status de pedido invalido.' });
+    }
+
+    const manualPaymentId = `manual:${orderId}`;
+    const orderPatch: Record<string, any> = { status, updatedAt: new Date().toISOString() };
+    if (status === 'paid') {
+      orderPatch.paymentExternalId = manualPaymentId;
+    }
 
     const [updated] = await supabaseRequest<any[]>(
       `/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=*`,
       {
         method: 'PATCH',
         headers: { Prefer: 'return=representation' },
-        body: JSON.stringify({ status, updatedAt: new Date().toISOString() }),
+        body: JSON.stringify(orderPatch),
       },
     );
 
@@ -107,7 +121,7 @@ export default async function handler(req: any, res: any) {
       await recordPayment({
         orderId,
         provider: updated.paymentProvider || 'manual',
-        providerPaymentId: updated.paymentExternalId || `manual:${orderId}`,
+        providerPaymentId: updated.paymentExternalId || manualPaymentId,
         method: updated.paymentMethod || 'pix',
         status: 'paid',
         rawResponse: {
@@ -115,6 +129,29 @@ export default async function handler(req: any, res: any) {
           actorId: adminUser.id,
           actorEmail: adminUser.email,
         },
+      });
+      await supabaseRequest(`/rest/v1/payments?orderId=eq.${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status: 'paid',
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+      await supabaseRequest('/rest/v1/payment_events?on_conflict=provider,eventId', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          provider: updated.paymentProvider || 'manual',
+          eventId: `${orderId}:admin-status-paid`,
+          orderId,
+          status: 'paid',
+          payload: {
+            source: 'admin_status_update',
+            actorId: adminUser.id,
+            actorEmail: adminUser.email,
+          },
+        }),
       });
       await fulfillPaidOrder(orderId);
     }

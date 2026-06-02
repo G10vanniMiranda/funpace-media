@@ -1,6 +1,6 @@
-import { infinitePayProvider } from '../../server/payments/providers/infinitepay.ts';
-import { fulfillPaidOrder, recordPayment } from '../../server/shared/checkoutFulfillment.ts';
-import { supabaseRequest } from '../../server/shared/utils.ts';
+import { infinitePayProvider } from '../../payments/providers/infinitepay.ts';
+import { fulfillPaidOrder, recordPayment } from '../../shared/checkoutFulfillment.ts';
+import { supabaseRequest } from '../../shared/utils.ts';
 
 function isAuthorized(req: any) {
   const secret = process.env.CRON_SECRET || process.env.PAYMENTS_RECONCILE_SECRET || '';

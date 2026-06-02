@@ -6,11 +6,35 @@
   },
   "crons": [
     {
-      "path": "/api/payments/reconcile?limit=50&minAgeMinutes=5",
-      "schedule": "*/5 * * * *"
+      "path": "/api/payments/reconcile",
+      "schedule": "0 3 * * *"
     }
   ],
   "rewrites": [
+    {
+      "source": "/api/health",
+      "destination": "/api/system?route=health"
+    },
+    {
+      "source": "/api/checkout/debug",
+      "destination": "/api/system?route=checkout-debug"
+    },
+    {
+      "source": "/api/payments/reconcile",
+      "destination": "/api/system?route=payments-reconcile"
+    },
+    {
+      "source": "/api/admin/snapshot",
+      "destination": "/api/admin?route=snapshot"
+    },
+    {
+      "source": "/api/admin/orders/status",
+      "destination": "/api/admin?route=orders-status"
+    },
+    {
+      "source": "/api/admin/payments/recovery",
+      "destination": "/api/admin?route=payments-recovery"
+    },
     {
       "source": "/api/:path*",
       "destination": "/api/:path*"

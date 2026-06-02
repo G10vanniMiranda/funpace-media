@@ -894,6 +894,7 @@ export interface CreateCheckoutInput {
   successUrl: string;
   cancelUrl?: string;
   paymentMethod?: CheckoutPaymentMethod;
+  couponCode?: string;
 }
 
 export interface CreateCheckoutResult {

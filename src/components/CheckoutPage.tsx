@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, ArrowRight, Copy, CreditCard, ExternalLink, Image as ImageIcon, Loader2, QrCode, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Copy, CreditCard, ExternalLink, Image as ImageIcon, Loader2, QrCode, ShieldCheck, Smartphone, Tag, Trash2 } from 'lucide-react';
 import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
@@ -11,7 +11,7 @@ import { CheckoutPaymentMethod, CreateCheckoutResult } from '../lib/services';
 interface CheckoutPageProps {
   cartItems: Product[];
   onRemoveItem: (id: string) => void;
-  onCheckout: (buyer: Buyer, paymentMethod: CheckoutPaymentMethod) => Promise<CreateCheckoutResult>;
+  onCheckout: (buyer: Buyer, paymentMethod: CheckoutPaymentMethod, couponCode?: string) => Promise<CreateCheckoutResult>;
   onLoginRequested: () => void;
 }
 
@@ -56,6 +56,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const [submittingMethod, setSubmittingMethod] = useState<CheckoutPaymentMethod | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<CreateCheckoutResult | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [couponCode, setCouponCode] = useState('');
 
   useEffect(() => {
     setFullName(user?.displayName || titleCaseFromEmail(user?.email));
@@ -83,12 +84,13 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
     setSubmittingMethod(paymentMethod);
     setCheckoutResult(null);
     try {
+      const normalizedCoupon = couponCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
       const result = await onCheckout({
         fullName: fullName.trim(),
         email: email.trim().toLowerCase(),
         phone: phoneDigits,
         cpf,
-      }, paymentMethod);
+      }, paymentMethod, normalizedCoupon || undefined);
 
       setCheckoutResult(result);
       if (paymentMethod !== 'pix' || !result.pix?.qrCode) {
@@ -282,13 +284,31 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
           )}
 
           <div className="border-t-2 border-brutal-black pt-5 space-y-3">
+            <div className="bg-gray-50 brutal-border-thin p-4 space-y-3">
+              <label className="flex items-center gap-2 font-mono text-[10px] uppercase font-bold text-gray-500">
+                <Tag className="h-4 w-4 text-brutal-accent" />
+                Cupom de desconto
+              </label>
+              <input
+                value={couponCode}
+                onChange={(event) => setCouponCode(event.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, ''))}
+                placeholder="FUNPACE10"
+                maxLength={40}
+                className="h-12 w-full bg-white brutal-border px-4 font-mono text-sm uppercase outline-none focus:bg-gray-50"
+              />
+              {couponCode.trim() && (
+                <p className="font-mono text-[9px] uppercase leading-relaxed text-gray-500">
+                  O cupom sera validado antes de abrir o pagamento seguro.
+                </p>
+              )}
+            </div>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Subtotal</span>
               <span>R$ {total.toFixed(2).replace('.', ',')}</span>
             </div>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Descontos</span>
-              <span>R$ 0,00</span>
+              <span>{checkoutResult?.discountTotal ? `- R$ ${checkoutResult.discountTotal.toFixed(2).replace('.', ',')}` : 'R$ 0,00'}</span>
             </div>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Entrega</span>
@@ -296,7 +316,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             </div>
             <div className="flex justify-between items-end pt-3">
               <span className="font-mono text-sm uppercase text-gray-500 font-bold tracking-widest">Total</span>
-              <span className="font-display text-4xl">R$ {total.toFixed(2).replace('.', ',')}</span>
+              <span className="font-display text-4xl">R$ {(checkoutResult?.total ?? total).toFixed(2).replace('.', ',')}</span>
             </div>
           </div>
 

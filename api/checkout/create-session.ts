@@ -65,6 +65,14 @@ function onlyCpfDigits(value: string | null | undefined) {
   return (value ?? '').replace(/\D/g, '').slice(0, 11);
 }
 
+function roundMoney(value: number) {
+  return Number(value.toFixed(2));
+}
+
+function normalizeCouponCode(value: unknown) {
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
+}
+
 function isValidCartProductId(value: unknown) {
   return typeof value === 'string' &&
     value.trim().length > 0 &&
@@ -180,6 +188,69 @@ function extractPix(payload: any) {
   const expiresAt = String(payload?.pix?.expires_at || payload?.pix_expires_at || payload?.expires_at || '').trim();
   if (!qrCode && !qrCodeImage) return null;
   return { qrCode, qrCodeImage, expiresAt };
+}
+
+async function validateCoupon(input: { code: string; subtotal: number; itemCount: number }) {
+  const code = normalizeCouponCode(input.code);
+  if (!code) return { coupon: null, discountTotal: 0 };
+  if (code.length < 3) throw new Error('Cupom invalido.');
+
+  const rows = await supabaseRequest<any[]>(
+    `/rest/v1/coupons?select=*&code=eq.${encodeURIComponent(code)}&limit=1`,
+  );
+  const coupon = rows[0];
+  if (!coupon || !coupon.isActive) throw new Error('Cupom invalido ou inativo.');
+
+  const now = Date.now();
+  if (coupon.startsAt && new Date(coupon.startsAt).getTime() > now) {
+    throw new Error('Cupom ainda nao esta valido.');
+  }
+  if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) {
+    throw new Error('Cupom expirado.');
+  }
+  if (coupon.maxUses !== null && coupon.maxUses !== undefined && Number(coupon.usedCount || 0) >= Number(coupon.maxUses)) {
+    throw new Error('Cupom esgotado.');
+  }
+
+  const subtotalCents = Math.round(input.subtotal * 100);
+  const minimumTotalCents = Math.max(101, input.itemCount);
+  const maxDiscountCents = Math.max(0, subtotalCents - minimumTotalCents);
+  const requestedDiscountCents = coupon.type === 'percent'
+    ? Math.floor(subtotalCents * Math.min(100, Math.max(0, Number(coupon.value))) / 100)
+    : Math.round(Number(coupon.value) * 100);
+  const discountCents = Math.min(maxDiscountCents, Math.max(0, requestedDiscountCents));
+
+  if (discountCents <= 0) throw new Error('Cupom nao pode ser aplicado a este carrinho.');
+  return { coupon, discountTotal: roundMoney(discountCents / 100) };
+}
+
+function applyDiscountToProducts(products: any[], discountTotal: number) {
+  const discountCents = Math.round(discountTotal * 100);
+  if (discountCents <= 0) return products.map((product) => ({ ...product, checkoutPrice: roundMoney(Number(product.price || 0)) }));
+
+  const subtotalCents = products.reduce((sum, product) => sum + Math.round(Number(product.price || 0) * 100), 0);
+  let remainingDiscount = discountCents;
+  const adjusted = products.map((product, index) => {
+    const originalCents = Math.round(Number(product.price || 0) * 100);
+    const proportional = index === products.length - 1
+      ? remainingDiscount
+      : Math.floor(discountCents * originalCents / subtotalCents);
+    const itemDiscount = Math.min(Math.max(0, proportional), Math.max(0, originalCents - 1), remainingDiscount);
+    remainingDiscount -= itemDiscount;
+    return { ...product, checkoutPrice: roundMoney((originalCents - itemDiscount) / 100) };
+  });
+
+  for (const product of adjusted) {
+    if (remainingDiscount <= 0) break;
+    const cents = Math.round(Number(product.checkoutPrice || 0) * 100);
+    const extra = Math.min(remainingDiscount, Math.max(0, cents - 1));
+    if (extra > 0) {
+      product.checkoutPrice = roundMoney((cents - extra) / 100);
+      remainingDiscount -= extra;
+    }
+  }
+
+  return adjusted;
 }
 
 function mapStatusFromProvider(payload: any): PaymentStatus {
@@ -393,7 +464,7 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const { items, successUrl, cancelUrl, buyer, paymentMethod: rawPaymentMethod } = getJsonBody(req);
+    const { items, successUrl, cancelUrl, buyer, paymentMethod: rawPaymentMethod, couponCode } = getJsonBody(req);
     const authUser = await getAuthenticatedRequestUser(req);
     const paymentMethod: PaymentMethod = rawPaymentMethod === 'pix' || rawPaymentMethod === 'credit_card' ? rawPaymentMethod : 'checkout';
 
@@ -426,10 +497,19 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Um ou mais produtos nao estao disponiveis.' });
     }
 
-    const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
-    if (total <= 1) {
+    const subtotal = roundMoney(products.reduce((sum: number, product: any) => sum + Number(product.price), 0));
+    if (subtotal <= 1) {
       return res.status(400).json({ error: 'A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.' });
     }
+    let couponResult;
+    try {
+      couponResult = await validateCoupon({ code: couponCode, subtotal, itemCount: products.length });
+    } catch (error: any) {
+      return res.status(400).json({ error: error?.message || 'Cupom invalido.' });
+    }
+    const discountTotal = couponResult.discountTotal;
+    const total = roundMoney(subtotal - discountTotal);
+    const checkoutProducts = applyDiscountToProducts(products, discountTotal);
 
     const buyerName = String(buyer.fullName).trim();
     const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
@@ -463,8 +543,8 @@ export default async function handler(req: any, res: any) {
         buyerPhone,
         buyerCpf,
         total,
-        subtotal: total,
-        discountTotal: 0,
+        subtotal,
+        discountTotal,
         status: 'pending',
         paymentMethod,
         paymentProvider: process.env.PAYMENT_PROVIDER || 'infinitepay',
@@ -478,12 +558,12 @@ export default async function handler(req: any, res: any) {
 
     await supabaseRequest('/rest/v1/order_items', {
       method: 'POST',
-      body: JSON.stringify(products.map((product: any) => ({
+      body: JSON.stringify(checkoutProducts.map((product: any) => ({
         orderId,
         productId: product.id,
         name: product.name,
         type: product.type,
-        price: product.price,
+        price: product.checkoutPrice,
         url: product.url,
         vendedorId: product.vendedorId,
         bib: product.bib,
@@ -505,10 +585,10 @@ export default async function handler(req: any, res: any) {
           phone: buyerPhone,
           cpf: buyerCpf,
         },
-        items: products.map((product: any) => ({
+        items: checkoutProducts.map((product: any) => ({
           id: product.id,
           name: product.name,
-          price: Number(product.price),
+          price: Number(product.checkoutPrice),
         })),
         paymentMethod,
         successUrl: successRedirectUrl,
@@ -544,13 +624,25 @@ export default async function handler(req: any, res: any) {
       }),
     });
 
+    if (couponResult.coupon) {
+      const nextUsedCount = Number(couponResult.coupon.usedCount || 0) + 1;
+      await supabaseRequest(`/rest/v1/coupons?id=eq.${couponResult.coupon.id}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ usedCount: nextUsedCount }),
+      }).catch((error) => {
+        console.error('Nao foi possivel atualizar uso do cupom:', error);
+      });
+    }
+
     return res.status(200).json({
       url: paymentResult.checkoutUrl,
       paymentUrl: paymentResult.checkoutUrl,
       orderId,
       total,
-      subtotal: total,
-      discountTotal: 0,
+      subtotal,
+      discountTotal,
+      couponCode: couponResult.coupon?.code || null,
       paymentMethod,
       provider: paymentResult.provider,
       status: paymentResult.status,

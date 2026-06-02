@@ -496,7 +496,7 @@ function Storefront() {
     setSelfieFile(null);
   };
 
-  const handleCheckout = async (buyer: Buyer, paymentMethod: CheckoutPaymentMethod = 'checkout') => {
+  const handleCheckout = async (buyer: Buyer, paymentMethod: CheckoutPaymentMethod = 'checkout', couponCode?: string) => {
     setIsLoading(true);
     try {
       if (!user?.email) {
@@ -523,6 +523,7 @@ function Storefront() {
         successUrl: `${window.location.origin}/pagamento/sucesso`,
         cancelUrl: `${window.location.origin}?payment=cancel`,
         paymentMethod,
+        couponCode,
       });
 
       return result;

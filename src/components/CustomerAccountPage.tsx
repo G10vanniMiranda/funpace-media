@@ -68,7 +68,14 @@ function itemToProduct(item: NonNullable<Order['items']>[number]): Product {
   };
 }
 
-async function authorizeDownload(orderId: string, orderItemId: string) {
+type AuthorizedDownload = {
+  downloadUrl: string;
+  inlineUrl: string;
+  saveUrl: string;
+  filename: string;
+};
+
+async function authorizeDownload(orderId: string, orderItemId: string): Promise<AuthorizedDownload> {
   const accessToken = await getCurrentAccessToken();
   const response = await fetch('/api/downloads/authorize', {
     method: 'POST',
@@ -82,17 +89,21 @@ async function authorizeDownload(orderId: string, orderItemId: string) {
   if (!response.ok || !payload?.url) {
     throw new Error(payload?.error || 'Nao foi possivel liberar o download.');
   }
-  return String(payload.url);
+  return {
+    downloadUrl: String(payload.downloadUrl || payload.url),
+    inlineUrl: String(payload.inlineUrl || payload.url),
+    saveUrl: String(payload.saveUrl || payload.inlineUrl || payload.url),
+    filename: String(payload.filename || 'funpace-media'),
+  };
 }
 
-async function downloadUrl(url: string, filename: string) {
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  a.rel = 'noopener noreferrer';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+function triggerBrowserDownload(url: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.rel = 'noopener noreferrer';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 export function CustomerAccountPage({
@@ -117,6 +128,8 @@ export function CustomerAccountPage({
   const [avatarUrl, setAvatarUrl] = React.useState(currentUser?.photoURL || '');
   const [password, setPassword] = React.useState('');
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
+  const [downloadingItemId, setDownloadingItemId] = React.useState<string | null>(null);
+  const [downloadError, setDownloadError] = React.useState<{ orderId: string; itemId: string; message: string } | null>(null);
   const highlightedOrderId = React.useMemo(() => new URLSearchParams(location.search).get('order'), [location.search]);
 
   const loadAccount = React.useCallback(async () => {
@@ -191,18 +204,40 @@ export function CustomerAccountPage({
   };
 
   const downloadItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    setDownloadingItemId(item.id);
+    setDownloadError(null);
     try {
-      const url = await authorizeDownload(order.id, item.id);
-      await downloadUrl(url, item.name || 'funpace-media');
+      const authorized = await authorizeDownload(order.id, item.id);
+      triggerBrowserDownload(authorized.downloadUrl);
       showToast('Download iniciado.', 'success');
     } catch (error: any) {
-      showToast(error?.message || 'Download nao autorizado.', 'error');
+      const message = error?.message || 'Download nao autorizado.';
+      setDownloadError({ orderId: order.id, itemId: item.id, message });
+      showToast(message, 'error');
+    } finally {
+      setDownloadingItemId(null);
+    }
+  };
+
+  const openItemForSaving = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    setDownloadingItemId(item.id);
+    setDownloadError(null);
+    try {
+      const authorized = await authorizeDownload(order.id, item.id);
+      window.location.assign(authorized.saveUrl);
+    } catch (error: any) {
+      const message = error?.message || 'Nao foi possivel abrir a imagem.';
+      setDownloadError({ orderId: order.id, itemId: item.id, message });
+      showToast(message, 'error');
+    } finally {
+      setDownloadingItemId(null);
     }
   };
 
   const downloadOrder = async (order: Order) => {
     for (const item of order.items ?? []) {
       await downloadItem(order, item);
+      await new Promise((resolve) => window.setTimeout(resolve, 250));
     }
   };
 
@@ -306,13 +341,32 @@ export function CustomerAccountPage({
                                 <p className="font-mono text-[9px] uppercase text-slate-400 truncate">{item.event}</p>
                               </div>
                               {order.status === 'paid' && (
-                                <button type="button" onClick={() => downloadItem(order, item)} className="h-8 w-8 border border-slate-200 bg-white inline-flex items-center justify-center hover:border-brutal-accent">
-                                  <Download className="w-3 h-3" />
+                                <button type="button" disabled={downloadingItemId === item.id} onClick={() => downloadItem(order, item)} className="h-8 w-8 border border-slate-200 bg-white inline-flex items-center justify-center hover:border-brutal-accent disabled:opacity-60">
+                                  {downloadingItemId === item.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                                 </button>
                               )}
                             </div>
                           ))}
                         </div>
+                        {downloadError?.orderId === order.id && (
+                          <div className="mt-3 border border-red-200 bg-red-50 p-3">
+                            <p className="font-mono text-[10px] uppercase text-red-700">{downloadError.message}</p>
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              <button type="button" onClick={() => {
+                                const retryItem = (order.items ?? []).find((orderItem) => orderItem.id === downloadError.itemId);
+                                if (retryItem) downloadItem(order, retryItem);
+                              }} className="min-h-8 border border-red-300 bg-white px-2 font-mono text-[9px] uppercase text-red-700">
+                                Tentar novamente
+                              </button>
+                              <button type="button" onClick={() => {
+                                const retryItem = (order.items ?? []).find((orderItem) => orderItem.id === downloadError.itemId);
+                                if (retryItem) openItemForSaving(order, retryItem);
+                              }} className="min-h-8 border border-slate-200 bg-white px-2 font-mono text-[9px] uppercase text-slate-700">
+                                Abrir para salvar
+                              </button>
+                            </div>
+                          </div>
+                        )}
                         {order.status === 'paid' ? (
                           <button type="button" onClick={() => downloadOrder(order)} className="mt-3 min-h-10 bg-brutal-black px-3 text-white border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent inline-flex items-center gap-2">
                             <Download className="w-3 h-3" />
@@ -335,7 +389,7 @@ export function CustomerAccountPage({
                   ) : (
                     <div className="grid gap-3 md:grid-cols-2">
                       {paidItems.slice(0, 10).map(({ order, item }) => (
-                        <button key={`${order.id}-${item.id}`} type="button" onClick={() => downloadItem(order, item)} className="text-left border border-slate-200 bg-slate-50 p-3 hover:border-brutal-accent">
+                        <button key={`${order.id}-${item.id}`} type="button" disabled={downloadingItemId === item.id} onClick={() => downloadItem(order, item)} className="text-left border border-slate-200 bg-slate-50 p-3 hover:border-brutal-accent disabled:opacity-60">
                           <p className="font-display text-base uppercase truncate">{item.name}</p>
                           <p className="mt-1 font-mono text-[9px] uppercase text-slate-400 truncate">{item.event} - {formatDate(order.createdAt)}</p>
                         </button>

@@ -108,26 +108,14 @@ function filenameFromItem(item: { name: string; url: string; type: string }) {
   return safeFilename(item.name || 'arquivo') + ext;
 }
 
-async function downloadFile(url: string, filename: string) {
-  // Try to force a file download. If fetch/CORS fails, fall back to opening the URL.
-  try {
-    const res = await fetch(url, { mode: 'cors' });
-    if (!res.ok) throw new Error('download_failed');
-    const blob = await res.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = objectUrl;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(objectUrl);
-  } catch {
-    window.open(url, '_blank', 'noopener,noreferrer');
-  }
-}
+type AuthorizedDownload = {
+  downloadUrl: string;
+  inlineUrl: string;
+  saveUrl: string;
+  filename: string;
+};
 
-async function authorizeDownload(orderId: string, orderItemId: string) {
+async function authorizeDownload(orderId: string, orderItemId: string): Promise<AuthorizedDownload> {
   const accessToken = await getCurrentAccessToken();
   const response = await fetch('/api/downloads/authorize', {
     method: 'POST',
@@ -142,7 +130,21 @@ async function authorizeDownload(orderId: string, orderItemId: string) {
   if (!response.ok || !payload?.url) {
     throw new Error(payload?.error || payload?.message || `Nao foi possivel autorizar o download. HTTP ${response.status}`);
   }
-  return String(payload.url);
+  return {
+    downloadUrl: String(payload.downloadUrl || payload.url),
+    inlineUrl: String(payload.inlineUrl || payload.url),
+    saveUrl: String(payload.saveUrl || payload.inlineUrl || payload.url),
+    filename: String(payload.filename || 'funpace-media'),
+  };
+}
+
+function triggerBrowserDownload(url: string) {
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.rel = 'noopener noreferrer';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
 }
 
 const hiddenPurchasesStorageKey = 'funpace:hidden-purchases:v1';
@@ -241,8 +243,9 @@ export function CustomerOrdersDrawer({
     try {
       const items = (order.items ?? []).filter((item) => item.url && !hiddenItemIds.has(item.id));
       for (const item of items) {
-        const signedUrl = await authorizeDownload(order.id, item.id);
-        await downloadFile(signedUrl, filenameFromItem(item as any));
+        const authorized = await authorizeDownload(order.id, item.id);
+        triggerBrowserDownload(authorized.downloadUrl);
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
       }
     } catch (error) {
       console.error('Erro ao baixar pedido:', error);
@@ -252,8 +255,8 @@ export function CustomerOrdersDrawer({
 
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     try {
-      const signedUrl = await authorizeDownload(order.id, item.id);
-      await downloadFile(signedUrl, filenameFromItem(item as any));
+      const authorized = await authorizeDownload(order.id, item.id);
+      triggerBrowserDownload(authorized.downloadUrl);
     } catch (error) {
       console.error('Erro ao baixar arquivo:', error);
       alert(error instanceof Error ? error.message : 'Não foi possivel baixar o arquivo.');
@@ -262,8 +265,8 @@ export function CustomerOrdersDrawer({
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     try {
-      const signedUrl = await authorizeDownload(order.id, item.id);
-      window.location.href = signedUrl;
+      const authorized = await authorizeDownload(order.id, item.id);
+      window.location.assign(authorized.saveUrl);
     } catch (error) {
       console.error('Erro ao abrir arquivo:', error);
       alert(error instanceof Error ? error.message : 'Não foi possivel abrir o arquivo.');
@@ -711,8 +714,8 @@ export function CustomerOrdersPage({
 
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     try {
-      const signedUrl = await authorizeDownload(order.id, item.id);
-      await downloadFile(signedUrl, filenameFromItem(item as any));
+      const authorized = await authorizeDownload(order.id, item.id);
+      triggerBrowserDownload(authorized.downloadUrl);
     } catch (error) {
       console.error('Erro ao baixar arquivo:', error);
       alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o arquivo.');
@@ -721,8 +724,8 @@ export function CustomerOrdersPage({
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     try {
-      const signedUrl = await authorizeDownload(order.id, item.id);
-      window.location.href = signedUrl;
+      const authorized = await authorizeDownload(order.id, item.id);
+      window.location.assign(authorized.saveUrl);
     } catch (error) {
       console.error('Erro ao abrir arquivo:', error);
       alert(error instanceof Error ? error.message : 'Nao foi possivel abrir o arquivo.');
@@ -733,8 +736,9 @@ export function CustomerOrdersPage({
     try {
       for (const item of order.items ?? []) {
         if (!item.url) continue;
-        const signedUrl = await authorizeDownload(order.id, item.id);
-        await downloadFile(signedUrl, filenameFromItem(item as any));
+        const authorized = await authorizeDownload(order.id, item.id);
+        triggerBrowserDownload(authorized.downloadUrl);
+        await new Promise((resolve) => window.setTimeout(resolve, 250));
       }
     } catch (error) {
       console.error('Erro ao baixar pedido:', error);

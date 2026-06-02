@@ -1,7 +1,3 @@
-import snapshotHandler from '../server/api/admin/snapshot.ts';
-import orderStatusHandler from '../server/api/admin/orders/status.ts';
-import paymentRecoveryHandler from '../server/api/admin/payments/recovery.ts';
-
 function getClientIp(req: any) {
   return String(req.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() ||
     String(req.socket?.remoteAddress || req.connection?.remoteAddress || '');
@@ -26,16 +22,36 @@ function routeName(req: any) {
   return 'snapshot';
 }
 
-export default function handler(req: any, res: any) {
+function setCors(res: any) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+}
+
+export default async function handler(req: any, res: any) {
+  setCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+
   if (!isIpAllowed(req)) {
     return res.status(403).json({ error: 'IP nao autorizado para rotas administrativas.' });
   }
 
   const route = routeName(req);
 
-  if (route === 'snapshot') return snapshotHandler(req, res);
-  if (route === 'orders-status') return orderStatusHandler(req, res);
-  if (route === 'payments-recovery') return paymentRecoveryHandler(req, res);
+  if (route === 'snapshot') {
+    const { default: snapshotHandler } = await import('../server/api/admin/snapshot.ts');
+    return snapshotHandler(req, res);
+  }
+
+  if (route === 'orders-status') {
+    const { default: orderStatusHandler } = await import('../server/api/admin/orders/status.ts');
+    return orderStatusHandler(req, res);
+  }
+
+  if (route === 'payments-recovery') {
+    const { default: paymentRecoveryHandler } = await import('../server/api/admin/payments/recovery.ts');
+    return paymentRecoveryHandler(req, res);
+  }
 
   return res.status(404).json({ error: 'Rota admin nao encontrada.' });
 }

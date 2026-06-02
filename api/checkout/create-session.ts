@@ -24,7 +24,7 @@ function setCors(req: any, res: any) {
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
+    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
   const origin = String(req.headers.origin || '').replace(/\/+$/, '');
 
@@ -42,7 +42,7 @@ function isTrustedOrigin(req: any) {
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
+    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
   const origin = String(req.headers.origin || '').replace(/\/+$/, '');
   if (origin) return origins.has(origin);
@@ -308,7 +308,7 @@ function getAllowedRedirectOrigins(req: any) {
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
+    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
 }
 
@@ -325,6 +325,22 @@ function buildSafeSuccessUrl(req: any, inputUrl: string | undefined, orderId: st
 
   candidate.searchParams.set('payment', 'success');
   candidate.searchParams.set('order', orderId);
+  return candidate.toString();
+}
+
+function buildSafeOptionalRedirectUrl(req: any, inputUrl: string | undefined) {
+  if (!inputUrl) return undefined;
+
+  const proto = req.headers['x-forwarded-proto'] || 'https';
+  const host = req.headers.host;
+  const fallback = `${proto}://${host}/`;
+  const candidate = new URL(inputUrl, fallback);
+  const origin = candidate.origin.replace(/\/+$/, '');
+
+  if (!getAllowedRedirectOrigins(req).has(origin)) {
+    throw new Error('URL de cancelamento do checkout nao autorizada.');
+  }
+
   return candidate.toString();
 }
 
@@ -470,6 +486,7 @@ export default async function handler(req: any, res: any) {
     });
 
     const successRedirectUrl = buildSafeSuccessUrl(req, successUrl, orderId);
+    const cancelRedirectUrl = buildSafeOptionalRedirectUrl(req, typeof cancelUrl === 'string' ? cancelUrl : undefined);
     let paymentResult;
     try {
       const webhookBaseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
@@ -488,7 +505,7 @@ export default async function handler(req: any, res: any) {
         })),
         paymentMethod,
         successUrl: successRedirectUrl,
-        cancelUrl: typeof cancelUrl === 'string' ? cancelUrl : undefined,
+        cancelUrl: cancelRedirectUrl,
         webhookUrl: `${webhookBaseUrl}/api/webhooks/infinitepay`,
       });
     } catch (error: any) {

@@ -2,6 +2,20 @@ import snapshotHandler from '../server/api/admin/snapshot.ts';
 import orderStatusHandler from '../server/api/admin/orders/status.ts';
 import paymentRecoveryHandler from '../server/api/admin/payments/recovery.ts';
 
+function getClientIp(req: any) {
+  return String(req.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() ||
+    String(req.socket?.remoteAddress || req.connection?.remoteAddress || '');
+}
+
+function isIpAllowed(req: any) {
+  const allowlist = String(process.env.ADMIN_IP_ALLOWLIST || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+  if (allowlist.length === 0) return true;
+  return allowlist.includes(getClientIp(req));
+}
+
 function routeName(req: any) {
   const queryRoute = String(req.query?.route || '').trim();
   if (queryRoute) return queryRoute;
@@ -13,6 +27,10 @@ function routeName(req: any) {
 }
 
 export default function handler(req: any, res: any) {
+  if (!isIpAllowed(req)) {
+    return res.status(403).json({ error: 'IP nao autorizado para rotas administrativas.' });
+  }
+
   const route = routeName(req);
 
   if (route === 'snapshot') return snapshotHandler(req, res);

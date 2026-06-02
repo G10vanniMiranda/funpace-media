@@ -10,7 +10,7 @@ function getAllowedOrigins() {
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
+    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
 }
 
@@ -57,6 +57,16 @@ function rateLimitRequest(req: any, res: any) {
   return true;
 }
 
+function rejectOversizedRequest(req: any, res: any) {
+  const maxBytes = Number(process.env.API_MAX_BODY_BYTES || 262144);
+  const contentLength = Number(req.headers?.['content-length'] || 0);
+  if (maxBytes > 0 && contentLength > maxBytes) {
+    res.status(413).json({ error: 'Requisicao muito grande.' });
+    return true;
+  }
+  return false;
+}
+
 function setSecurityHeaders(res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -92,6 +102,10 @@ export function handleOptions(req: any, res: any) {
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase()) && !isTrustedBrowserOrigin(req)) {
     res.status(403).json({ error: 'Origem nao autorizada.' });
+    return true;
+  }
+
+  if (rejectOversizedRequest(req, res)) {
     return true;
   }
 

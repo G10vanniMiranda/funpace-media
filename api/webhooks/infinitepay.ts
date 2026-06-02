@@ -101,7 +101,9 @@ function getWebhookToken(req: any) {
 
 function isValidWebhookSignature(req: any, payload: any) {
   const secret = process.env.INFINITEPAY_WEBHOOK_SECRET || process.env.INFINITEPAY_WEBHOOK_TOKEN || '';
-  if (!secret) return true;
+  if (!secret) {
+    return process.env.NODE_ENV !== 'production' || process.env.INFINITEPAY_ALLOW_UNSIGNED_WEBHOOKS === 'true';
+  }
 
   const token = getWebhookToken(req);
   if (token && token === secret) return true;

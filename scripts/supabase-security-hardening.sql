@@ -11,12 +11,26 @@ stable
 security definer
 set search_path = ''
 as $$
-  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false)
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') in ('admin', 'super_admin'), false)
 $$;
 
 revoke all on function public.is_admin() from public;
 grant execute on function public.is_admin() to authenticated;
 grant execute on function public.is_admin() to service_role;
+
+create or replace function public.is_super_admin()
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'super_admin', false)
+$$;
+
+revoke all on function public.is_super_admin() from public;
+grant execute on function public.is_super_admin() to authenticated;
+grant execute on function public.is_super_admin() to service_role;
 
 create or replace function public.set_updated_at()
 returns trigger
@@ -51,6 +65,25 @@ grant execute on function public.order_has_vendor(uuid, text) to authenticated;
 grant execute on function public.order_has_vendor(uuid, text) to service_role;
 
 -- Remove permissive legacy policies commonly created during early setup/tests.
+alter table if exists public.photographers enable row level security;
+alter table if exists public.customers enable row level security;
+alter table if exists public.products enable row level security;
+alter table if exists public.events enable row level security;
+alter table if exists public.orders enable row level security;
+alter table if exists public.order_items enable row level security;
+alter table if exists public.payment_events enable row level security;
+alter table if exists public.payments enable row level security;
+alter table if exists public.download_access enable row level security;
+alter table if exists public.download_events enable row level security;
+alter table if exists public.downloads enable row level security;
+alter table if exists public.withdrawal_requests enable row level security;
+alter table if exists public.platform_settings enable row level security;
+alter table if exists public.photographer_wallets enable row level security;
+alter table if exists public.photographer_transactions enable row level security;
+alter table if exists public.media_processing_jobs enable row level security;
+alter table if exists public.coupons enable row level security;
+alter table if exists public.admin_activity_logs enable row level security;
+
 drop policy if exists "Enable read access for all users" on public.photographers;
 drop policy if exists "Enable read access for all users" on public.customers;
 drop policy if exists "Enable read access for all users" on public.products;
@@ -197,26 +230,58 @@ drop policy if exists "events_select_authenticated" on public.events;
 create policy "events_select_authenticated"
 on public.events
 for select
-using (auth.uid() is not null);
+using (
+  auth.uid() is not null
+  and (
+    "isPublished" = true
+    or "photographerId" = auth.uid()::text
+    or public.is_admin()
+  )
+);
 
 drop policy if exists "events_insert_admin_only" on public.events;
-create policy "events_insert_admin_only"
+drop policy if exists "events_insert_admin_or_owner_photographer" on public.events;
+create policy "events_insert_admin_or_owner_photographer"
 on public.events
 for insert
-with check (public.is_admin());
+with check (
+  public.is_admin()
+  or (
+    "photographerId" = auth.uid()::text
+    and exists (
+      select 1
+      from public.photographers p
+      where p.id = auth.uid()::text
+        and p.verified = true
+    )
+  )
+);
 
 drop policy if exists "events_update_admin_only" on public.events;
-create policy "events_update_admin_only"
+drop policy if exists "events_update_admin_or_owner_photographer" on public.events;
+create policy "events_update_admin_or_owner_photographer"
 on public.events
 for update
-using (public.is_admin())
-with check (public.is_admin());
+using (public.is_admin() or "photographerId" = auth.uid()::text)
+with check (
+  public.is_admin()
+  or (
+    "photographerId" = auth.uid()::text
+    and exists (
+      select 1
+      from public.photographers p
+      where p.id = auth.uid()::text
+        and p.verified = true
+    )
+  )
+);
 
 drop policy if exists "events_delete_admin_only" on public.events;
-create policy "events_delete_admin_only"
+drop policy if exists "events_delete_admin_or_owner_photographer" on public.events;
+create policy "events_delete_admin_or_owner_photographer"
 on public.events
 for delete
-using (public.is_admin());
+using (public.is_admin() or "photographerId" = auth.uid()::text);
 
 drop policy if exists "orders_select_owner_email_or_admin" on public.orders;
 create policy "orders_select_owner_email_or_admin"
@@ -259,6 +324,33 @@ create policy "payment_events_select_admin_only"
 on public.payment_events
 for select
 using (public.is_admin());
+
+drop policy if exists "payments_select_order_owner_or_admin" on public.payments;
+create policy "payments_select_order_owner_or_admin"
+on public.payments
+for select
+using (
+  public.is_admin()
+  or exists (
+    select 1
+    from public.orders o
+    where o.id = payments."orderId"
+      and (
+        (o."userId" is not null and o."userId" = auth.uid()::text)
+        or (o."buyerEmail" = (auth.jwt() ->> 'email'))
+      )
+  )
+);
+
+drop policy if exists "download_access_select_owner_or_admin" on public.download_access;
+create policy "download_access_select_owner_or_admin"
+on public.download_access
+for select
+using (
+  public.is_admin()
+  or ("userId" is not null and "userId" = auth.uid()::text)
+  or ("customerEmail" = (auth.jwt() ->> 'email'))
+);
 
 drop policy if exists "download_events_select_owner_or_admin" on public.download_events;
 create policy "download_events_select_owner_or_admin"

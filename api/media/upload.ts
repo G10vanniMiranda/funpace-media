@@ -25,7 +25,7 @@ function setCorsHeaders(req: any, res: any) {
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
+    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
   const origin = String(req.headers.origin || '').replace(/\/+$/, '');
 
@@ -44,7 +44,7 @@ function isTrustedOrigin(req: any) {
     'https://funpace.media',
     'https://www.funpace.media',
     process.env.FRONTEND_URL,
-    ...(process.env.CORS_ORIGINS || '').split(','),
+    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
   ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
   const origin = String(req.headers.origin || '').replace(/\/+$/, '');
   if (origin) return allowedOrigins.has(origin);

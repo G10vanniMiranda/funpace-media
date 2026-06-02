@@ -1,20 +1,30 @@
-import {
-  getJsonBody,
-  handleOptions,
-  isUuid,
-  setCors,
-  supabaseRequest,
-} from '../../server/shared/utils.ts';
-import { createHmac, timingSafeEqual } from 'crypto';
-import { infinitePayProvider } from '../../server/payments/providers/infinitepay.ts';
-import { fulfillPaidOrder, recordPayment } from '../../server/shared/checkoutFulfillment.ts';
+type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
+
+function setCors(res: any) {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
+function getJsonBody(req: any) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
+  return {};
+}
+
+function isUuid(value: unknown) {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
 
 function normalizeKey(value: string) {
   return value.replace(/[^a-z0-9]/gi, '').toLowerCase();
 }
 
 function getPayloadValue(payload: any, names: string[]) {
-  const normalizedNames = new Set(names.map(normalizeKey));
+  const wanted = new Set(names.map(normalizeKey));
   const queue = [payload];
   const seen = new Set<any>();
 
@@ -24,105 +34,179 @@ function getPayloadValue(payload: any, names: string[]) {
     seen.add(current);
 
     for (const [key, value] of Object.entries(current)) {
-      if (normalizedNames.has(normalizeKey(key)) && value !== undefined && value !== null && String(value).trim()) {
+      if (wanted.has(normalizeKey(key)) && value !== undefined && value !== null && String(value).trim()) {
         return String(value).trim();
       }
-
-      if (value && typeof value === 'object') {
-        queue.push(value);
-      }
+      if (value && typeof value === 'object') queue.push(value);
     }
   }
 
   return '';
 }
 
-function mapNonPaidPaymentStatus(payload: any) {
-  const rawStatus = getPayloadValue(payload, [
-    'status',
-    'payment_status',
-    'paymentStatus',
-    'event',
-    'type',
-  ]).toLowerCase();
+function getSupabaseConfig() {
+  const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
+  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase Service Role nao configurado.');
+  return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), supabaseKey };
+}
 
-  if (['rejected', 'denied', 'refused'].includes(rawStatus)) return 'refused';
-  if (['failed', 'expired'].includes(rawStatus)) return 'failed';
-  if (['cancelled', 'canceled', 'voided'].includes(rawStatus)) return 'canceled';
-  if (['refunded', 'chargeback'].includes(rawStatus)) return 'refunded';
+async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const { supabaseUrl, supabaseKey } = getSupabaseConfig();
+  const response = await fetch(`${supabaseUrl}${path}`, {
+    ...init,
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${supabaseKey}`,
+      'Content-Type': 'application/json',
+      ...(init.headers || {}),
+    },
+  });
+  const raw = await response.text();
+  let data: any = null;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = raw;
+  }
+  if (!response.ok) throw new Error(data?.message || data?.hint || raw || `Supabase HTTP ${response.status}`);
+  return data as T;
+}
+
+function getInfinitePayHandle() {
+  const handle = process.env.INFINITEPAY_HANDLE;
+  if (!handle) throw new Error('INFINITEPAY_HANDLE nao configurado.');
+  return handle;
+}
+
+function getPaymentCheckEndpoint() {
+  return process.env.INFINITEPAY_PAYMENT_CHECK_ENDPOINT ||
+    `${(process.env.INFINITEPAY_BASE_URL || 'https://api.checkout.infinitepay.io').replace(/\/+$/, '')}/payment_check`;
+}
+
+function mapPaymentCheckStatus(payload: any): PaymentStatus {
+  if (payload?.paid === true) return 'paid';
+  const raw = String(payload?.status || payload?.payment_status || payload?.event || payload?.type || '').toLowerCase();
+  if (['paid', 'approved', 'confirmed', 'captured', 'received', 'recebido', 'completed', 'settled', 'success', 'succeeded'].includes(raw)) return 'paid';
+  if (['rejected', 'denied', 'refused'].includes(raw)) return 'refused';
+  if (['failed', 'expired'].includes(raw)) return 'failed';
+  if (['cancelled', 'canceled', 'voided'].includes(raw)) return 'canceled';
+  if (['refunded', 'chargeback'].includes(raw)) return 'refunded';
   return 'pending';
 }
 
-function getWebhookEventId(payload: any, orderId: string, status: string, transactionNsu: string) {
-  return getPayloadValue(payload, [
-    'id',
-    'event_id',
-    'eventId',
-    'transaction_nsu',
-    'transactionNSU',
-    'transaction_id',
-    'transactionId',
-    'invoice_slug',
-    'invoiceSlug',
-    'slug',
-  ]) || `${orderId}:${transactionNsu || status}`;
-}
-
-async function recordPaymentEvent(input: {
-  eventId: string;
-  orderId: string;
-  status: string;
-  payload: any;
-}) {
+async function checkInfinitePayPayment(input: { orderId: string; transactionNsu: string; slug: string }) {
+  const response = await fetch(getPaymentCheckEndpoint(), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      handle: getInfinitePayHandle(),
+      order_nsu: input.orderId,
+      transaction_nsu: input.transactionNsu,
+      slug: input.slug,
+    }),
+  });
+  const raw = await response.text();
+  let payload: any = {};
   try {
-    await supabaseRequest('/rest/v1/payment_events?on_conflict=provider,eventId', {
-      method: 'POST',
-      headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-      body: JSON.stringify({
-        provider: 'infinitepay',
-        eventId: input.eventId,
-        orderId: input.orderId,
-        status: input.status,
-        payload: input.payload,
-      }),
-    });
-  } catch (error) {
-    console.error('Nao foi possivel registrar evento InfinitePay:', error);
-  }
-}
-
-function getWebhookSignature(req: any) {
-  return String(req.headers?.['x-infinitepay-signature'] || req.headers?.['x-webhook-signature'] || req.headers?.['x-signature'] || '');
-}
-
-function getWebhookToken(req: any) {
-  return String(req.headers?.['x-infinitepay-token'] || req.headers?.['x-webhook-token'] || req.query?.token || '');
-}
-
-function isValidWebhookSignature(req: any, payload: any) {
-  const requireAuth = process.env.INFINITEPAY_WEBHOOK_REQUIRE_AUTH === 'true';
-  const secret = process.env.INFINITEPAY_WEBHOOK_SECRET || process.env.INFINITEPAY_WEBHOOK_TOKEN || '';
-  if (!requireAuth) {
-    return true;
-  }
-
-  if (!secret) {
-    return process.env.NODE_ENV !== 'production';
-  }
-
-  const token = getWebhookToken(req);
-  if (token && token === secret) return true;
-
-  const signature = getWebhookSignature(req).replace(/^sha256=/i, '').trim();
-  if (!signature) return false;
-
-  const raw = typeof req.body === 'string' ? req.body : JSON.stringify(payload);
-  const digest = createHmac('sha256', secret).update(raw).digest('hex');
-  try {
-    return timingSafeEqual(Buffer.from(signature), Buffer.from(digest));
+    payload = raw ? JSON.parse(raw) : {};
   } catch {
-    return false;
+    payload = { message: raw };
   }
+  if (!response.ok) throw new Error(payload?.message || payload?.error || raw || `InfinitePay HTTP ${response.status}`);
+  return { status: mapPaymentCheckStatus(payload), rawResponse: payload };
+}
+
+async function recordPaymentEvent(input: { eventId: string; orderId: string; status: string; payload: any }) {
+  await supabaseRequest('/rest/v1/payment_events?on_conflict=provider,eventId', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      provider: 'infinitepay',
+      eventId: input.eventId,
+      orderId: input.orderId,
+      status: input.status,
+      payload: input.payload,
+    }),
+  }).catch((error) => console.error('webhook:event_record_failed', error));
+}
+
+async function recordPayment(input: { orderId: string; providerPaymentId: string; method: string; status: PaymentStatus; rawResponse: any }) {
+  await supabaseRequest('/rest/v1/payments?on_conflict=provider,providerPaymentId', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      orderId: input.orderId,
+      provider: 'infinitepay',
+      providerPaymentId: input.providerPaymentId,
+      method: input.method || 'checkout',
+      status: input.status,
+      rawResponse: input.rawResponse,
+      updatedAt: new Date().toISOString(),
+    }),
+  });
+
+  await supabaseRequest(`/rest/v1/payments?orderId=eq.${encodeURIComponent(input.orderId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ status: input.status, updatedAt: new Date().toISOString() }),
+  }).catch((error) => console.error('webhook:payment_rollup_failed', error));
+}
+
+async function releaseDownloadAccess(orderId: string) {
+  const orders = await supabaseRequest<any[]>(
+    `/rest/v1/orders?select=id,userId,buyerEmail,status&id=eq.${encodeURIComponent(orderId)}&limit=1`,
+  );
+  const order = orders[0];
+  if (!order || order.status !== 'paid') return;
+
+  const items = await supabaseRequest<any[]>(
+    `/rest/v1/order_items?select=id,orderId,productId,vendedorId,price&orderId=eq.${encodeURIComponent(orderId)}`,
+  );
+  if (!items.length) return;
+
+  const expiresAt = new Date(Date.now() + Number(process.env.DOWNLOAD_ACCESS_DAYS || 30) * 24 * 60 * 60 * 1000).toISOString();
+  await supabaseRequest('/rest/v1/download_access?on_conflict=orderId,photoId', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify(items.map((item) => ({
+      orderId,
+      photoId: item.productId,
+      orderItemId: item.id,
+      userId: order.userId || null,
+      customerEmail: order.buyerEmail,
+      isActive: true,
+      expiresAt,
+    }))),
+  });
+
+  const existing = await supabaseRequest<any[]>(
+    `/rest/v1/photographer_transactions?select=orderItemId&orderId=eq.${encodeURIComponent(orderId)}`,
+  ).catch(() => []);
+  const processed = new Set(existing.map((item) => String(item.orderItemId || '')));
+  const newItems = items.filter((item) => !processed.has(String(item.id)));
+  if (!newItems.length) return;
+
+  const settings = await supabaseRequest<any[]>('/rest/v1/platform_settings?select=platformFeePercent&id=eq.default&limit=1').catch(() => []);
+  const feePercent = Number(settings[0]?.platformFeePercent ?? 30);
+  await supabaseRequest('/rest/v1/photographer_transactions?on_conflict=orderItemId', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
+    body: JSON.stringify(newItems.map((item) => {
+      const grossAmount = Number(item.price || 0);
+      const platformFee = Number((grossAmount * feePercent / 100).toFixed(2));
+      const netAmount = Number(Math.max(0, grossAmount - platformFee).toFixed(2));
+      return {
+        photographerId: item.vendedorId,
+        orderId,
+        orderItemId: item.id,
+        grossAmount,
+        platformFee,
+        netAmount,
+        status: 'pending',
+      };
+    })),
+  }).catch((error) => console.error('webhook:photographer_transactions_failed', error));
 }
 
 function normalizePaymentMethod(value: string) {
@@ -132,148 +216,79 @@ function normalizePaymentMethod(value: string) {
   return 'checkout';
 }
 
-async function updateOrderStatus(input: {
-  orderId: string;
-  status: string;
-  transactionNsu: string;
-}) {
-  if (input.status === 'paid') {
-    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled,canceled,refused)`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        status: 'paid',
-        paymentExternalId: input.transactionNsu || null,
-      }),
-    });
-    return;
-  }
-
-  if (['failed', 'cancelled', 'canceled', 'refused', 'refunded'].includes(input.status)) {
-    await supabaseRequest(`/rest/v1/orders?id=eq.${input.orderId}&paymentProvider=eq.infinitepay&status=neq.paid`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({
-        status: input.status,
-        paymentExternalId: input.transactionNsu || null,
-      }),
-    });
-  }
-}
-
 export default async function handler(req: any, res: any) {
-  if (handleOptions(req, res)) return;
-  setCors(req, res);
+  setCors(res);
+  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
-  }
-
-  const payload = getJsonBody(req);
-  if (!isValidWebhookSignature(req, payload)) {
-    return res.status(401).json({ error: 'Assinatura do webhook invalida.', received: false });
-  }
-
-  const orderId = getPayloadValue(payload, [
-    'order_nsu',
-    'orderNSU',
-    'order',
-    'order_id',
-    'orderId',
-    'reference',
-    'external_reference',
-  ]);
-  const transactionNsu = getPayloadValue(payload, [
-    'transaction_nsu',
-    'transactionNSU',
-    'transaction_id',
-    'transactionId',
-    'nsu',
-  ]);
-  const slug = getPayloadValue(payload, [
-    'invoice_slug',
-    'invoiceSlug',
-    'slug',
-    'invoice_id',
-    'invoiceId',
-  ]);
-
-  if (!isUuid(orderId)) {
-    return res.status(400).json({ error: 'Pedido invalido no webhook.', received: false });
-  }
-
-  if (!transactionNsu || !slug) {
-    await recordPaymentEvent({
-      eventId: getWebhookEventId(payload, orderId, 'pending', transactionNsu),
-      orderId,
-      status: 'pending',
-      payload: { ...payload, webhook_error: 'missing_transaction_or_slug' },
-    });
-
-    console.error('Webhook InfinitePay sem identificadores obrigatorios:', {
-      orderId,
-      hasTransactionNsu: Boolean(transactionNsu),
-      hasSlug: Boolean(slug),
-    });
-
-    return res.status(400).json({
-      success: false,
-      received: false,
-      orderId,
-      status: 'pending',
-      message: 'Dados de pagamento incompletos no webhook.',
-      missing: {
-        transaction_nsu: !transactionNsu,
-        invoice_slug: !slug,
-      },
-    });
-  }
-
-  let paymentCheck: any = {};
-  let status = mapNonPaidPaymentStatus(payload);
   try {
-    const checked = await infinitePayProvider.checkPayment({ orderId, transactionNsu, slug });
-    paymentCheck = checked.rawResponse;
-    status = checked.status;
-  } catch (error: any) {
-    await recordPaymentEvent({
-      eventId: getWebhookEventId(payload, orderId, 'pending', transactionNsu),
+    const payload = getJsonBody(req);
+    const orderId = getPayloadValue(payload, ['order_nsu', 'orderNSU', 'order', 'order_id', 'orderId', 'reference', 'external_reference']);
+    const transactionNsu = getPayloadValue(payload, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
+    const slug = getPayloadValue(payload, ['invoice_slug', 'invoiceSlug', 'slug', 'invoice_id', 'invoiceId']);
+    const eventId = getPayloadValue(payload, ['id', 'event_id', 'eventId']) || `${orderId}:${transactionNsu || slug || Date.now()}`;
+
+    if (!isUuid(orderId)) {
+      return res.status(400).json({ success: false, received: false, error: 'Pedido invalido no webhook.' });
+    }
+    if (!transactionNsu || !slug) {
+      await recordPaymentEvent({
+        eventId,
+        orderId,
+        status: 'pending',
+        payload: { ...payload, webhook_error: 'missing_transaction_or_slug' },
+      });
+      return res.status(400).json({
+        success: false,
+        received: false,
+        orderId,
+        error: 'Webhook sem transaction_nsu ou invoice_slug.',
+      });
+    }
+
+    const checked = await checkInfinitePayPayment({ orderId, transactionNsu, slug });
+    const status = checked.status;
+    const rawResponse = { ...payload, payment_check: checked.rawResponse };
+
+    await recordPaymentEvent({ eventId, orderId, status, payload: rawResponse });
+    await recordPayment({
       orderId,
-      status: 'pending',
-      payload: { ...payload, payment_check_error: error?.message || 'payment_check_failed' },
+      providerPaymentId: transactionNsu,
+      method: normalizePaymentMethod(getPayloadValue(payload, ['capture_method', 'payment_method', 'method'])),
+      status,
+      rawResponse,
     });
 
+    if (status === 'paid') {
+      await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled,canceled,refused)`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status: 'paid',
+          paymentExternalId: transactionNsu,
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+      await releaseDownloadAccess(orderId);
+    } else if (['failed', 'cancelled', 'canceled', 'refused', 'refunded'].includes(status)) {
+      await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paymentProvider=eq.infinitepay&status=neq.paid`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status,
+          paymentExternalId: transactionNsu,
+          updatedAt: new Date().toISOString(),
+        }),
+      });
+    }
+
+    return res.status(200).json({ success: true, received: true, orderId, status });
+  } catch (error: any) {
+    console.error('webhook:infinitepay_failed', error);
     return res.status(400).json({
       success: false,
       received: false,
-      orderId,
-      status: 'pending',
-      error: error?.message || 'Falha ao validar webhook na InfinitePay.',
+      error: error?.message || 'Falha ao processar webhook InfinitePay.',
     });
   }
-
-  const eventId = getWebhookEventId(payload, orderId, status, transactionNsu);
-
-  await recordPaymentEvent({
-    eventId,
-    orderId,
-    status,
-    payload: { ...payload, payment_check: paymentCheck },
-  });
-
-  await updateOrderStatus({ orderId, status, transactionNsu });
-  await recordPayment({
-    orderId,
-    provider: 'infinitepay',
-    providerPaymentId: transactionNsu || eventId,
-    method: normalizePaymentMethod(getPayloadValue(payload, ['capture_method', 'payment_method', 'method'])),
-    status: status as any,
-    rawResponse: { ...payload, payment_check: paymentCheck },
-  });
-
-  if (status === 'paid') {
-    await fulfillPaidOrder(orderId);
-  }
-
-  return res.status(200).json({ success: true, received: true, orderId, status });
 }

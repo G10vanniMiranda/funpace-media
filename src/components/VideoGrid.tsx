@@ -113,7 +113,7 @@ export function VideoGrid({
               {/* Video Badge */}
               <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                4K UHD
+                HD
               </div>
 
               <div className="absolute top-4 right-4 z-10 flex gap-2">

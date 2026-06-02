@@ -1093,6 +1093,9 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
     const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
     const email = typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
     const bio = typeof req.body?.bio === "string" ? req.body.bio.trim().slice(0, 1000) : "";
+    const instagram = typeof req.body?.instagram === "string"
+      ? req.body.instagram.trim().replace(/^@+/, "").toLowerCase()
+      : "";
 
     if (name.length < 2 || name.length > 100) {
       return res.status(400).json({ error: "Nome do fotografo invalido." });
@@ -1102,8 +1105,13 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
       return res.status(400).json({ error: "Email do fotografo invalido." });
     }
 
+    if (instagram && (instagram.length > 29 || !/^[a-z0-9._]+$/.test(instagram))) {
+      return res.status(400).json({ error: "Instagram do fotografo invalido." });
+    }
+
     const avatar = `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random`;
     const pendingId = `pending:${email}`;
+    const safeInstagram = instagram ? `@${instagram}` : null;
 
     pool = new Pool(getDbConfig());
     await pool.query("begin");
@@ -1114,6 +1122,7 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
           id,
           name,
           email,
+          instagram,
           bio,
           avatar,
           verified,
@@ -1127,6 +1136,7 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
           $3,
           $4,
           $5,
+          $6,
           false,
           jsonb_build_object(
             'photos', 0,
@@ -1141,12 +1151,13 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
         )
         on conflict (email) do update set
           name = excluded.name,
+          instagram = coalesce(excluded.instagram, public.photographers.instagram),
           bio = excluded.bio,
           avatar = coalesce(nullif(public.photographers.avatar, ''), excluded.avatar),
           stats = coalesce(public.photographers.stats, excluded.stats),
           "updatedAt" = now()
       `,
-      [pendingId, name, email, bio, avatar],
+      [pendingId, name, email, safeInstagram, bio, avatar],
     );
 
     const redirectTo = getPhotographerPasswordSetupUrl(req);

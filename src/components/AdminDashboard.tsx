@@ -260,6 +260,11 @@ function normalizeEventKey(value: string) {
     .replace(/[\u0300-\u036f]/g, '');
 }
 
+function normalizeInstagramInput(value: string) {
+  const handle = value.trim().replace(/^@+/, '').toLowerCase();
+  return handle ? `@${handle}` : '';
+}
+
 function buildSparklineBuckets<T>(
   items: T[],
   start: Date,
@@ -442,11 +447,11 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
 export function AdminDashboard({ photographers, photos, videos, orders, withdrawals, customers, payments, paymentEvents, coupons, adminLogs, metrics, onLogout, onRefresh }: AdminDashboardProps) {
   const [activeTab, setActiveTab] = useState<AdminTab>('overview');
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newPhotographer, setNewPhotographer] = useState({ name: '', email: '', bio: '' });
+  const [newPhotographer, setNewPhotographer] = useState({ name: '', email: '', instagram: '', bio: '' });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [openMenuPhotographerId, setOpenMenuPhotographerId] = useState<string | null>(null);
   const [editingPhotographer, setEditingPhotographer] = useState<Photographer | null>(null);
-  const [editForm, setEditForm] = useState({ name: '', bio: '', cpf: '', phone: '', avatar: '' });
+  const [editForm, setEditForm] = useState({ name: '', bio: '', cpf: '', phone: '', instagram: '', avatar: '' });
   const [isUpdatingPhotographer, setIsUpdatingPhotographer] = useState(false);
   const [updatingWithdrawalId, setUpdatingWithdrawalId] = useState<string | null>(null);
   const [isBackfillingThumbnails, setIsBackfillingThumbnails] = useState(false);
@@ -522,6 +527,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         photographer.name,
         photographer.email,
         photographer.id,
+        photographer.instagram,
         photographer.phone,
         photographer.cpf,
       ].some((value) => String(value || '').toLowerCase().includes(normalizedSearch));
@@ -1211,6 +1217,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         body: JSON.stringify({
           name: newPhotographer.name,
           email: newPhotographer.email,
+          instagram: normalizeInstagramInput(newPhotographer.instagram),
           bio: newPhotographer.bio,
         }),
       });
@@ -1224,7 +1231,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
       onRefresh();
       setShowAddModal(false);
-      setNewPhotographer({ name: '', email: '', bio: '' });
+      setNewPhotographer({ name: '', email: '', instagram: '', bio: '' });
       alert(payload?.message || "Fotografo cadastrado e convite de senha enviado por email.");
     } catch (error) {
       console.error(error);
@@ -1321,6 +1328,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       bio: photographer.bio ?? '',
       cpf: formatCpf(photographer.cpf ?? ''),
       phone: photographer.phone ?? '',
+      instagram: photographer.instagram ?? '',
       avatar: photographer.avatar ?? '',
     });
     setOpenMenuPhotographerId(null);
@@ -1338,11 +1346,18 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
     setIsUpdatingPhotographer(true);
     try {
+      const instagram = normalizeInstagramInput(editForm.instagram);
+      if (instagram && !/^@[a-z0-9._]{1,29}$/.test(instagram)) {
+        alert('Instagram invalido. Use apenas letras, numeros, ponto ou underline.');
+        return;
+      }
+
       await photographerService.updatePhotographerAdmin(editingPhotographer.id, {
         name: editForm.name.trim(),
         bio: editForm.bio,
         cpf: cpfDigits || null,
         phone: editForm.phone.trim() || null,
+        instagram: instagram || null,
         avatar: editForm.avatar.trim() || editingPhotographer.avatar,
       } as any);
       await onRefresh();
@@ -2222,7 +2237,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     type="text"
                     value={photographerSearch}
                     onChange={(event) => setPhotographerSearch(event.target.value)}
-                    placeholder="Buscar por nome, email, CPF, telefone ou ID"
+                    placeholder="Buscar por nome, email, Instagram, CPF, telefone ou ID"
                     className="w-full h-12 pl-12 pr-4 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent transition-colors"
                   />
                 </div>
@@ -2302,6 +2317,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                               <div className="min-w-0">
                                 <p className="font-sans font-black text-sm uppercase text-white truncate max-w-70">{p.name || 'Sem nome'}</p>
                                 <p className="text-[10px] text-gray-400 lowercase truncate max-w-70">{p.email}</p>
+                                <p className={`text-[10px] lowercase truncate max-w-70 ${p.instagram ? 'text-brutal-accent' : 'text-gray-600'}`}>
+                                  {p.instagram || 'Instagram nao informado'}
+                                </p>
                                 <p className="text-[9px] text-gray-600 uppercase truncate max-w-70">ID {p.id}</p>
                               </div>
                             </div>
@@ -3244,6 +3262,17 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
 
                 <div className="space-y-2">
+                  <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Instagram</label>
+                  <input
+                    type="text"
+                    value={newPhotographer.instagram}
+                    onChange={e => setNewPhotographer({ ...newPhotographer, instagram: e.target.value })}
+                    placeholder="@usuario"
+                    className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                  />
+                </div>
+
+                <div className="space-y-2">
                   <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Bio / Especialidade</label>
                   <textarea
                     value={newPhotographer.bio}
@@ -3353,6 +3382,17 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       onChange={(e) => setEditForm((current) => ({ ...current, phone: e.target.value }))}
                       className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
                       placeholder="(00) 00000-0000"
+                    />
+                  </div>
+
+                  <div className="space-y-2 md:col-span-2">
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Instagram</label>
+                    <input
+                      type="text"
+                      value={editForm.instagram}
+                      onChange={(e) => setEditForm((current) => ({ ...current, instagram: e.target.value }))}
+                      className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
+                      placeholder="@usuario"
                     />
                   </div>
 

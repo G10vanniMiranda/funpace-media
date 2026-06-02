@@ -344,6 +344,14 @@ function buildSafeOptionalRedirectUrl(req: any, inputUrl: string | undefined) {
   return candidate.toString();
 }
 
+function getInfinitePayWebhookUrl(req: any) {
+  const configuredUrl = String(process.env.INFINITEPAY_WEBHOOK_URL || '').trim();
+  if (configuredUrl) return configuredUrl;
+
+  const webhookBaseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
+  return `${webhookBaseUrl}/api/webhooks/infinitepay`;
+}
+
 function getBearerToken(req: any) {
   const header = String(req.headers?.authorization || req.headers?.Authorization || '');
   const match = header.match(/^Bearer\s+(.+)$/i);
@@ -489,7 +497,6 @@ export default async function handler(req: any, res: any) {
     const cancelRedirectUrl = buildSafeOptionalRedirectUrl(req, typeof cancelUrl === 'string' ? cancelUrl : undefined);
     let paymentResult;
     try {
-      const webhookBaseUrl = `${req.headers['x-forwarded-proto'] || 'https'}://${req.headers.host}`;
       paymentResult = await createProviderCheckout({
         orderId,
         buyer: {
@@ -506,7 +513,7 @@ export default async function handler(req: any, res: any) {
         paymentMethod,
         successUrl: successRedirectUrl,
         cancelUrl: cancelRedirectUrl,
-        webhookUrl: `${webhookBaseUrl}/api/webhooks/infinitepay`,
+        webhookUrl: getInfinitePayWebhookUrl(req),
       });
     } catch (error: any) {
       await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}`, {

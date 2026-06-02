@@ -46,7 +46,7 @@ function extractPix(payload: any) {
 function mapStatusFromPayload(payload: any): ProviderPaymentStatus {
   if (payload?.paid === true) return 'paid';
   const raw = String(payload?.status || payload?.payment_status || payload?.event || payload?.type || '').toLowerCase();
-  if (['paid', 'approved', 'confirmed', 'captured'].includes(raw)) return 'paid';
+  if (['paid', 'approved', 'confirmed', 'captured', 'received', 'recebido', 'completed', 'settled', 'success', 'succeeded'].includes(raw)) return 'paid';
   if (['rejected', 'denied', 'refused'].includes(raw)) return 'refused';
   if (['failed', 'expired'].includes(raw)) return 'failed';
   if (['cancelled', 'canceled', 'voided'].includes(raw)) return 'canceled';

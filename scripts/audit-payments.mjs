@@ -51,6 +51,90 @@ function maskEmail(value) {
   return `${local.slice(0, 2)}***@${domain}`;
 }
 
+function getFrontendUrl() {
+  return String(process.env.FRONTEND_URL || 'https://funpace.media').replace(/\/+$/, '');
+}
+
+function getNotificationEmail() {
+  return process.env.NOTIFICATION_EMAIL || process.env.CONTACT_EMAIL || process.env.SUPPORT_EMAIL || 'funpacerunclub@gmail.com';
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function buildPaidOrderEmail(order) {
+  const ordersUrl = `${getFrontendUrl()}/minha-conta?order=${encodeURIComponent(order.id)}&status=paid`;
+  const buyerName = String(order.buyerName || 'cliente').trim();
+  const orderShort = String(order.id).slice(0, 8);
+  return {
+    subject: `Pedido #${orderShort} liberado - Funpace Media`,
+    html: `
+      <div style="font-family:Arial,sans-serif;color:#111827;line-height:1.5">
+        <h2 style="margin:0 0 16px">Seu pedido foi liberado</h2>
+        <p>Ola, ${escapeHtml(buyerName)}.</p>
+        <p>Recebemos a confirmacao do pagamento do pedido <strong>#${escapeHtml(orderShort)}</strong> e suas fotos ja estao disponiveis para download.</p>
+        <p><a href="${escapeHtml(ordersUrl)}" style="display:inline-block;background:#111827;color:#ffffff;padding:12px 16px;text-decoration:none;border-radius:6px">Acessar meus pedidos</a></p>
+        <p style="font-size:12px;color:#6b7280">Se o botao nao abrir, acesse ${escapeHtml(ordersUrl)}</p>
+      </div>
+    `,
+  };
+}
+
+async function sendResendEmail(input) {
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { skipped: true, reason: 'RESEND_API_KEY ausente' };
+
+  const from = process.env.EMAIL_FROM || 'Funpace Media <no-reply@funpace.media>';
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from,
+      to: input.to,
+      ...(input.bcc ? { bcc: input.bcc } : {}),
+      subject: input.subject,
+      html: input.html,
+    }),
+  });
+
+  if (!response.ok) {
+    const raw = await response.text().catch(() => '');
+    throw new Error(raw || `Resend HTTP ${response.status}`);
+  }
+
+  return response.json().catch(() => ({}));
+}
+
+async function sendPaidOrderEmailOnce(client, orderId) {
+  const result = await client.query(
+    `select id, "buyerName", "buyerEmail", "paidEmailSentAt", status from public.orders where id = $1 limit 1`,
+    [orderId],
+  );
+  const order = result.rows[0];
+  if (!order || order.status !== 'paid') return { skipped: true, reason: 'pedido_nao_pago' };
+  if (order.paidEmailSentAt) return { skipped: true, reason: 'email_ja_enviado' };
+  if (!order.buyerEmail) return { skipped: true, reason: 'email_ausente' };
+
+  const email = buildPaidOrderEmail(order);
+  const sent = await sendResendEmail({ to: order.buyerEmail, bcc: getNotificationEmail(), ...email });
+  if (sent?.skipped) return sent;
+
+  await client.query(
+    `update public.orders set "paidEmailSentAt" = now(), "updatedAt" = now() where id = $1 and "paidEmailSentAt" is null`,
+    [orderId],
+  );
+  return { sent: true };
+}
+
 async function createPool() {
   const config = dbConfigFromEnv();
   if (config.host && /[a-z]/i.test(config.host)) {
@@ -305,7 +389,11 @@ async function manualRelease(pool, search, releaseReason) {
     );
 
     await client.query('commit');
-    return { orderId, releasedItems: items.rowCount };
+    const email = await sendPaidOrderEmailOnce(client, orderId).catch((error) => ({
+      failed: true,
+      reason: error?.message || String(error),
+    }));
+    return { orderId, releasedItems: items.rowCount, email };
   } catch (error) {
     await client.query('rollback');
     throw error;
@@ -451,6 +539,7 @@ async function main() {
       const result = await manualRelease(pool, orderSearch, reason);
       console.log(`Pedido liberado: ${result.orderId}`);
       console.log(`Itens liberados: ${result.releasedItems}`);
+      console.log(`Email: ${JSON.stringify(result.email)}`);
       return;
     }
 

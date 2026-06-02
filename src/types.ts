@@ -174,6 +174,26 @@ export interface PaymentEventLog {
   createdAt: string;
 }
 
+export interface PaymentRecoveryIssue {
+  orderId: string;
+  status: Order['status'];
+  buyerName: string;
+  buyerEmail: string;
+  total: number;
+  paymentMethod?: Order['paymentMethod'];
+  paymentProvider: string;
+  paymentExternalId?: string | null;
+  createdAt: string;
+  itemCount: number;
+  accessCount: number;
+  missingAccessCount: number;
+  paymentStatuses: string[];
+  eventStatuses: string[];
+  hasTransactionNsu: boolean;
+  hasSlug: boolean;
+  reasons: string[];
+}
+
 export interface Coupon {
   id: string;
   code: string;

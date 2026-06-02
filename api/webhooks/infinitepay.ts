@@ -203,8 +203,14 @@ export default async function handler(req: any, res: any) {
       payload: { ...payload, webhook_error: 'missing_transaction_or_slug' },
     });
 
-    return res.status(200).json({
-      received: true,
+    console.error('Webhook InfinitePay sem identificadores obrigatorios:', {
+      orderId,
+      hasTransactionNsu: Boolean(transactionNsu),
+      hasSlug: Boolean(slug),
+    });
+
+    return res.status(400).json({
+      success: false,
       orderId,
       status: 'pending',
       message: 'Dados de pagamento incompletos no webhook.',
@@ -255,5 +261,5 @@ export default async function handler(req: any, res: any) {
     await fulfillPaidOrder(orderId);
   }
 
-  return res.status(200).json({ received: true, orderId, status });
+  return res.status(200).json({ success: true, received: true, orderId, status });
 }

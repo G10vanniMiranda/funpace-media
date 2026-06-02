@@ -13,6 +13,7 @@ import {
   Customer,
   PaymentRecord,
   PaymentEventLog,
+  PaymentRecoveryIssue,
   Coupon,
   AdminActivityLog,
 } from '../types';
@@ -1697,6 +1698,42 @@ export const adminService = {
       limit: String(count),
     });
     return supabaseRest.get<SupabaseRow<PaymentEventLog>[]>(`/rest/v1/payment_events?${params.toString()}`, true);
+  },
+
+  async getPaymentRecoveryIssues(): Promise<{ issues: PaymentRecoveryIssue[]; summary: Record<string, number> }> {
+    if (isMockMode) return { issues: [], summary: {} };
+
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessao admin expirada.');
+
+    const response = await fetch(apiUrl('/api/admin/payments/recovery'), {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
+    return {
+      issues: payload.issues || [],
+      summary: payload.summary || {},
+    };
+  },
+
+  async recoverPayment(input: { orderId: string; action: 'reprocess' | 'manual_release' | 'fulfill'; reason?: string }) {
+    if (isMockMode) throw new Error('Recuperacao de pagamento esta disponivel apenas no modo producao.');
+
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessao admin expirada.');
+
+    const response = await fetch(apiUrl('/api/admin/payments/recovery'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(input),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
+    return payload as { orderId: string; status: Order['status'] };
   },
 
   async getCoupons(count = 200): Promise<Coupon[]> {

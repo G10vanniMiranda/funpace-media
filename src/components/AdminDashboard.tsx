@@ -31,9 +31,11 @@ import {
   Activity,
   EyeOff,
   ReceiptText,
-  Pencil
+  Pencil,
+  RefreshCw,
+  AlertTriangle,
 } from 'lucide-react';
-import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
+import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, PaymentRecoveryIssue, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
 import { adminService, eventService, photographerService, platformSettingsService, productService, withdrawalService, orderService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { getCurrentAccessToken } from '../lib/supabase';
@@ -464,6 +466,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
   const [paymentStatusFilter, setPaymentStatusFilter] = useState<'all' | Order['status']>('all');
+  const [paymentRecoveryIssues, setPaymentRecoveryIssues] = useState<PaymentRecoveryIssue[]>([]);
+  const [paymentRecoverySummary, setPaymentRecoverySummary] = useState<Record<string, number>>({});
+  const [isAuditingPayments, setIsAuditingPayments] = useState(false);
+  const [recoveringPaymentOrderId, setRecoveringPaymentOrderId] = useState<string | null>(null);
   const [logSearch, setLogSearch] = useState('');
   const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
@@ -652,6 +658,52 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       paymentStatusFilter === 'all' || payment.status === paymentStatusFilter
     ));
   }, [payments, paymentStatusFilter]);
+  const localPaymentIssues = React.useMemo<PaymentRecoveryIssue[]>(() => {
+    const paymentsByOrder = new Map<string, PaymentRecord[]>();
+    const eventsByOrder = new Map<string, PaymentEventLog[]>();
+    for (const payment of payments) {
+      const rows = paymentsByOrder.get(payment.orderId) ?? [];
+      rows.push(payment);
+      paymentsByOrder.set(payment.orderId, rows);
+    }
+    for (const eventItem of paymentEvents) {
+      if (!eventItem.orderId) continue;
+      const rows = eventsByOrder.get(eventItem.orderId) ?? [];
+      rows.push(eventItem);
+      eventsByOrder.set(eventItem.orderId, rows);
+    }
+
+    return orders.map((order) => {
+      const orderPayments = paymentsByOrder.get(order.id) ?? [];
+      const orderEvents = eventsByOrder.get(order.id) ?? [];
+      const reasons: string[] = [];
+      if (order.status !== 'paid' && orderPayments.some((payment) => payment.status === 'paid')) reasons.push('payment_paid_order_not_paid');
+      if (order.status !== 'paid' && orderEvents.some((eventItem) => eventItem.status === 'paid')) reasons.push('webhook_paid_order_not_paid');
+      if (order.status === 'pending' && orderPayments.some((payment) => payment.status === 'pending') && orderEvents.length === 0) reasons.push('pending_without_webhook');
+      if (order.status === 'pending' && !order.paymentExternalId) reasons.push('missing_provider_identifiers');
+
+      return {
+        orderId: order.id,
+        status: order.status,
+        buyerName: order.buyerName,
+        buyerEmail: order.buyerEmail,
+        total: Number(order.total || 0),
+        paymentMethod: order.paymentMethod,
+        paymentProvider: order.paymentProvider,
+        paymentExternalId: order.paymentExternalId,
+        createdAt: order.createdAt,
+        itemCount: order.items?.length ?? 0,
+        accessCount: 0,
+        missingAccessCount: 0,
+        paymentStatuses: orderPayments.map((payment) => payment.status),
+        eventStatuses: orderEvents.map((eventItem) => eventItem.status || '').filter(Boolean),
+        hasTransactionNsu: Boolean(order.paymentExternalId),
+        hasSlug: false,
+        reasons,
+      };
+    }).filter((issue) => issue.paymentProvider === 'infinitepay' && issue.reasons.length > 0);
+  }, [orders, payments, paymentEvents]);
+  const visiblePaymentIssues = paymentRecoveryIssues.length > 0 ? paymentRecoveryIssues : localPaymentIssues;
   const operationalLogs = React.useMemo(() => {
     const webhookLogs: AdminActivityLog[] = paymentEvents.map((eventItem) => ({
       id: `webhook:${eventItem.id}`,
@@ -1529,6 +1581,44 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       alert('Nao foi possivel atualizar o pedido.');
     } finally {
       setUpdatingOrderId(null);
+    }
+  };
+
+  const handleAuditPayments = async () => {
+    setIsAuditingPayments(true);
+    try {
+      const result = await adminService.getPaymentRecoveryIssues();
+      setPaymentRecoveryIssues(result.issues);
+      setPaymentRecoverySummary(result.summary);
+    } catch (error) {
+      console.error(error);
+      alert('Nao foi possivel auditar pagamentos.');
+    } finally {
+      setIsAuditingPayments(false);
+    }
+  };
+
+  const handleRecoverPayment = async (issue: PaymentRecoveryIssue, action: 'reprocess' | 'manual_release' | 'fulfill') => {
+    let reason = '';
+    if (action === 'manual_release') {
+      reason = window.prompt(`Informe o comprovante/motivo para liberar #${issue.orderId.slice(0, 8)}:`)?.trim() || '';
+      if (reason.length < 8) return;
+    }
+
+    const label = action === 'reprocess' ? 'reprocessar' : action === 'fulfill' ? 'reexecutar liberacao' : 'liberar manualmente';
+    const confirmed = window.confirm(`Confirmar ${label} do pedido #${issue.orderId.slice(0, 8)}?`);
+    if (!confirmed) return;
+
+    setRecoveringPaymentOrderId(issue.orderId);
+    try {
+      await adminService.recoverPayment({ orderId: issue.orderId, action, reason });
+      await handleAuditPayments();
+      await onRefresh();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel recuperar o pagamento.');
+    } finally {
+      setRecoveringPaymentOrderId(null);
     }
   };
 
@@ -2571,6 +2661,73 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
           {activeTab === 'payments' && (
             <motion.div key="payments" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10 flex flex-col xl:flex-row gap-4 xl:items-center xl:justify-between">
+                  <div>
+                    <h3 className="font-sans font-black text-base uppercase flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-yellow-300" /> Recuperacao de pagamentos</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">{visiblePaymentIssues.length} inconsistencia(s) detectada(s)</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleAuditPayments}
+                    disabled={isAuditingPayments}
+                    className="h-11 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase inline-flex items-center justify-center gap-2 hover:border-brutal-accent disabled:text-gray-500 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-4 h-4 ${isAuditingPayments ? 'animate-spin' : ''}`} />
+                    Auditar banco
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-5 border-b border-white/10">
+                  <div className="bg-[#080d14] border border-white/10 p-4"><p className="font-mono text-[9px] uppercase text-gray-500">Sem webhook</p><p className="font-sans font-black text-2xl text-yellow-300">{paymentRecoverySummary.pendingWithoutWebhook ?? localPaymentIssues.filter((issue) => issue.reasons.includes('pending_without_webhook')).length}</p></div>
+                  <div className="bg-[#080d14] border border-white/10 p-4"><p className="font-mono text-[9px] uppercase text-gray-500">Sem IDs InfinitePay</p><p className="font-sans font-black text-2xl text-red-300">{paymentRecoverySummary.missingProviderIdentifiers ?? localPaymentIssues.filter((issue) => issue.reasons.includes('missing_provider_identifiers')).length}</p></div>
+                  <div className="bg-[#080d14] border border-white/10 p-4"><p className="font-mono text-[9px] uppercase text-gray-500">Download faltando</p><p className="font-sans font-black text-2xl text-brutal-accent">{paymentRecoverySummary.missingDownloadAccess ?? 0}</p></div>
+                  <div className="bg-[#080d14] border border-white/10 p-4"><p className="font-mono text-[9px] uppercase text-gray-500">Total em risco</p><p className="font-sans font-black text-2xl text-white">{visiblePaymentIssues.length}</p></div>
+                </div>
+                <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
+                  {visiblePaymentIssues.slice(0, 80).map((issue) => {
+                    const canReprocess = issue.hasTransactionNsu && issue.hasSlug;
+                    const isBusy = recoveringPaymentOrderId === issue.orderId;
+                    return (
+                      <div key={issue.orderId} className="p-4 flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+                        <div className="min-w-0">
+                          <p className="font-sans font-black text-sm uppercase truncate">#{issue.orderId.slice(0, 8)} - {issue.buyerName}</p>
+                          <p className="font-mono text-[10px] text-gray-500 truncate">{issue.buyerEmail} - {formatCurrency(Number(issue.total || 0))} - {issue.paymentMethod || 'checkout'}</p>
+                          <p className="font-mono text-[9px] text-yellow-300 uppercase mt-1">{issue.reasons.join(', ')}</p>
+                        </div>
+                        <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+                          <button
+                            type="button"
+                            disabled={isBusy || !canReprocess}
+                            onClick={() => handleRecoverPayment(issue, 'reprocess')}
+                            className="h-9 px-3 border border-blue-400/30 text-blue-300 font-mono text-[9px] uppercase hover:bg-blue-500/10 disabled:text-gray-600 disabled:border-white/10 disabled:cursor-not-allowed"
+                          >
+                            Reprocessar
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy || issue.status !== 'paid'}
+                            onClick={() => handleRecoverPayment(issue, 'fulfill')}
+                            className="h-9 px-3 border border-green-400/30 text-green-300 font-mono text-[9px] uppercase hover:bg-green-500/10 disabled:text-gray-600 disabled:border-white/10 disabled:cursor-not-allowed"
+                          >
+                            Liberar downloads
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isBusy}
+                            onClick={() => handleRecoverPayment(issue, 'manual_release')}
+                            className="h-9 px-3 border border-brutal-accent/60 text-brutal-accent font-mono text-[9px] uppercase hover:bg-brutal-accent/10 disabled:text-gray-600 disabled:border-white/10 disabled:cursor-not-allowed"
+                          >
+                            Manual
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {visiblePaymentIssues.length === 0 && (
+                    <div className="p-6 text-center font-mono text-[10px] uppercase text-gray-500">Nenhuma inconsistencia encontrada.</div>
+                  )}
+                </div>
+              </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                 <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Pagamentos</p><p className="font-sans font-black text-3xl">{payments.length}</p></div>
                 <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Aprovados</p><p className="font-sans font-black text-3xl text-green-400">{payments.filter((item) => item.status === 'paid').length}</p></div>

@@ -14,6 +14,7 @@
     "backup:bucket": "node scripts/backup-bucket-manifest.mjs",
     "bucket:upload:test": "node scripts/test-bucket-upload.mjs 5",
     "payments:reconcile": "node scripts/reconcile-infinitepay-pending-orders.mjs",
+    "payments:audit": "node scripts/audit-payments.mjs",
     "supabase:schema:apply": "node scripts/apply-supabase-schema.mjs",
     "supabase:schema:validate": "node scripts/validate-supabase-schema.mjs",
     "supabase:admin:set": "node scripts/set-supabase-admin.mjs"

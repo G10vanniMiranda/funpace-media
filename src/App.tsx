@@ -33,8 +33,9 @@ import { CheckoutPaymentMethod, adminService, customerAccountService, productSer
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MapPin, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MapPin, MessageCircle, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
 import { useToast } from './contexts/ToastContext';
+import { buildWhatsappUrl } from './lib/contact';
 
 enum OperationType {
   CREATE = 'create',
@@ -901,6 +902,8 @@ function Storefront() {
         onClose={closeSelfieNotice}
       />
 
+      <FloatingWhatsappSupport />
+
       <AnimatePresence>
         {isAuthOpen && (
           <AuthView
@@ -912,6 +915,20 @@ function Storefront() {
 
       <Footer />
     </div>
+  );
+}
+
+function FloatingWhatsappSupport() {
+  return (
+    <a
+      href={buildWhatsappUrl('Ola, Funpace. Preciso de suporte.')}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label="Abrir suporte no WhatsApp"
+      className="fixed bottom-5 right-5 z-70 inline-flex h-14 w-14 items-center justify-center rounded-full border-2 border-brutal-black bg-[#25D366] text-brutal-black brutal-shadow transition-transform hover:-translate-y-0.5 hover:bg-[#20bd5a] focus:outline-none focus:ring-4 focus:ring-[#25D366]/30 sm:bottom-6 sm:right-6"
+    >
+      <MessageCircle className="h-6 w-6" />
+    </a>
   );
 }
 

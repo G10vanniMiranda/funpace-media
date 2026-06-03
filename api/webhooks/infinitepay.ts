@@ -1,4 +1,4 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, rateLimit, setSecurityHeaders } from '../_security.ts';
+import { assertRequestSize, handleOptions as handleSecurityOptions, rateLimit, setSecurityHeaders } from '../_security.js';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 

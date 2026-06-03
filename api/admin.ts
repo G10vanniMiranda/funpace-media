@@ -1,4 +1,4 @@
-import { getClientIp, handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.ts';
+import { getClientIp, handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.js';
 
 function isIpAllowed(req: any) {
   const allowlist = String(process.env.ADMIN_IP_ALLOWLIST || '')
@@ -31,17 +31,17 @@ export default async function handler(req: any, res: any) {
   const route = routeName(req);
 
   if (route === 'snapshot') {
-    const { default: snapshotHandler } = await import('../server/api/admin/snapshot.ts');
+    const { default: snapshotHandler } = await import('../server/api/admin/snapshot.js');
     return snapshotHandler(req, res);
   }
 
   if (route === 'orders-status') {
-    const { default: orderStatusHandler } = await import('../server/api/admin/orders/status.ts');
+    const { default: orderStatusHandler } = await import('../server/api/admin/orders/status.js');
     return orderStatusHandler(req, res);
   }
 
   if (route === 'payments-recovery') {
-    const { default: paymentRecoveryHandler } = await import('../server/api/admin/payments/recovery.ts');
+    const { default: paymentRecoveryHandler } = await import('../server/api/admin/payments/recovery.js');
     return paymentRecoveryHandler(req, res);
   }
 

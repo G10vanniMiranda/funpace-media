@@ -1,5 +1,5 @@
-import { infinitePayProvider } from '../../../payments/providers/infinitepay.ts';
-import { fulfillPaidOrder, recordPayment } from '../../../shared/checkoutFulfillment.ts';
+import { infinitePayProvider } from '../../../payments/providers/infinitepay.js';
+import { fulfillPaidOrder, recordPayment } from '../../../shared/checkoutFulfillment.js';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 

@@ -4,12 +4,12 @@ import type {
   PaymentProvider,
   PaymentStatusResult,
   ProviderPaymentStatus,
-} from './types.ts';
+} from './types.js';
 import {
   getInfinitePayCheckoutEndpoint,
   getInfinitePayPaymentCheckEndpoint,
   fetchWithTimeout,
-} from '../../shared/utils.ts';
+} from '../../shared/utils.js';
 
 function getHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;

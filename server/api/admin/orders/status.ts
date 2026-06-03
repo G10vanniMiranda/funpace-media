@@ -1,4 +1,4 @@
-import { fulfillPaidOrder, recordPayment } from '../../../shared/checkoutFulfillment.ts';
+import { fulfillPaidOrder, recordPayment } from '../../../shared/checkoutFulfillment.js';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');

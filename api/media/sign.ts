@@ -1,4 +1,4 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
 
 const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';

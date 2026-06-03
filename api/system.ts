@@ -1,7 +1,7 @@
-import healthHandler from '../server/api/health.ts';
-import checkoutDebugHandler from '../server/api/checkout/debug.ts';
-import paymentsReconcileHandler from '../server/api/payments/reconcile.ts';
-import { handleOptions, rateLimit, setSecurityHeaders } from './_security.ts';
+import healthHandler from '../server/api/health.js';
+import checkoutDebugHandler from '../server/api/checkout/debug.js';
+import paymentsReconcileHandler from '../server/api/payments/reconcile.js';
+import { handleOptions, rateLimit, setSecurityHeaders } from './_security.js';
 
 function routeName(req: any) {
   const queryRoute = String(req.query?.route || '').trim();

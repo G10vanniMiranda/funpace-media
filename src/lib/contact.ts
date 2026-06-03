@@ -1,6 +1,6 @@
 export const FUNPACE_CONTACT_EMAIL = 'funpacerunclub@gmail.com';
-export const FUNPACE_WHATSAPP_NUMBER = '5569992565151';
-export const FUNPACE_WHATSAPP_DISPLAY = '(69) 99256-5151';
+export const FUNPACE_WHATSAPP_NUMBER = '5569992565155';
+export const FUNPACE_WHATSAPP_DISPLAY = '(69) 99256-5155';
 
 export function buildMailtoUrl(input?: { subject?: string; body?: string }) {
   const params = new URLSearchParams();

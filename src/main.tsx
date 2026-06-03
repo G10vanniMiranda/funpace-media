@@ -5,6 +5,7 @@ import './index.css';
 import { AuthProvider } from './contexts/AuthContext';
 import { ToastProvider } from './contexts/ToastContext';
 import { handleOAuthCallbackFromUrl } from './lib/supabase';
+import { Analytics } from '@vercel/analytics/react';
 
 async function boot() {
   try {
@@ -18,6 +19,7 @@ async function boot() {
       <AuthProvider>
         <ToastProvider>
           <App />
+          <Analytics />
         </ToastProvider>
       </AuthProvider>
     </StrictMode>,

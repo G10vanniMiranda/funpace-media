@@ -1,0 +1,133 @@
+﻿{
+  "completedAt": "2026-06-03T09:11:46.784Z",
+  "dropped": [
+    {
+      "schema": "public",
+      "table": "admin_activity_logs",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "codex_connection_test",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "coupons",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "customer_favorites",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "customers",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "downloads",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "media_processing_jobs",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "photographer_transactions",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "photographer_wallets",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "photographers",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "platform_settings",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "product_likes",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "user_sessions",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "withdrawal_requests",
+      "policy": "liberar"
+    }
+  ],
+  "skipped": [
+    {
+      "schema": "public",
+      "table": "orders",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "order_items",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "download_access",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "download_events",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "payments",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "payment_events",
+      "policy": "liberar"
+    },
+    {
+      "schema": "public",
+      "table": "products",
+      "policy": "liberar"
+    },
+    {
+      "schema": "storage",
+      "table": "objects",
+      "policy": "liberar 1bsoywt_0"
+    },
+    {
+      "schema": "storage",
+      "table": "objects",
+      "policy": "liberar 1bsoywt_1"
+    },
+    {
+      "schema": "storage",
+      "table": "objects",
+      "policy": "liberar 1bsoywt_2"
+    },
+    {
+      "schema": "storage",
+      "table": "objects",
+      "policy": "liberar 1bsoywt_3"
+    }
+  ],
+  "remainingBroadPolicies": []
+}

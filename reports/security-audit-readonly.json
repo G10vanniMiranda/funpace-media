@@ -1,0 +1,1524 @@
+﻿{
+  "generatedAt": "2026-06-03T09:12:29.244Z",
+  "schema": {
+    "orders": {
+      "count": 61,
+      "columns": [
+        "id",
+        "userId",
+        "buyerName",
+        "buyerEmail",
+        "buyerPhone",
+        "buyerCpf",
+        "total",
+        "status",
+        "paymentProvider",
+        "paymentExternalId",
+        "checkoutUrl",
+        "createdAt",
+        "updatedAt",
+        "payment_provider",
+        "payment_url",
+        "payment_id",
+        "receipt_url",
+        "paid_amount",
+        "payment_method",
+        "webhook_payload",
+        "paid_at",
+        "updated_at",
+        "subtotal",
+        "discountTotal",
+        "paymentMethod",
+        "paidEmailSentAt"
+      ]
+    },
+    "order_items": {
+      "count": 62,
+      "columns": [
+        "id",
+        "orderId",
+        "productId",
+        "name",
+        "type",
+        "price",
+        "url",
+        "vendedorId",
+        "bib",
+        "event",
+        "checkpoint",
+        "thumbnailUrl",
+        "createdAt"
+      ]
+    },
+    "download_access": {
+      "count": 33,
+      "columns": [
+        "id",
+        "orderId",
+        "photoId",
+        "orderItemId",
+        "userId",
+        "customerEmail",
+        "isActive",
+        "expiresAt",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "download_events": {
+      "count": 105,
+      "columns": [
+        "id",
+        "orderId",
+        "orderItemId",
+        "productId",
+        "vendedorId",
+        "buyerEmail",
+        "userId",
+        "ipHash",
+        "userAgent",
+        "createdAt"
+      ]
+    },
+    "products": {
+      "count": 1867,
+      "columns": [
+        "id",
+        "name",
+        "price",
+        "url",
+        "type",
+        "vendedorId",
+        "bib",
+        "event",
+        "checkpoint",
+        "thumbnailUrl",
+        "duration",
+        "storagePath",
+        "status",
+        "createdAt",
+        "updatedAt",
+        "watermarkUrl",
+        "viewCount",
+        "salesCount",
+        "fileHash",
+        "fileSize",
+        "originalFileName",
+        "thumbnailHash",
+        "uploadBatchId"
+      ]
+    },
+    "payments": {
+      "count": 35,
+      "columns": [
+        "id",
+        "orderId",
+        "provider",
+        "providerPaymentId",
+        "method",
+        "status",
+        "rawResponse",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "payment_events": {
+      "count": 19,
+      "columns": [
+        "id",
+        "provider",
+        "eventId",
+        "orderId",
+        "status",
+        "payload",
+        "createdAt"
+      ]
+    },
+    "admin_activity_logs": {
+      "count": 20,
+      "columns": [
+        "id",
+        "actorId",
+        "actorEmail",
+        "action",
+        "targetType",
+        "targetId",
+        "metadata",
+        "createdAt"
+      ]
+    },
+    "customers": {
+      "count": 21,
+      "columns": [
+        "id",
+        "email",
+        "name",
+        "phone",
+        "cpf",
+        "createdAt",
+        "updatedAt",
+        "avatarUrl",
+        "preferences"
+      ]
+    },
+    "photographers": {
+      "count": 10,
+      "columns": [
+        "id",
+        "name",
+        "email",
+        "bio",
+        "avatar",
+        "phone",
+        "cpf",
+        "verified",
+        "stats",
+        "createdAt",
+        "updatedAt",
+        "role",
+        "commissionPercent",
+        "blockedAt",
+        "lastLoginAt",
+        "instagram"
+      ]
+    }
+  },
+  "findings": [
+    {
+      "label": "storage_buckets",
+      "rows": [
+        {
+          "id": "bucket_funpace",
+          "name": "bucket_funpace",
+          "public": false,
+          "file_size_limit": null,
+          "allowed_mime_types": null
+        },
+        {
+          "id": "funpace-media",
+          "name": "funpace-media",
+          "public": false,
+          "file_size_limit": "524288000",
+          "allowed_mime_types": [
+            "image/jpeg",
+            "image/png",
+            "image/webp",
+            "image/gif",
+            "video/mp4",
+            "video/webm",
+            "video/quicktime"
+          ]
+        }
+      ]
+    },
+    {
+      "label": "rls_policies_sensiveis",
+      "rows": [
+        {
+          "schemaname": "public",
+          "tablename": "download_access",
+          "policyname": "download_access_select_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "(is_admin() OR ((\"userId\" IS NOT NULL) AND (\"userId\" = (auth.uid())::text)) OR (\"customerEmail\" = (auth.jwt() ->> 'email'::text)))",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "download_events",
+          "policyname": "download_events_select_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "(is_admin() OR (\"vendedorId\" = (auth.uid())::text))",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "order_items",
+          "policyname": "order_items_select_order_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "(is_admin() OR (\"vendedorId\" = (auth.uid())::text) OR (EXISTS ( SELECT 1\n   FROM orders o\n  WHERE ((o.id = order_items.\"orderId\") AND (((o.\"userId\" IS NOT NULL) AND (o.\"userId\" = (auth.uid())::text)) OR (o.\"buyerEmail\" = (auth.jwt() ->> 'email'::text)))))))",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "orders",
+          "policyname": "orders_select_owner_email_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "(is_admin() OR ((\"userId\" IS NOT NULL) AND (\"userId\" = (auth.uid())::text)) OR (\"buyerEmail\" = (auth.jwt() ->> 'email'::text)) OR order_has_vendor(id, (auth.uid())::text))",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "orders",
+          "policyname": "orders_update_admin_only",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "UPDATE",
+          "qual": "is_admin()",
+          "with_check": "is_admin()"
+        },
+        {
+          "schemaname": "public",
+          "tablename": "payment_events",
+          "policyname": "payment_events_select_admin_only",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "is_admin()",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "payments",
+          "policyname": "payments_select_order_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "(is_admin() OR (EXISTS ( SELECT 1\n   FROM orders o\n  WHERE ((o.id = payments.\"orderId\") AND (((o.\"userId\" IS NOT NULL) AND (o.\"userId\" = (auth.uid())::text)) OR (o.\"buyerEmail\" = (auth.jwt() ->> 'email'::text)))))))",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "products",
+          "policyname": "products_delete_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "DELETE",
+          "qual": "((\"vendedorId\" = (auth.uid())::text) OR is_admin())",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "products",
+          "policyname": "products_insert_own_verified_photographer",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "((auth.uid() IS NOT NULL) AND (\"vendedorId\" = (auth.uid())::text) AND (EXISTS ( SELECT 1\n   FROM photographers p\n  WHERE ((p.id = (auth.uid())::text) AND (p.verified = true)))))"
+        },
+        {
+          "schemaname": "public",
+          "tablename": "products",
+          "policyname": "products_select_published_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "((status = 'published'::text) OR (\"vendedorId\" = (auth.uid())::text) OR is_admin())",
+          "with_check": null
+        },
+        {
+          "schemaname": "public",
+          "tablename": "products",
+          "policyname": "products_update_owner_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "UPDATE",
+          "qual": "((\"vendedorId\" = (auth.uid())::text) OR is_admin())",
+          "with_check": "((\"vendedorId\" = (auth.uid())::text) OR is_admin())"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "media_delete_owner_folder_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "DELETE",
+          "qual": "((bucket_id = 'funpace-media'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR is_admin()))",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "media_insert_verified_owner_folder",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "INSERT",
+          "qual": null,
+          "with_check": "((bucket_id = 'funpace-media'::text) AND (auth.uid() IS NOT NULL) AND (is_admin() OR (((storage.foldername(name))[1] = (auth.uid())::text) AND (EXISTS ( SELECT 1\n   FROM photographers p\n  WHERE ((p.id = (auth.uid())::text) AND (p.verified = true)))))))"
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "media_select_public",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "SELECT",
+          "qual": "(bucket_id = 'funpace-media'::text)",
+          "with_check": null
+        },
+        {
+          "schemaname": "storage",
+          "tablename": "objects",
+          "policyname": "media_update_owner_folder_or_admin",
+          "permissive": "PERMISSIVE",
+          "roles": "{public}",
+          "cmd": "UPDATE",
+          "qual": "((bucket_id = 'funpace-media'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR is_admin()))",
+          "with_check": "((bucket_id = 'funpace-media'::text) AND (((storage.foldername(name))[1] = (auth.uid())::text) OR is_admin()))"
+        }
+      ]
+    },
+    {
+      "label": "download_access_sem_pedido_pago",
+      "rows": []
+    },
+    {
+      "label": "download_events_sem_pedido_pago",
+      "rows": []
+    },
+    {
+      "label": "produtos_baixados_por_emails_diferentes_do_comprador",
+      "rows": []
+    },
+    {
+      "label": "downloads_recentes_por_ip",
+      "rows": [
+        {
+          "ip_hash": "sem_ip_hash",
+          "downloads": 99,
+          "orders": 14,
+          "products": 25,
+          "first_seen": "2026-05-26T22:49:45.524Z",
+          "last_seen": "2026-06-03T05:59:16.268Z"
+        },
+        {
+          "ip_hash": "12ca17b49af2289436f303e0166030a21e525d266e209267433801a8fd4071a0",
+          "downloads": 6,
+          "orders": 2,
+          "products": 2,
+          "first_seen": "2026-05-26T21:11:44.458Z",
+          "last_seen": "2026-05-28T05:16:24.257Z"
+        }
+      ]
+    },
+    {
+      "label": "pedidos_pagos_sem_download_access",
+      "rows": []
+    },
+    {
+      "label": "admin_logs_recentes",
+      "rows": [
+        {
+          "id": "097be904-10f9-4d2f-87f4-e12b972c0a05",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "e1d94fed-c40b-45df-a296-35e282ab1972",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T22:42:43.081Z",
+          "metadata": {
+            "reason": "Comprovante externo InfinitePay PIX recebido em 2026-06-02 as 18:38 no valor de R$ 1,10",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "9bed61af-3bac-4805-a57e-0ff9839b72bf",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "470199e9-318d-4af2-b72e-0610e1c443b8",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T22:25:25.236Z",
+          "metadata": {
+            "reason": "Comprovante externo InfinitePay PIX recebido em 2026-06-02 as 18:21 no valor de R$ 1,10",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "3a5786b5-f1da-46e0-bf2e-36d7ae20d2b9",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "a1718f5b-819d-4623-bc5e-07407da2e0af",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T21:43:02.062Z",
+          "metadata": {
+            "reason": "Comprovante externo InfinitePay PIX recebido em 2026-06-02 as 17:37 no valor de R$ 1,10",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "c7eb358d-4f78-4ded-84aa-e6de95a3ab3b",
+          "action": "coupon_created",
+          "targetType": "coupon",
+          "targetId": "baff6915-5df7-4aa1-aac3-ec64a355f857",
+          "actorEmail": "lucasromulocompany@gmail.com",
+          "createdAt": "2026-06-02T21:26:45.138Z",
+          "metadata": {
+            "code": "TESTE13",
+            "type": "fixed",
+            "value": 13.8
+          }
+        },
+        {
+          "id": "b1ffc34f-535c-473e-a1a2-b49b9a26bb5e",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "9b8cdad1-5395-4b5e-8de3-40698379d85b",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T20:44:08.431Z",
+          "metadata": {
+            "reason": "Reenvio idempotente para acionar notificacao apos comprovante externo InfinitePay PIX recebido em 2026-06-02 as 15:46",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "b679f849-2254-4fa5-93e2-659f2589abbd",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "9b8cdad1-5395-4b5e-8de3-40698379d85b",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T20:38:49.259Z",
+          "metadata": {
+            "reason": "Comprovante",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "d3dd5038-7070-4840-87f9-4248a45f9f25",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "07278173-7119-4ff9-9170-c018d12fcf63",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:37.698Z",
+          "metadata": {
+            "reason": "Comprovante",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "66b43c65-7fc1-42cd-8228-8f0bb2d27a34",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "7031a68e-e9d4-4064-8592-2ef4d4265042",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:36.602Z",
+          "metadata": {
+            "reason": "Comprovante",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "ed17c465-5a52-4c66-ab00-040e23299ee2",
+          "action": "payment_manual_release_cli",
+          "targetType": "order",
+          "targetId": "405eb949-3429-4e92-884e-a1c4299f70aa",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:31.923Z",
+          "metadata": {
+            "reason": "Comprovante",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "19e639a4-7929-4cd6-9b6b-f15d553ccf07",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "8b290de9-a0dc-4e19-8312-056147ab54f9",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "22515897-7b2c-4665-bfdc-def1ceddf6ac",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "98301305-bd2d-427b-a40b-e4f17a4fa852",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "3ba909a1-0ff2-40ea-8408-6a97a35f78a6",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "92db5705-d673-499e-a49c-832489e49b8c",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "69a10904-d6c9-43c1-b33b-919f1fb9929f",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "d72eeaaf-04db-4bc0-a516-8aad617db27a",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "ebdd3be7-8394-42d1-a618-ba180ec25f25",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "cc43befb-9bff-407b-9ded-c66c4c269e04",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "63b3f55c-c479-433a-842c-bd4ad08fff4e",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "7fff3345-b3cc-4dc6-8d02-5520ab405f32",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "81d221c9-3d14-4469-a05a-c6d7bc8592ff",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "a196cc98-1970-434c-8575-909e3db1c395",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "6ac2421c-1301-4f63-a77e-0b40962e470e",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "8a19eee0-bc46-47cd-aa70-3fd9471812d1",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "7b6b34c4-5e6d-41e6-b8d9-5bd2af71ec32",
+          "action": "payment_fulfillment_retry_cli",
+          "targetType": "order",
+          "targetId": "8b42045e-9433-4901-81e4-ae4f4410fd24",
+          "actorEmail": null,
+          "createdAt": "2026-06-02T19:05:02.962Z",
+          "metadata": {
+            "reason": "paid_order_missing_download_access",
+            "source": "audit-payments"
+          }
+        },
+        {
+          "id": "53580540-fc91-4011-a683-d7d8ac9386d0",
+          "action": "order_status_updated",
+          "targetType": "order",
+          "targetId": "e6c58171-cfd0-4805-aeda-e80fa8f74350",
+          "actorEmail": "lucasromulocompany@gmail.com",
+          "createdAt": "2026-05-30T10:00:16.664Z",
+          "metadata": {
+            "status": "canceled",
+            "previousStatus": "pending"
+          }
+        },
+        {
+          "id": "909d4a98-1f0d-4b23-afb3-2979cd32122e",
+          "action": "order_status_updated",
+          "targetType": "order",
+          "targetId": "ee8fcaca-9973-4cb5-a767-44a739ed7ad0",
+          "actorEmail": "lucasromulocompany@gmail.com",
+          "createdAt": "2026-05-30T09:59:57.207Z",
+          "metadata": {
+            "status": "canceled",
+            "previousStatus": "pending"
+          }
+        }
+      ]
+    },
+    {
+      "label": "produtos_recentes",
+      "rows": [
+        {
+          "id": "00b86166-05a0-4454-83f8-ccb212ce0fbb",
+          "name": "C0636",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T06:56:29.530Z",
+          "updatedAt": "2026-06-03T06:56:28.368Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/434fde07652942b3aab3a6e34d3a73f8.mp4",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/a5b3ab5c0bae425b8b649a82cc582b74.jpg"
+        },
+        {
+          "id": "7da261f1-9282-443d-8267-23bc1a0a501d",
+          "name": "C0629",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T06:54:41.369Z",
+          "updatedAt": "2026-06-03T06:54:40.273Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/91523f0c6bc04333afa88e3cc5d82e5a.mp4",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/46d8c0232fd74fe9a9b0d83732187ff3.jpg"
+        },
+        {
+          "id": "e72eae30-0f91-4c36-9868-c00e60ee661c",
+          "name": "DSC02127",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:14:31.302Z",
+          "updatedAt": "2026-06-03T05:14:30.085Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/fcf379d1143841fb9f9f176dd65779b2.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/00cd83698ea644919ce25f1fee634066.jpg"
+        },
+        {
+          "id": "aaf3ff07-b1e3-4841-a8f4-0bcf390cb3e5",
+          "name": "DSC02126",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:14:27.127Z",
+          "updatedAt": "2026-06-03T05:14:25.916Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/71d0e9ccba8f4bd49d66329295e7af6d.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9d31ce53e77f4ee694cca20d51571e0b.jpg"
+        },
+        {
+          "id": "02c76c16-424b-4da9-946e-938bfce3af53",
+          "name": "DSC02124",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:14:22.965Z",
+          "updatedAt": "2026-06-03T05:14:21.745Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/e6824850d5a8401ab677ec8d1d4fdf4b.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/ce88f8c09e6946d4867b809523821b34.jpg"
+        },
+        {
+          "id": "7a5ce3af-8774-46b2-a948-d29a60d1b98c",
+          "name": "DSC02123",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:14:18.863Z",
+          "updatedAt": "2026-06-03T05:14:17.643Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/3b5a6e1fa615475e8e6e323ef69bc75d.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/c08923d37bf2409ca0b56f796b14484a.jpg"
+        },
+        {
+          "id": "0d383a90-9732-43ab-bf38-b424c41121b8",
+          "name": "DSC02093",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:14:14.531Z",
+          "updatedAt": "2026-06-03T05:14:13.317Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/ba0c6e2b6b404df7bf60f6cf0581d8f5.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/73607b14221d49e6b2b2a193e98d647b.jpg"
+        },
+        {
+          "id": "b93f6358-6d67-4e9e-8e13-de3f3d23779b",
+          "name": "DSC02088",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:14:00.130Z",
+          "updatedAt": "2026-06-03T05:13:58.909Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/5816c36d239749d295e104116155a549.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/7fcaea44e0c048fd90c8f9288959cefb.jpg"
+        },
+        {
+          "id": "97e79896-ee13-42e6-984a-5d08181616e5",
+          "name": "DSC02082",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:55.972Z",
+          "updatedAt": "2026-06-03T05:13:54.761Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/be96b4d43a634324919bee5e4d49c7ea.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/aa84e3c07422429f96827a5e0d199893.jpg"
+        },
+        {
+          "id": "5c120194-15fb-4e90-ba58-f53fc4a77d00",
+          "name": "DSC02071",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:51.823Z",
+          "updatedAt": "2026-06-03T05:13:50.640Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/0bba9a5542ff4903b79833a511661178.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/43254480965d4dbaab7fba36727ab406.jpg"
+        },
+        {
+          "id": "d14e7653-9d58-4bf0-a25a-c38af9d75086",
+          "name": "DSC02058",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:47.630Z",
+          "updatedAt": "2026-06-03T05:13:46.410Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/92568976ea88499db9402a92aa793753.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/7c7a2e5be12643058ad1f65c1a40c1db.jpg"
+        },
+        {
+          "id": "93b88e27-d26a-4ee8-b337-6bf2979d25c2",
+          "name": "DSC02055",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:43.523Z",
+          "updatedAt": "2026-06-03T05:13:42.313Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/75e784c0c8cb43388f564193a0a24e6e.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/099cc849668547a688abc379dcaaaf4b.jpg"
+        },
+        {
+          "id": "2bc7bd27-01f7-45a8-9ca5-f74d3eb7feb3",
+          "name": "DSC02052",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:30.471Z",
+          "updatedAt": "2026-06-03T05:13:29.256Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/fb55dd46701542a79b9f6c27163bca91.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/c39a5aacf0a647dab84c30b0c22e44ec.jpg"
+        },
+        {
+          "id": "7011f6c2-16ee-4385-a97f-a83569c9c1b9",
+          "name": "DSC02046",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:26.309Z",
+          "updatedAt": "2026-06-03T05:13:25.098Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/61f1d0bf4af14c8f8d12524139d198d0.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/8e5cab9b7eed41429ff83dc6d985706f.jpg"
+        },
+        {
+          "id": "bbbe1afb-8c98-4735-ace7-5a7986f50d62",
+          "name": "DSC02045",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:21.777Z",
+          "updatedAt": "2026-06-03T05:13:20.568Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/a513cd46a93a4b64bb475c786db7b453.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9cea02fe517c42d39ce63533919cf147.jpg"
+        },
+        {
+          "id": "fb69c968-60bd-4e37-baec-ab58e72e9bad",
+          "name": "DSC02040",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:17.520Z",
+          "updatedAt": "2026-06-03T05:13:16.309Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/ea1c4241d63e4ce399a1802624f0d6ad.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/52e7bfb1c41d426e96068df62c161fcf.jpg"
+        },
+        {
+          "id": "8e849e0f-7ea3-4121-a3ec-84e9816c4fa6",
+          "name": "DSC02034",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:13:13.297Z",
+          "updatedAt": "2026-06-03T05:13:12.097Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/68139edfda7a4059962f8f77ab3ac469.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/13ef758ff69d4a44a0a8b0ed2436a535.jpg"
+        },
+        {
+          "id": "63fc669f-754a-4d9d-9d36-c8a3074a4f9f",
+          "name": "DSC02031",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:58.338Z",
+          "updatedAt": "2026-06-03T05:12:57.130Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/975b4c85854b4fd18a88903a29b232aa.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/616ed779928249708190c7bafdea39df.jpg"
+        },
+        {
+          "id": "e64aa40e-0779-4050-8d83-b451fb4ea0fc",
+          "name": "DSC02025",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:54.066Z",
+          "updatedAt": "2026-06-03T05:12:52.847Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/d9190dad62794d72a039b278ae5a2fd8.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/81c319212fa54184886c630fb211291e.jpg"
+        },
+        {
+          "id": "a17f18ac-d69a-4889-bb0e-742b820ceaba",
+          "name": "DSC02018",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:49.983Z",
+          "updatedAt": "2026-06-03T05:12:48.762Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/4642c53029794bfc9d5c74c7bdb930a7.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/a4b073fd69cf4accb178e58715966e74.jpg"
+        },
+        {
+          "id": "47652009-9302-4e0b-9fdf-d7afd3f61627",
+          "name": "DSC02016",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:45.820Z",
+          "updatedAt": "2026-06-03T05:12:44.612Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/6d96f1b741a5416e94ac28d24bbf2a6d.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/8c15a1f3eb514e6fbcf2c4eb278ad757.jpg"
+        },
+        {
+          "id": "13d4f5ea-9c5f-4750-80ff-7a63a188868b",
+          "name": "DSC02015",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:40.067Z",
+          "updatedAt": "2026-06-03T05:12:38.853Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/84613574866c44f0831060272a65d88b.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/8084d2279baa456ab6cb06b76eadf781.jpg"
+        },
+        {
+          "id": "fdead7b0-632b-475a-9746-9b5f96d6d5ff",
+          "name": "DSC02010",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:21.699Z",
+          "updatedAt": "2026-06-03T05:12:20.488Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/410e0b0b75694edaac60d22bc253a9cd.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/451360419676410da3f75bea8f30e3df.jpg"
+        },
+        {
+          "id": "57c0b094-a49e-4805-9533-61be9888b389",
+          "name": "DSC01993",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:18.119Z",
+          "updatedAt": "2026-06-03T05:12:16.901Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/0a13a5ca86dd4ada9cb722f30d259f50.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/a7bf4699e1364898af3e65892c14b115.jpg"
+        },
+        {
+          "id": "15d4a586-65b0-4a4b-8319-caf7b7bb59c6",
+          "name": "DSC01978",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:14.179Z",
+          "updatedAt": "2026-06-03T05:12:12.962Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/1b081d486aea4922890c856a85618850.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/e989c4132a9c4bbb9547a41eecda9991.jpg"
+        },
+        {
+          "id": "152b3c88-0cb3-462e-8175-901ee109fd67",
+          "name": "DSC01965",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T05:12:10.317Z",
+          "updatedAt": "2026-06-03T05:12:09.180Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/fa6c886ebe3342fe9444a76f6611af93.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/b59d75101a3740b2820501b3e7786494.jpg"
+        },
+        {
+          "id": "d00ba447-0511-411b-8f1a-d7fa755c9afe",
+          "name": "DSC01899",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:50:56.898Z",
+          "updatedAt": "2026-06-03T02:50:56.145Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/b4dbe8229d694c8781fe8a42b8de2437.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/63a9b600c5da482f9f1e60caa84bd070.jpg"
+        },
+        {
+          "id": "f94ace00-a08a-409f-983a-fa2d407e6691",
+          "name": "DSC01897",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:50:55.388Z",
+          "updatedAt": "2026-06-03T02:50:54.635Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9959a23140dc45b6b3a4b34565eb7335.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/e646e28bb5444240abdf8ee256cefb39.jpg"
+        },
+        {
+          "id": "8e18d53b-2a02-4860-be09-4cb8caccda46",
+          "name": "DSC01895",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:50:53.950Z",
+          "updatedAt": "2026-06-03T02:50:53.220Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/e0006eef2bc946008d0f7a63d8cea467.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/8af6d62d5cb841bda66e6b7464b2e472.jpg"
+        },
+        {
+          "id": "04fb5def-1600-4c4e-a069-6c4a3a122d32",
+          "name": "DSC02666",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:46:12.155Z",
+          "updatedAt": "2026-06-03T02:46:11.408Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/43d86a5e1db248188948bb2d08256808.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/f73c582a35fe45a69a91713c7afb6bfd.jpg"
+        },
+        {
+          "id": "a2424b2b-f663-4950-8b16-de24e1e23e6d",
+          "name": "DSC02665",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:46:07.098Z",
+          "updatedAt": "2026-06-03T02:46:06.341Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/ef2bfd1ad6c9443db7a6e06cf3e6c006.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/aeb2202401c44dfc9849752ffe2c7135.jpg"
+        },
+        {
+          "id": "8277bf4b-e490-45ba-bf99-7476cce0b4c3",
+          "name": "DSC02664",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:46:03.011Z",
+          "updatedAt": "2026-06-03T02:46:02.255Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/7b4dc0907308490cb4663d6901c17545.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9ac11015c3e94c9fbc6992c8900633e3.jpg"
+        },
+        {
+          "id": "5003389c-1587-4293-a6e4-bbfc811c3e2f",
+          "name": "DSC02662",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:58.577Z",
+          "updatedAt": "2026-06-03T02:45:57.827Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/163b6345aeaa46b9834b57517c9068b7.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/3768c955315f4180ab4c0cef148e688a.jpg"
+        },
+        {
+          "id": "36b89ffc-2b2e-4548-9720-038c71ca3b55",
+          "name": "DSC02661",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:44.702Z",
+          "updatedAt": "2026-06-03T02:45:43.945Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/22bce13a882e4c73812e8d49f87209b5.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/14b6f2e1fe154632ac71a339e8ca9020.jpg"
+        },
+        {
+          "id": "1962d219-b048-45aa-889c-d50b0abec831",
+          "name": "DSC02660",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:41.090Z",
+          "updatedAt": "2026-06-03T02:45:40.345Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/5886f5e79f2a414e80b406e2d12bd273.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/683fab84f7104bb4af4142501756aac8.jpg"
+        },
+        {
+          "id": "525263e1-b328-4c2f-9700-cb9f03bdf9ea",
+          "name": "DSC02659",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:37.166Z",
+          "updatedAt": "2026-06-03T02:45:36.422Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/47592bfd1c194825b2c63bd40f1a33fe.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/5122c2be51df450da1129fa85613581e.jpg"
+        },
+        {
+          "id": "5f6f5060-67a8-4582-9b40-6adef9c9c3bf",
+          "name": "DSC02658",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:33.283Z",
+          "updatedAt": "2026-06-03T02:45:32.527Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/cec9f62aba864309ad2b127196aaad41.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/d63c13929cb944739588fbce60ceb82a.jpg"
+        },
+        {
+          "id": "aae81b7b-5c8c-431b-b0ac-1fad2ef9945c",
+          "name": "DSC02657",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:29.354Z",
+          "updatedAt": "2026-06-03T02:45:28.611Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/e6e5f4bac42c4000adaedaac428cb577.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/f0392aa50620402cac844d6597425ef4.jpg"
+        },
+        {
+          "id": "978ff4d8-8b45-4759-a837-2076f8449473",
+          "name": "DSC02656",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:15.763Z",
+          "updatedAt": "2026-06-03T02:45:15.010Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/067fb5b5a59e48a697dea45366e53665.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/790c8cec49df40d9994802e6f37ad366.jpg"
+        },
+        {
+          "id": "19226db2-260f-485f-bbf7-7c3058ff773f",
+          "name": "DSC02654",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:12.929Z",
+          "updatedAt": "2026-06-03T02:45:12.175Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9314d050b804481083504b89469c0f52.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/b5ea83e18dd64fbbb928da713f438c56.jpg"
+        },
+        {
+          "id": "b4810819-18a4-4f64-8218-6f8491970e97",
+          "name": "DSC02653",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:10.932Z",
+          "updatedAt": "2026-06-03T02:45:10.190Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/5e57ac434077465fa4de1dc4ba03a7be.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/f532c1c9fa50489da390bd452b7fe816.jpg"
+        },
+        {
+          "id": "546c5a92-d18e-4862-8740-9ed5e53edd30",
+          "name": "DSC02650",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:09.106Z",
+          "updatedAt": "2026-06-03T02:45:08.354Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/3f72909130b243eca87c01ee8e37399d.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/1e0846add14040739eb8346a904dee27.jpg"
+        },
+        {
+          "id": "766200d1-3716-4283-86d7-623c5356c793",
+          "name": "DSC02649",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:06.967Z",
+          "updatedAt": "2026-06-03T02:45:06.214Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/22be2804a4a04039b8f8840947dc32a8.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/eb3abf91a4be40c590ec3d98ad9140fe.jpg"
+        },
+        {
+          "id": "1d769b91-d235-48ea-826f-edd70ff5b024",
+          "name": "DSC02647",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:03.479Z",
+          "updatedAt": "2026-06-03T02:45:02.727Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/3168f4f2b8df434e8c23d17bf5b88282.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/e1fb3240ef4b4a53ba4199f316c8d92a.jpg"
+        },
+        {
+          "id": "fc5c852e-08d3-40d4-bcd1-a003c855a3db",
+          "name": "DSC02646",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:45:00.808Z",
+          "updatedAt": "2026-06-03T02:45:00.052Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/c3dfbdb041bd4a54882dda0574fedad0.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9b83f10321324e17b425cb52a9d5223a.jpg"
+        },
+        {
+          "id": "a95752be-bb78-4ece-982d-ef31f5da7e56",
+          "name": "DSC02645",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:44:43.726Z",
+          "updatedAt": "2026-06-03T02:44:42.972Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/488b3aab8c204ddeab22a803dd2f8786.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/73ab3fb7ae01494fab5789eb6b0b9548.jpg"
+        },
+        {
+          "id": "b271fb80-e247-4111-a91c-430569916bd5",
+          "name": "DSC02644",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:44:39.888Z",
+          "updatedAt": "2026-06-03T02:44:39.130Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9be9d53d39a24e3fa9cd13c719e87af0.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/fea1211f3a244f67909cb8902f193dd5.jpg"
+        },
+        {
+          "id": "8884b835-a7f8-41e8-bd78-368ebfdf737d",
+          "name": "DSC02643",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:44:36.195Z",
+          "updatedAt": "2026-06-03T02:44:35.456Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/cf23ca7f776d458cb9e4543d5c447c0a.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/a3311f3f0ae74b138821800547349638.jpg"
+        },
+        {
+          "id": "cc484416-1aac-4610-962d-b459e7c8c5f6",
+          "name": "DSC02642",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:44:32.453Z",
+          "updatedAt": "2026-06-03T02:44:31.699Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/c7fab56d48f84815bcc4f8d900a55ad1.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/9a8f5193215d4ece84b41aefd0af0dcb.jpg"
+        },
+        {
+          "id": "284af858-2e6a-4538-b78d-29b07c9b5fdb",
+          "name": "DSC02641",
+          "event": "NightRun #31 by FUNPACE 02/06",
+          "bib": "",
+          "status": "published",
+          "vendedorId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+          "createdAt": "2026-06-03T02:44:28.515Z",
+          "updatedAt": "2026-06-03T02:44:27.757Z",
+          "url": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/c5534440f5f643ca971fba95908df536.jpg",
+          "thumbnailUrl": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/06/d1c0bd4b2f2c47648d0fe5c59317cdc6.jpg"
+        }
+      ]
+    },
+    {
+      "label": "pedidos_pagos_recentes",
+      "rows": [
+        {
+          "id": "9830d3c0-77ec-4c49-adc6-5d94fd7adb8f",
+          "buyerName": "Criativa Studio",
+          "buyerEmail": "criativastudiobr@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-06-03T03:45:42.309Z",
+          "items": "DSC02661 / NightRun #31 by FUNPACE 02/06"
+        },
+        {
+          "id": "c4c4cf7e-2228-4dbc-9326-720328999f93",
+          "buyerName": "Gustavo Garcia",
+          "buyerEmail": "garciaconta8@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-06-03T03:11:29.972Z",
+          "items": "DSC01894 / NightRun #31 by FUNPACE 02/06"
+        },
+        {
+          "id": "e1d94fed-c40b-45df-a296-35e282ab1972",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-06-02T22:37:43.278Z",
+          "items": "DSC03181 / NightRun #30 by FUNPACE"
+        },
+        {
+          "id": "470199e9-318d-4af2-b72e-0610e1c443b8",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-06-02T22:20:46.318Z",
+          "items": "DSC03181 / NightRun #30 by FUNPACE"
+        },
+        {
+          "id": "a1718f5b-819d-4623-bc5e-07407da2e0af",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-06-02T21:36:29.055Z",
+          "items": "DSC09997 / ESPAÇO ALTERNATIVO 01/06 NOITE"
+        },
+        {
+          "id": "9b8cdad1-5395-4b5e-8de3-40698379d85b",
+          "buyerName": "Iva Corrêa Ribeiro Neta",
+          "buyerEmail": "correa.neta@eaportal.org",
+          "status": "paid",
+          "total": "134.10",
+          "createdAt": "2026-06-02T19:45:26.936Z",
+          "items": "DSC09676 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09649 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09681 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09673 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09648 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09652 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09670 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09686 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05 | DSC09662 / ESPAÇO ALTERNATIVO TARDE/NOITE 31/05"
+        },
+        {
+          "id": "07278173-7119-4ff9-9170-c018d12fcf63",
+          "buyerName": "Rainer Damasceno",
+          "buyerEmail": "rainergeovane04@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-06-02T16:16:41.492Z",
+          "items": "DSC01431 / ESPAÇO ALTERNATIVO 01/06 NOITE"
+        },
+        {
+          "id": "7031a68e-e9d4-4064-8592-2ef4d4265042",
+          "buyerName": "BRUNA OLIVEIRA SILVA DE MELLO CARVALHO",
+          "buyerEmail": "brunaosmc@hotmail.com",
+          "status": "paid",
+          "total": "29.80",
+          "createdAt": "2026-06-02T13:36:18.321Z",
+          "items": "DSC00458 / ESPAÇO ALTERNATIVO 01/06 NOITE | DSC09997 / ESPAÇO ALTERNATIVO 01/06 NOITE"
+        },
+        {
+          "id": "405eb949-3429-4e92-884e-a1c4299f70aa",
+          "buyerName": "Maria Eduarda Rocha Alexandre",
+          "buyerEmail": "duda130973@yahoo.com",
+          "status": "paid",
+          "total": "59.60",
+          "createdAt": "2026-06-02T06:55:53.087Z",
+          "items": "DSC03257 / NightRun #30 by FUNPACE | DSC03263 / NightRun #30 by FUNPACE | DSC03259 / NightRun #30 by FUNPACE | DSC03262 / NightRun #30 by FUNPACE"
+        },
+        {
+          "id": "dc079023-54c8-45d5-a617-0d6995da9217",
+          "buyerName": "Gustavo Garcia",
+          "buyerEmail": "garciaconta8@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-06-01T17:42:30.874Z",
+          "items": "DSC09792 / FOTOS ESPAÇO ALTERNATIVO TARDE/NOITE 31/05"
+        },
+        {
+          "id": "b6ff6383-2c85-434c-a6fe-6785d7cc1e20",
+          "buyerName": "Luciendril Uriel Da Silva Lima",
+          "buyerEmail": "luciendrilbryan@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-05-30T01:06:04.872Z",
+          "items": "DSC06053 / FOTOS ESPAÇO ALTERNATIVO 29/05 MANHÃ"
+        },
+        {
+          "id": "8b42045e-9433-4901-81e4-ae4f4410fd24",
+          "buyerName": "Lara Isabelly Fabrícia Ataíde",
+          "buyerEmail": "lu.lara0501@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-05-27T18:25:06.955Z",
+          "items": "DSC03264 / NightRun #30 by FUNPACE"
+        },
+        {
+          "id": "8a19eee0-bc46-47cd-aa70-3fd9471812d1",
+          "buyerName": "Luana",
+          "buyerEmail": "eluana767@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-05-27T17:18:58.231Z",
+          "items": "DSC03229 / NightRun #30 by FUNPACE"
+        },
+        {
+          "id": "a196cc98-1970-434c-8575-909e3db1c395",
+          "buyerName": "Luciana Cabral",
+          "buyerEmail": "lucianacabral21pvh@gmail.com",
+          "status": "paid",
+          "total": "14.90",
+          "createdAt": "2026-05-27T16:50:01.670Z",
+          "items": "DSC03267 / NightRun #30 by FUNPACE"
+        },
+        {
+          "id": "7fff3345-b3cc-4dc6-8d02-5520ab405f32",
+          "buyerName": "Tina",
+          "buyerEmail": "tinatina27022000@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-26T22:53:21.510Z",
+          "items": "IMG 2544 / Teste 3"
+        },
+        {
+          "id": "cc43befb-9bff-407b-9ded-c66c4c269e04",
+          "buyerName": "Criativa Studio",
+          "buyerEmail": "criativastudiobr@gmail.com",
+          "status": "paid",
+          "total": "1.01",
+          "createdAt": "2026-05-26T22:46:46.795Z",
+          "items": "IMG 3608 / Geral"
+        },
+        {
+          "id": "1acd0254-5f9a-4d64-a544-95775b39bc8d",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-26T22:30:54.956Z",
+          "items": "IMG 2544 / Teste 3"
+        },
+        {
+          "id": "d72eeaaf-04db-4bc0-a516-8aad617db27a",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.01",
+          "createdAt": "2026-05-26T22:00:26.694Z",
+          "items": "IMG 1934 / Geral"
+        },
+        {
+          "id": "92db5705-d673-499e-a49c-832489e49b8c",
+          "buyerName": "Natalia Emilly",
+          "buyerEmail": "nataliaemilly1789@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-26T21:57:01.718Z",
+          "items": "DSC00003 / FUNPACE"
+        },
+        {
+          "id": "98301305-bd2d-427b-a40b-e4f17a4fa852",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.01",
+          "createdAt": "2026-05-26T21:07:27.214Z",
+          "items": "03 / Geral"
+        },
+        {
+          "id": "8b290de9-a0dc-4e19-8312-056147ab54f9",
+          "buyerName": "Gustavo atila Rodrigues silva",
+          "buyerEmail": "gstvatila@gmail.com",
+          "status": "paid",
+          "total": "1.01",
+          "createdAt": "2026-05-26T15:10:41.962Z",
+          "items": "03 / Geral"
+        },
+        {
+          "id": "6bd32742-3f4c-4bbc-a241-3cb90122ca26",
+          "buyerName": "EDER MIRANDA",
+          "buyerEmail": "edermirandacontabilidade@gmail.com",
+          "status": "paid",
+          "total": "1.01",
+          "createdAt": "2026-05-25T18:56:50.310Z",
+          "items": null
+        },
+        {
+          "id": "d8ee0794-98eb-4375-8209-46529bab8b66",
+          "buyerName": "Gustavo atila Rodrigues silva",
+          "buyerEmail": "gstvatila@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-25T02:43:39.940Z",
+          "items": null
+        },
+        {
+          "id": "06925b93-a706-4689-9d0d-e952b4bcf3de",
+          "buyerName": "Sebastião Rodrigo",
+          "buyerEmail": "rodrigoexer1@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-24T21:20:52.008Z",
+          "items": null
+        },
+        {
+          "id": "c4385078-6628-4ce7-8141-c6bd7e1eac28",
+          "buyerName": "Lucasromulocompany",
+          "buyerEmail": "lucasromulocompany@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-24T16:37:50.145Z",
+          "items": null
+        },
+        {
+          "id": "7239a297-70ec-4ceb-beb6-96da23b8a8a4",
+          "buyerName": "Criativa Studio",
+          "buyerEmail": "criativastudiobr@gmail.com",
+          "status": "paid",
+          "total": "1.10",
+          "createdAt": "2026-05-22T22:15:01.139Z",
+          "items": null
+        },
+        {
+          "id": "dc1e0774-3b6c-4735-980e-2adb7324e4b7",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.01",
+          "createdAt": "2026-05-22T19:17:58.438Z",
+          "items": null
+        },
+        {
+          "id": "b7734368-104d-443c-8a07-0bcd69d894bf",
+          "buyerName": "Giovanni Miranda",
+          "buyerEmail": "giovannimiranda07@gmail.com",
+          "status": "paid",
+          "total": "1.00",
+          "createdAt": "2026-05-20T05:39:41.111Z",
+          "items": null
+        },
+        {
+          "id": "184196eb-a7a3-4198-8688-4489a1ea35bf",
+          "buyerName": "Giovanni de Sousa Miranda",
+          "buyerEmail": "giovannimiranda09@gmail.com",
+          "status": "paid",
+          "total": "1.00",
+          "createdAt": "2026-05-19T23:59:22.459Z",
+          "items": null
+        }
+      ]
+    }
+  ]
+}

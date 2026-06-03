@@ -642,7 +642,7 @@ export const orderService = {
     const accessToken = await getCurrentAccessToken();
     if (!accessToken) throw new Error('Sessao admin expirada.');
 
-    const response = await fetch(apiUrl('/api/admin/orders/status'), {
+    const response = await fetch('/api/admin/orders/status', {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${accessToken}`,
@@ -1663,7 +1663,7 @@ export const adminService = {
     const accessToken = await getCurrentAccessToken();
     if (!accessToken) throw new Error('Sessao admin ausente.');
 
-    const response = await fetch(apiUrl('/api/admin/snapshot'), {
+    const response = await fetch('/api/admin/snapshot', {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -1728,7 +1728,7 @@ export const adminService = {
     const accessToken = await getCurrentAccessToken();
     if (!accessToken) throw new Error('Sessao admin expirada.');
 
-    const response = await fetch(apiUrl('/api/admin/payments/recovery'), {
+    const response = await fetch('/api/admin/payments/recovery', {
       headers: { Authorization: `Bearer ${accessToken}` },
     });
     const payload = await response.json().catch(() => ({}));
@@ -1745,7 +1745,7 @@ export const adminService = {
     const accessToken = await getCurrentAccessToken();
     if (!accessToken) throw new Error('Sessao admin expirada.');
 
-    const response = await fetch(apiUrl('/api/admin/payments/recovery'), {
+    const response = await fetch('/api/admin/payments/recovery', {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,

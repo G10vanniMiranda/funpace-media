@@ -14,10 +14,12 @@ test('production CSP allows the configured API host used by admin recovery calls
 test('admin payment recovery uses stable rewritten API paths', () => {
   const services = readFileSync('src/lib/services.ts', 'utf8');
 
-  assert.match(services, /apiUrl\('\/api\/admin\/payments\/recovery'\)/);
-  assert.match(services, /apiUrl\('\/api\/admin\/orders\/status'\)/);
+  assert.match(services, /fetch\('\/api\/admin\/payments\/recovery'/);
+  assert.match(services, /fetch\('\/api\/admin\/orders\/status'/);
   assert.doesNotMatch(services, /apiUrl\('\/api\/admin\?route=payments-recovery'\)/);
   assert.doesNotMatch(services, /apiUrl\('\/api\/admin\?route=orders-status'\)/);
+  assert.doesNotMatch(services, /apiUrl\('\/api\/admin\/payments\/recovery'\)/);
+  assert.doesNotMatch(services, /apiUrl\('\/api\/admin\/orders\/status'\)/);
 });
 
 test('InfinitePay webhook records incomplete paid payloads for recovery instead of rejecting them', () => {

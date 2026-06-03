@@ -354,10 +354,12 @@ export function CustomerOrdersDrawer({
                       <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
                         <div className="w-11 h-11 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
                           <ProtectedMedia
-                            src={item.thumbnailUrl || item.url}
+                            src={item.thumbnailUrl || null}
                             alt={item.name}
                             type={item.type}
                             watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+                            mediaId={item.id}
+                            eventName={item.event}
                             imgClassName="w-full h-full object-cover"
                           />
                         </div>
@@ -478,10 +480,12 @@ export function CustomerOrdersDrawer({
                           <div key={item.id} className="flex items-center gap-3 bg-gray-50 brutal-border-thin p-2">
                             <div className="w-12 h-12 bg-brutal-black text-white brutal-border-thin overflow-hidden flex items-center justify-center">
                               <ProtectedMedia
-                                src={item.thumbnailUrl || (item.type === 'IMG' ? item.url : null)}
+                                src={item.thumbnailUrl || null}
                                 alt={item.name}
                                 type={item.type}
                                 watermark={`FUNPACE ${order.id.slice(0, 8)}`}
+                                mediaId={item.productId || item.id}
+                                eventName={item.event}
                                 imgClassName="w-full h-full object-cover"
                               />
                             </div>
@@ -610,10 +614,12 @@ function FavoritePanelItem({
     <article className="bg-white border border-slate-200 shadow-sm overflow-hidden">
       <div className="aspect-4/3 bg-brutal-black text-white flex items-center justify-center overflow-hidden">
         <ProtectedMedia
-          src={product.thumbnailUrl || product.url}
+          src={product.thumbnailUrl || null}
           alt={product.name}
           type={product.type}
           watermark={`FUNPACE ${product.bib || product.id.slice(0, 6)}`}
+          mediaId={product.id}
+          eventName={product.event}
           imgClassName="h-full w-full object-cover"
         />
       </div>
@@ -984,10 +990,12 @@ export function CustomerOrdersPage({
                         <div key={item.id} className="grid grid-cols-[56px_1fr] gap-3 bg-slate-50 border border-slate-200 p-3 md:grid-cols-[64px_1fr_auto] md:items-center">
                           <div className="w-14 h-14 md:w-16 md:h-16 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
                             <ProtectedMedia
-                              src={item.thumbnailUrl || (item.type === 'IMG' ? item.url : null)}
+                              src={item.thumbnailUrl || null}
                               alt={item.name}
                               type={item.type}
                               watermark={`FUNPACE ${order.id.slice(0, 8)}`}
+                              mediaId={item.productId || item.id}
+                              eventName={item.event}
                               imgClassName="w-full h-full object-cover"
                             />
                           </div>
@@ -1099,10 +1107,12 @@ export function CustomerOrdersPage({
                       <div key={item.id} className="flex items-center gap-3 bg-slate-50 border border-slate-200 p-2">
                         <div className="w-10 h-10 bg-brutal-black text-white border border-slate-200 overflow-hidden flex items-center justify-center">
                           <ProtectedMedia
-                            src={item.thumbnailUrl || item.url}
+                            src={item.thumbnailUrl || null}
                             alt={item.name}
                             type={item.type}
                             watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+                            mediaId={item.id}
+                            eventName={item.event}
                             imgClassName="w-full h-full object-cover"
                           />
                         </div>

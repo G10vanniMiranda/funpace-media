@@ -1,3 +1,5 @@
+import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
+
 export const config = {
   api: {
     bodyParser: false,
@@ -59,6 +61,17 @@ function isTrustedOrigin(req: any) {
 
 function usesExternalBucket() {
   return mediaStorageProvider === 'external_bucket' || Boolean(process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN);
+}
+
+function isAllowedUploadContentType(value: string) {
+  return /^image\/(jpeg|jpg|png|webp)$/i.test(value) ||
+    /^video\/(mp4|quicktime|webm)$/i.test(value);
+}
+
+function isSafeStoragePath(path: string, userId: string) {
+  if (!path || path.length > 512 || path.includes('..') || path.startsWith('/')) return false;
+  if (!path.startsWith(`${userId}/`)) return false;
+  return /^[a-zA-Z0-9._/-]+$/.test(path);
 }
 
 function getSupabaseConfig() {
@@ -248,16 +261,9 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
 }
 
 export default async function handler(req: any, res: any) {
-  setSecurityHeaders(res);
-  setCorsHeaders(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  if (!isTrustedOrigin(req)) {
-    return res.status(403).json({ error: 'Origem nao autorizada.' });
-  }
+  if (handleSecurityOptions(req, res, 'POST,OPTIONS', 'Authorization, Content-Type, X-File-Name, X-Storage-Path')) return;
+  if (rateLimit(req, res, { keyPrefix: 'media-upload', windowMs: 60 * 1000, max: 120 })) return;
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
@@ -278,8 +284,12 @@ export default async function handler(req: any, res: any) {
       return res.status(403).json({ error: 'Apenas fotografos aprovados podem enviar midias.' });
     }
 
-    if (!storagePath || storagePath.includes('..') || storagePath.startsWith('/') || !storagePath.startsWith(`${authUser.id}/`)) {
+    if (!isSafeStoragePath(storagePath, authUser.id)) {
       return res.status(403).json({ error: 'Caminho de upload invalido para este fotografo.' });
+    }
+
+    if (!isAllowedUploadContentType(contentType)) {
+      return res.status(415).json({ error: 'Tipo de arquivo nao permitido.' });
     }
 
     if (fileBuffer.length === 0) {

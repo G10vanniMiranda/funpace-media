@@ -1,7 +1,4 @@
-function getClientIp(req: any) {
-  return String(req.headers?.['x-forwarded-for'] || '').split(',')[0]?.trim() ||
-    String(req.socket?.remoteAddress || req.connection?.remoteAddress || '');
-}
+import { getClientIp, handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.ts';
 
 function isIpAllowed(req: any) {
   const allowlist = String(process.env.ADMIN_IP_ALLOWLIST || '')
@@ -22,15 +19,10 @@ function routeName(req: any) {
   return 'snapshot';
 }
 
-function setCors(res: any) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PATCH,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-}
-
 export default async function handler(req: any, res: any) {
-  setCors(res);
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (handleOptions(req, res, 'GET,POST,PATCH,OPTIONS')) return;
+  if (rateLimit(req, res, { keyPrefix: 'admin', windowMs: 60 * 1000, max: 60 })) return;
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (!isIpAllowed(req)) {
     return res.status(403).json({ error: 'IP nao autorizado para rotas administrativas.' });

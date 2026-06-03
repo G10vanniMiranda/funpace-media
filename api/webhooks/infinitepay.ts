@@ -1,3 +1,5 @@
+import { assertRequestSize, handleOptions as handleSecurityOptions, rateLimit, setSecurityHeaders } from '../_security.ts';
+
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
 function setCors(res: any) {
@@ -12,6 +14,46 @@ function getJsonBody(req: any) {
   if (req.body && typeof req.body === 'object') return req.body;
   if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
   return {};
+}
+
+async function getRawBody(req: any) {
+  if (typeof req.body === 'string') return req.body;
+  if (req.body && typeof req.body === 'object') return JSON.stringify(req.body);
+  return '';
+}
+
+async function isWebhookAuthorized(req: any) {
+  const secret = process.env.INFINITEPAY_WEBHOOK_SECRET || process.env.INFINITEPAY_WEBHOOK_TOKEN || '';
+  if (!secret) return true;
+  if (process.env.INFINITEPAY_WEBHOOK_REQUIRE_AUTH !== 'true') return true;
+
+  const direct = String(
+    req.headers?.['x-webhook-secret'] ||
+    req.headers?.['x-infinitepay-token'] ||
+    req.headers?.['x-infinitepay-secret'] ||
+    '',
+  );
+  const bearer = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
+  if (direct === secret || bearer === secret) return true;
+
+  const signature = String(
+    req.headers?.['x-infinitepay-signature'] ||
+    req.headers?.['x-webhook-signature'] ||
+    req.headers?.['x-signature'] ||
+    '',
+  );
+  if (!signature) return false;
+
+  const { createHmac, timingSafeEqual } = await import('crypto');
+  const rawBody = await getRawBody(req);
+  const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
+  const normalized = signature.replace(/^sha256=/i, '');
+
+  try {
+    return timingSafeEqual(Buffer.from(normalized), Buffer.from(expected));
+  } catch {
+    return false;
+  }
 }
 
 function isUuid(value: unknown) {
@@ -217,11 +259,17 @@ function normalizePaymentMethod(value: string) {
 }
 
 export default async function handler(req: any, res: any) {
-  setCors(res);
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (handleSecurityOptions(req, res, 'POST,OPTIONS', 'Content-Type, Authorization, X-Webhook-Secret, X-InfinitePay-Token, X-InfinitePay-Signature, X-Webhook-Signature, X-Signature')) return;
+  setSecurityHeaders(res);
+  if (rateLimit(req, res, { keyPrefix: 'webhook-infinitepay', windowMs: 60 * 1000, max: 240 })) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
 
   try {
+    assertRequestSize(req, Number(process.env.WEBHOOK_MAX_BODY_BYTES || 200 * 1024));
+    if (!(await isWebhookAuthorized(req))) {
+      return res.status(401).json({ success: false, received: false, error: 'Webhook nao autorizado.' });
+    }
+
     const payload = getJsonBody(req);
     const orderId = getPayloadValue(payload, ['order_nsu', 'orderNSU', 'order', 'order_id', 'orderId', 'reference', 'external_reference']);
     const transactionNsu = getPayloadValue(payload, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);

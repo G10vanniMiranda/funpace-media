@@ -1,3 +1,5 @@
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
+
 type PaymentMethod = 'pix' | 'credit_card' | 'checkout';
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
@@ -449,21 +451,16 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
 }
 
 export default async function handler(req: any, res: any) {
-  setCors(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  if (!isTrustedOrigin(req)) {
-    return res.status(403).json({ error: 'Origem nao autorizada.' });
-  }
+  if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
+  if (rateLimit(req, res, { keyPrefix: 'checkout', windowMs: 60 * 1000, max: 30 })) return;
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
   try {
+    assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
     const { items, successUrl, cancelUrl, buyer, paymentMethod: rawPaymentMethod, couponCode } = getJsonBody(req);
     const authUser = await getAuthenticatedRequestUser(req);
     const paymentMethod: PaymentMethod = rawPaymentMethod === 'pix' || rawPaymentMethod === 'credit_card' ? rawPaymentMethod : 'checkout';
@@ -649,8 +646,9 @@ export default async function handler(req: any, res: any) {
       pix: paymentResult.pix || null,
     });
   } catch (error: any) {
-    return res.status(500).json({
-      error: error?.message || 'Erro interno ao criar checkout.',
+    const safe = publicError(error, 'Erro interno ao criar checkout.');
+    return res.status(safe.statusCode).json({
+      error: safe.message,
       source: 'checkout-create-session',
     });
   }

@@ -163,25 +163,29 @@ function mediaPathKey(value?: string | null) {
   return value || '';
 }
 
-async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; type?: string }>(items: T[]): Promise<T[]> {
+async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; type?: string }>(
+  items: T[],
+  options: { protectImageOriginals?: boolean } = {},
+): Promise<T[]> {
   if (isMockMode || items.length === 0) return items;
+  const shouldProtectImageOriginal = (item: T) => options.protectImageOriginals && item.type === 'IMG';
 
   const withPublicFallback = () => items.map((item) => ({
     ...item,
-    url: createPublicMediaUrl(item.url),
+    url: shouldProtectImageOriginal(item) ? '' : createPublicMediaUrl(item.url),
     thumbnailUrl: item.thumbnailUrl ? createPublicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl,
   }));
 
   const paths = Array.from(new Set(items.flatMap((item) => {
     const thumbnail = mediaPathKey(item.thumbnailUrl);
-    const shouldSignOriginal = item.type === 'VIDEO' || item.type === 'VIEW' || !thumbnail;
+    const shouldSignOriginal = !shouldProtectImageOriginal(item) && (item.type === 'VIDEO' || item.type === 'VIEW' || !thumbnail);
     return [
       thumbnail,
       shouldSignOriginal ? mediaPathKey(item.url) : '',
     ];
   }).filter(Boolean)));
 
-  if (paths.length === 0) return items;
+  if (paths.length === 0) return options.protectImageOriginals ? withPublicFallback() : items;
 
   try {
     const response = await fetch(apiUrl('/api/media/sign'), {
@@ -201,7 +205,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
 
     return items.map((item) => ({
       ...item,
-      url: item.url && urls[item.url] ? urls[item.url] : item.url,
+      url: shouldProtectImageOriginal(item) ? '' : item.url && urls[item.url] ? urls[item.url] : item.url,
       thumbnailUrl: item.thumbnailUrl && urls[item.thumbnailUrl] ? urls[item.thumbnailUrl] : item.thumbnailUrl,
     }));
   } catch (error) {
@@ -356,7 +360,7 @@ export const productService = {
       order: 'createdAt.desc',
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
-    return signMediaUrls(products);
+    return signMediaUrls(products, { protectImageOriginals: true });
   },
 
   async getAdminProducts(count = 1000): Promise<Product[]> {
@@ -383,7 +387,7 @@ export const productService = {
       status: 'eq.published',
     });
     const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
-    return signMediaUrls(products);
+    return signMediaUrls(products, { protectImageOriginals: true });
   },
 
   async getVendedorProducts(vendedorId: string): Promise<Product[]> {
@@ -981,7 +985,7 @@ export const customerAccountService = {
     ).catch(() => []);
 
     const products = rows.map((row) => row.products).filter(Boolean) as Product[];
-    return signMediaUrls(products);
+    return signMediaUrls(products, { protectImageOriginals: true });
   },
 
   async setFavorite(product: Product, isFavorite: boolean) {

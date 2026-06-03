@@ -1,3 +1,5 @@
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
+
 const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || 'supabase';
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
 
@@ -55,6 +57,15 @@ function getJsonBody(req: any) {
   return {};
 }
 
+function isAllowedMediaPath(value: string) {
+  if (!value || value.length > 2048 || value.includes('..')) return false;
+  if (!/^https?:\/\//i.test(value)) return !value.startsWith('/');
+
+  const mediaBaseUrl = String(process.env.MEDIA_PUBLIC_BASE_URL || process.env.VITE_MEDIA_PUBLIC_BASE_URL || '').replace(/\/+$/, '');
+  if (!mediaBaseUrl) return false;
+  return value.startsWith(`${mediaBaseUrl}/`);
+}
+
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
@@ -89,24 +100,21 @@ async function signedMediaUrl(rawPathOrUrl: string) {
 }
 
 export default async function handler(req: any, res: any) {
-  setCors(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  if (!isTrustedOrigin(req)) {
-    return res.status(403).json({ error: 'Origem nao autorizada.' });
-  }
+  if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
+  if (rateLimit(req, res, { keyPrefix: 'media-sign', windowMs: 60 * 1000, max: 90 })) return;
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
   try {
+    assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
     const body = getJsonBody(req);
-    const paths = Array.isArray(body.paths) ? body.paths.map(String) : [];
-    const uniquePaths = Array.from(new Set(paths)).filter((path): path is string => Boolean(path)).slice(0, 1000);
+    const paths: string[] = Array.isArray(body.paths) ? body.paths.map(String) : [];
+    const uniquePaths = Array.from(new Set(paths))
+      .filter((path): path is string => isAllowedMediaPath(path))
+      .slice(0, 200);
 
     const entries = await Promise.all(
       uniquePaths.map(async (path) => [path, await signedMediaUrl(path)] as const),
@@ -114,6 +122,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ urls: Object.fromEntries(entries) });
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Nao foi possivel assinar midias.' });
+    const safe = publicError(error, 'Nao foi possivel assinar midias.');
+    return res.status(safe.statusCode).json({ error: safe.message });
   }
 }

@@ -334,7 +334,7 @@ export function CustomerAccountPage({
                           {(order.items ?? []).slice(0, 4).map((item) => (
                             <div key={item.id} className="flex items-center gap-3 bg-white border border-slate-200 p-2">
                               <div className="h-12 w-12 overflow-hidden bg-brutal-black">
-                                <ProtectedMedia src={item.thumbnailUrl || item.url} alt={item.name} type={item.type} watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`} />
+                                <ProtectedMedia src={item.thumbnailUrl || null} alt={item.name} type={item.type} watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`} mediaId={item.productId || item.id} eventName={item.event} />
                               </div>
                               <div className="min-w-0 flex-1">
                                 <p className="font-display text-sm uppercase truncate">{item.name}</p>
@@ -428,7 +428,7 @@ export function CustomerAccountPage({
                       {mergedFavorites.slice(0, 6).map((product) => (
                         <div key={product.id} className="flex items-center gap-3 border border-slate-200 bg-slate-50 p-2">
                           <div className="h-10 w-10 overflow-hidden bg-brutal-black">
-                            <ProtectedMedia src={product.thumbnailUrl || product.url} alt={product.name} type={product.type} watermark="FUNPACE" />
+                            <ProtectedMedia src={product.thumbnailUrl || null} alt={product.name} type={product.type} watermark="FUNPACE" mediaId={product.id} eventName={product.event} />
                           </div>
                           <div className="min-w-0 flex-1">
                             <p className="font-display text-xs uppercase truncate">{product.name}</p>

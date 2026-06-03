@@ -106,10 +106,12 @@ export function PhotoGrid({
           >
             <div className="aspect-3/4 bg-gray-200 brutal-border overflow-hidden relative brutal-shadow transition-transform duration-300">
               <ProtectedMedia
-                src={photo.thumbnailUrl || photo.url}
+                src={photo.thumbnailUrl || null}
                 alt={photo.id}
                 type={photo.type}
                 watermark={`FUNPACE ${photo.bib || photo.id.slice(0, 6)}`}
+                mediaId={photo.id}
+                eventName={photo.event}
                 loading={index < 8 ? 'eager' : 'lazy'}
                 decoding="async"
                 sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"

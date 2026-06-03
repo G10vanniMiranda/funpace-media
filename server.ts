@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import pg from "pg";
 import cors from "cors";
+import helmet from "helmet";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
 import { getActivePaymentProvider } from "./server/payments/paymentProvider";
@@ -19,6 +20,10 @@ const { Pool } = pg;
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
+app.use(helmet({
+  contentSecurityPolicy: false,
+  crossOriginResourcePolicy: { policy: "same-site" },
+}));
 
 type RateLimitBucket = {
   count: number;

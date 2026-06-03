@@ -70,8 +70,7 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
   for (const groupProducts of productGroups.values()) {
     const name = String(groupProducts[0]?.event || 'Evento sem nome').trim();
     const eventDetail = findEventDetail(name, groupProducts, registeredEvents);
-    const coverProduct = groupProducts.find((product) => product.thumbnailUrl) ||
-      groupProducts.find((product) => product.type === 'IMG' && product.url);
+    const coverProduct = groupProducts.find((product) => product.thumbnailUrl);
     const fallbackDate = groupProducts.reduce<string | undefined>((latest, product) => {
       if (!product.createdAt) return latest;
       if (!latest) return product.createdAt;
@@ -86,7 +85,7 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
     events.set(normalizeText(name), {
       name,
       checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
-      coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || (coverProduct?.type === 'IMG' ? coverProduct.url : null) || null,
+      coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || null,
       date: eventDetail?.date || fallbackDate,
       createdAt,
       sortTime: getTimestamp(eventDetail?.createdAt) || fallbackSortTime,
@@ -177,6 +176,7 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                     src={event.coverUrl}
                     alt={event.name}
                     watermark={`FUNPACE ${event.name.slice(0, 12)}`}
+                    eventName={event.name}
                     loading="lazy"
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"

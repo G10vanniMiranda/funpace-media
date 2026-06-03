@@ -1,5 +1,6 @@
 import React from 'react';
 import { Image as ImageIcon, Video } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 type ProtectedMediaType = 'IMG' | 'VIDEO' | 'VIEW';
 
@@ -8,6 +9,9 @@ interface ProtectedMediaProps {
   alt: string;
   type?: ProtectedMediaType;
   watermark?: string;
+  mediaId?: string | null;
+  eventName?: string | null;
+  blurPreview?: boolean;
   className?: string;
   imgClassName?: string;
   loading?: 'eager' | 'lazy';
@@ -21,11 +25,21 @@ function preventDefault(event: React.SyntheticEvent) {
   event.preventDefault();
 }
 
+function maskEmail(email?: string | null) {
+  if (!email || !email.includes('@')) return null;
+  const [local, domain] = email.split('@');
+  const prefix = local.slice(0, Math.min(2, local.length));
+  return `${prefix || 'u'}***@${domain}`;
+}
+
 export function ProtectedMedia({
   src,
   alt,
   type = 'IMG',
   watermark = 'FUNPACE',
+  mediaId,
+  eventName,
+  blurPreview = true,
   className = '',
   imgClassName = 'w-full h-full object-cover',
   loading,
@@ -34,7 +48,28 @@ export function ProtectedMedia({
   onError,
   children,
 }: ProtectedMediaProps) {
+  const { user } = useAuth();
   const mark = watermark.trim() || 'FUNPACE';
+  const userEmail = maskEmail(user?.email);
+  const userId = user?.id || user?.uid || '';
+  const viewedAt = React.useMemo(() => {
+    return new Intl.DateTimeFormat('pt-BR', {
+      day: '2-digit',
+      month: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+    }).format(new Date());
+  }, []);
+  const watermarkLines = [
+    'FUNPACE.MEDIA',
+    'PRÉVIA NÃO LICENCIADA',
+    mediaId ? `FOTO ${mediaId.slice(0, 10)}` : mark,
+    eventName ? eventName.slice(0, 42) : null,
+    userEmail ? `USUARIO ${userEmail}` : null,
+    userId ? `ID ${userId.slice(0, 8)}` : null,
+    `VIEW ${viewedAt}`,
+  ].filter(Boolean);
+  const watermarkText = watermarkLines.join('  /  ');
 
   return (
     <div
@@ -53,7 +88,7 @@ export function ProtectedMedia({
           decoding={decoding}
           sizes={sizes}
           onError={onError}
-          className={`protected-media__asset pointer-events-none ${imgClassName}`}
+          className={`protected-media__asset ${blurPreview ? 'protected-media__asset--preview' : ''} pointer-events-none ${imgClassName}`}
         />
       ) : (
         <div className="protected-media__asset flex h-full w-full items-center justify-center bg-brutal-black text-white">
@@ -64,13 +99,21 @@ export function ProtectedMedia({
       {children}
 
       <div className="protected-media__watermark pointer-events-none absolute inset-0">
-        {Array.from({ length: 6 }).map((_, row) => (
+        {Array.from({ length: 9 }).map((_, row) => (
           <div key={row} className="protected-media__watermark-row">
-            {Array.from({ length: 4 }).map((__, col) => (
-              <span key={`${row}-${col}`}>{mark}</span>
+            {Array.from({ length: 3 }).map((__, col) => (
+              <span key={`${row}-${col}`}>{watermarkText}</span>
             ))}
           </div>
         ))}
+      </div>
+
+      <div className="protected-media__watermark-center pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span>
+          FUNPACE.MEDIA
+          <strong>PRÉVIA NÃO LICENCIADA</strong>
+          {mediaId ? <em>ID {mediaId.slice(0, 10)}</em> : null}
+        </span>
       </div>
 
       <div className="protected-media__print-warning hidden">

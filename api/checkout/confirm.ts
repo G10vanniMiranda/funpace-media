@@ -1,3 +1,5 @@
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
+
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
 function setCors(req: any, res: any) {
@@ -219,11 +221,13 @@ function normalizePaymentMethod(value: string) {
 }
 
 export default async function handler(req: any, res: any) {
-  setCors(req, res);
-  if (req.method === 'OPTIONS') return res.status(204).end();
+  if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
+  if (rateLimit(req, res, { keyPrefix: 'checkout-confirm', windowMs: 60 * 1000, max: 60 })) return;
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
 
   try {
+    assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
     const body = getJsonBody(req);
     const orderId = getBodyValue(body, ['order', 'order_nsu', 'orderNsu', 'orderNSU', 'order_id', 'orderId']);
     const transactionNsu = getBodyValue(body, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
@@ -296,9 +300,10 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ paid: true, confirmedBy: 'payment_check' });
   } catch (error: any) {
     console.error('confirm:infinitepay_failed', error);
-    return res.status(500).json({
+    const safe = publicError(error, 'Nao foi possivel confirmar o pagamento.');
+    return res.status(safe.statusCode).json({
       paid: false,
-      error: error?.message || 'Nao foi possivel confirmar o pagamento.',
+      error: safe.message,
     });
   }
 }

@@ -8,6 +8,8 @@
 - Manter `INFINITEPAY_ALLOW_UNSIGNED_WEBHOOKS=false` em producao.
 - Definir `DOWNLOAD_TOKEN_SECRET` com valor aleatorio forte.
 - Definir `CRON_SECRET` para `/api/payments/reconcile`.
+- Definir `API_JSON_BODY_LIMIT_BYTES=204800` e `WEBHOOK_MAX_BODY_BYTES=204800` para limitar payloads JSON.
+- Definir `OPERATIONS_SECRET` se `/api/system?route=checkout-debug` for usado em staging.
 - Nunca expor `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `BUCKET_API_TOKEN` ou `RESEND_API_KEY` em variaveis `VITE_*`.
 
 ## Supabase
@@ -22,6 +24,7 @@
 
 - Ativar proxy no DNS do dominio publico.
 - Criar regras de rate limit para `/api/checkout/*`, `/api/downloads/*`, `/api/media/upload`, `/api/admin*`.
+- Manter rate limit de borda/WAF mesmo com rate limit em codigo, porque instancias serverless nao compartilham memoria global.
 - Bloquear paises/ASNs apenas se houver abuso comprovado.
 - Ativar bot fight/WAF gerenciado quando disponivel.
 

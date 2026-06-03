@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -413,8 +414,8 @@ function safeReturnPath(req: any) {
 }
 
 export default async function handler(req: any, res: any) {
-  if (handleOptions(req, res)) return;
-  setCors(req, res);
+  if (handleSecurityOptions(req, res, 'GET,POST,OPTIONS')) return;
+  if (rateLimit(req, res, { keyPrefix: 'downloads', windowMs: 60 * 1000, max: 120 })) return;
 
   if (req.method === 'GET') {
     try {
@@ -431,6 +432,7 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   try {
     const body = getJsonBody(req);

@@ -1,4 +1,28 @@
-import { getJsonBody, handleOptions, setCors, supabaseRequest } from '../../server/shared/utils.ts';
+import { getJsonBody, getSupabaseApiConfig, handleOptions, setCors, supabaseRequest } from '../../server/shared/utils.ts';
+
+function getBearerToken(req: any) {
+  const header = String(req.headers?.authorization || req.headers?.Authorization || '');
+  const match = header.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || '';
+}
+
+async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; email: string | null } | null> {
+  const token = getBearerToken(req);
+  if (!token) return null;
+
+  const { supabaseUrl, supabaseKey } = getSupabaseApiConfig();
+  const response = await fetch(`${supabaseUrl}/auth/v1/user`, {
+    headers: {
+      apikey: supabaseKey,
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!response.ok) return null;
+  const user: any = await response.json().catch(() => null);
+  return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
+}
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
@@ -13,6 +37,7 @@ export default async function handler(req: any, res: any) {
   try {
     step = 'parse_body';
     const { userId, email } = getJsonBody(req);
+    const authUser = await getAuthenticatedRequestUser(req);
 
     step = 'validacao';
     if (typeof userId !== 'string' || userId.trim().length < 8) {
@@ -24,6 +49,10 @@ export default async function handler(req: any, res: any) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    if (!authUser?.id || authUser.id !== userId.trim() || (authUser.email && authUser.email !== normalizedEmail)) {
+      return res.status(403).json({ error: 'Usuario autenticado nao corresponde ao cadastro reivindicado.' });
+    }
+
     step = 'buscar_por_id_auth';
     const authRows = await supabaseRequest<any[]>(
       `/rest/v1/photographers?select=id,verified&id=eq.${encodeURIComponent(userId.trim())}&limit=1`,

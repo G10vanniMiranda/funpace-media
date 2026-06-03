@@ -1,3 +1,5 @@
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.ts';
+
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -177,15 +179,9 @@ function photographerUpdatePayload(input: {
 }
 
 export default async function handler(req: any, res: any) {
-  setCors(req, res);
-
-  if (req.method === 'OPTIONS') {
-    return res.status(204).end();
-  }
-
-  if (!isTrustedOrigin(req)) {
-    return res.status(403).json({ error: 'Origem nao autorizada.' });
-  }
+  if (handleSecurityOptions(req, res, 'GET,POST,OPTIONS')) return;
+  if (rateLimit(req, res, { keyPrefix: 'photographer-request', windowMs: 60 * 1000, max: 20 })) return;
+  if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method === 'GET') {
     if (process.env.ENABLE_PUBLIC_DIAGNOSTICS !== 'true') {
@@ -210,6 +206,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     step = 'parse_body';
+    assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
     const { userId, email, name, instagram, bio, cpf, phone, avatar } = getJsonBody(req);
 
     step = 'validacao';
@@ -307,8 +304,9 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ ok: true, id: resolvedId });
   } catch (error: any) {
-    return res.status(500).json({
-      error: error?.message || 'Erro ao registrar fotografo pendente.',
+    const safe = publicError(error, 'Erro ao registrar fotografo pendente.');
+    return res.status(safe.statusCode).json({
+      error: safe.message,
       source: 'photographers-request',
       step,
     });

@@ -30,7 +30,7 @@ function publicMediaUrl(rawPathOrUrl?: string | null) {
 }
 
 function getProductPreviewUrl(item: Product) {
-  return publicMediaUrl(item.thumbnailUrl || item.url);
+  return publicMediaUrl(item.thumbnailUrl || null);
 }
 
 function titleCaseFromEmail(email?: string | null) {
@@ -358,6 +358,8 @@ function ProductThumbnail({ item }: { item: Product }) {
           alt={item.name}
           type={item.type}
           watermark={`FUNPACE ${item.bib || item.id.slice(0, 6)}`}
+          mediaId={item.id}
+          eventName={item.event}
           imgClassName="w-full h-full object-cover"
           onError={() => setFailed(true)}
         />

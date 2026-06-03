@@ -45,6 +45,16 @@ type UploadItem = {
   previewUrl: string;
 };
 
+type DuplicateUploadAction = 'replace' | 'copy' | 'cancel';
+
+type DuplicateUploadConflict = {
+  index: number;
+  item: UploadItem;
+  existingProduct: Product;
+  eventName: string;
+  remainingCount: number;
+};
+
 type ProductEditForm = {
   name: string;
   price: string;
@@ -140,6 +150,35 @@ function normalizeCatalogText(value: string) {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '');
+}
+
+function normalizeUploadName(value: string) {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
+function splitFileName(fileName: string) {
+  const match = fileName.match(/^(.*?)(\.[^.]+)?$/);
+  const base = (match?.[1] || fileName || 'captura').trim();
+  const extension = match?.[2] || '';
+  return { base, extension };
+}
+
+function createCopyFileName(fileName: string, usedNames: Set<string>) {
+  const { base, extension } = splitFileName(fileName);
+  let counter = 1;
+  let candidate = `${base} (${counter})${extension}`;
+
+  while (usedNames.has(normalizeUploadName(candidate))) {
+    counter += 1;
+    candidate = `${base} (${counter})${extension}`;
+  }
+
+  usedNames.add(normalizeUploadName(candidate));
+  return candidate;
 }
 
 function formatCatalogDate(value?: string) {
@@ -623,6 +662,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawalError, setWithdrawalError] = useState('');
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
+  const [duplicateConflict, setDuplicateConflict] = useState<DuplicateUploadConflict | null>(null);
+  const [applyDuplicateChoiceToAll, setApplyDuplicateChoiceToAll] = useState(false);
   const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
   const [showEventModal, setShowEventModal] = useState(false);
   const [eventForm, setEventForm] = useState<EventFormState>(() => ({
@@ -666,6 +707,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     status: 'published',
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const duplicateResolutionRef = React.useRef<((action: DuplicateUploadAction) => void) | null>(null);
+  const duplicateBatchActionRef = React.useRef<Exclude<DuplicateUploadAction, 'cancel'> | null>(null);
   const currentPreview = selectedFiles[previewIndex];
   const eventCoverCandidates = React.useMemo(() => {
     const normalizedEventName = normalizeCatalogText(eventForm.name.trim());
@@ -1278,6 +1321,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setIsPreparingFiles(false);
     setFilePrepareProgress({ done: 0, total: 0 });
     setPublishProgress({ done: 0, total: 0 });
+    setDuplicateConflict(null);
+    setApplyDuplicateChoiceToAll(false);
+    duplicateBatchActionRef.current = null;
+    duplicateResolutionRef.current = null;
   };
 
   const updateSelectedFile = (index: number, changes: Partial<Pick<UploadItem, 'price' | 'description' | 'bib'>>) => {
@@ -1294,6 +1341,28 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
 
     setSelectedFiles((current) => current.map((item) => ({ ...item, price: normalizedPrice })));
+  };
+
+  const requestDuplicateResolution = (conflict: DuplicateUploadConflict): Promise<DuplicateUploadAction> => {
+    if (duplicateBatchActionRef.current) return Promise.resolve(duplicateBatchActionRef.current);
+
+    setApplyDuplicateChoiceToAll(false);
+    setDuplicateConflict(conflict);
+
+    return new Promise((resolve) => {
+      duplicateResolutionRef.current = resolve;
+    });
+  };
+
+  const resolveDuplicateConflict = (action: DuplicateUploadAction) => {
+    if (action !== 'cancel' && applyDuplicateChoiceToAll) {
+      duplicateBatchActionRef.current = action;
+    }
+
+    duplicateResolutionRef.current?.(action);
+    duplicateResolutionRef.current = null;
+    setDuplicateConflict(null);
+    setApplyDuplicateChoiceToAll(false);
   };
 
   const handleTodayEventSelect = (eventId: string) => {
@@ -1499,26 +1568,71 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       }
 
       let publishedCount = 0;
+      let replacedCount = 0;
+      let copiedCount = 0;
       let skippedDuplicateCount = 0;
       const uploadBatchId = crypto.randomUUID();
       const currentBatchHashes = new Set<string>();
       const failedUploads: Array<{ index: number; name: string; message: string }> = [];
       const previewWarnings: Array<{ name: string; message: string }> = [];
+      const usedFileNames = new Set(
+        products
+          .filter((product) => (
+            (product.status ?? 'published') !== 'removed' &&
+            normalizeCatalogText(product.event || '') === normalizeCatalogText(normalizedEvent)
+          ))
+          .flatMap((product) => [product.originalFileName || '', product.name || ''])
+          .filter(Boolean)
+          .map(normalizeUploadName),
+      );
+      duplicateBatchActionRef.current = null;
 
       for (const [index, item] of selectedFiles.entries()) {
         try {
+          let duplicateAction: DuplicateUploadAction | null = null;
+          let existingNameProduct = await productService.findExistingProductByOriginalFileName(photographer.id, item.file.name, normalizedEvent);
+          let resolvedOriginalFileName = item.file.name;
+          let resolvedDescription = item.description.trim();
+
+          if (existingNameProduct) {
+            duplicateAction = await requestDuplicateResolution({
+              index,
+              item,
+              existingProduct: existingNameProduct,
+              eventName: normalizedEvent,
+              remainingCount: selectedFiles.length - index - 1,
+            });
+
+            if (duplicateAction === 'cancel') {
+              throw new Error('Upload cancelado pelo fotografo ao detectar arquivo duplicado.');
+            }
+
+            if (duplicateAction === 'copy') {
+              resolvedOriginalFileName = createCopyFileName(item.file.name, usedFileNames);
+              const copyBaseName = splitFileName(resolvedOriginalFileName).base;
+              const originalBaseName = splitFileName(item.file.name).base;
+              if (normalizeUploadName(resolvedDescription) === normalizeUploadName(originalBaseName)) {
+                resolvedDescription = copyBaseName;
+              }
+            }
+          } else {
+            usedFileNames.add(normalizeUploadName(item.file.name));
+          }
+
           const uploadFile = await prepareImageForUpload(item.file);
           assertFileFitsUploadLimit(uploadFile);
           const fileHash = await calculateFileSha256(uploadFile);
 
-          if (currentBatchHashes.has(fileHash)) {
+          if (duplicateAction !== 'replace' && currentBatchHashes.has(fileHash)) {
             skippedDuplicateCount += 1;
             setPublishProgress({ done: index + 1, total: selectedFiles.length });
             continue;
           }
           currentBatchHashes.add(fileHash);
 
-          const existingProduct = await productService.findExistingProductByFileHash(photographer.id, fileHash, normalizedEvent);
+          const existingProduct = duplicateAction === 'replace'
+            ? null
+            : await productService.findExistingProductByFileHash(photographer.id, fileHash, normalizedEvent);
           if (existingProduct) {
             skippedDuplicateCount += 1;
             setPublishProgress({ done: index + 1, total: selectedFiles.length });
@@ -1545,8 +1659,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
             : null;
 
-          await productService.addProduct({
-            name: item.description.trim(),
+          const productPayload = {
+            name: resolvedDescription,
             price: Number(item.price),
             url: uploadedFile.path,
             type: item.file.type.startsWith('image') ? 'IMG' : 'VIDEO',
@@ -1559,15 +1673,50 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             storagePath: uploadedFile.path,
             fileHash,
             fileSize: uploadFile.size,
-            originalFileName: item.file.name,
+            originalFileName: resolvedOriginalFileName,
             thumbnailHash,
             uploadBatchId,
             status: 'published'
-          });
-          publishedCount += 1;
+          } satisfies Omit<Product, 'id'>;
+
+          if (duplicateAction === 'replace' && existingNameProduct) {
+            await productService.replaceProductMedia(existingNameProduct.id, productPayload);
+            await productService.logUploadConflictAction({
+              action: 'upload_replace',
+              productId: existingNameProduct.id,
+              metadata: {
+                event: normalizedEvent,
+                previousFileName: existingNameProduct.originalFileName || existingNameProduct.name,
+                uploadedFileName: item.file.name,
+                storagePath: uploadedFile.path,
+                uploadBatchId,
+              },
+            });
+            replacedCount += 1;
+          } else {
+            const productId = await productService.addProduct(productPayload);
+            if (duplicateAction === 'copy') {
+              await productService.logUploadConflictAction({
+                action: 'upload_copy',
+                productId,
+                metadata: {
+                  event: normalizedEvent,
+                  originalFileName: item.file.name,
+                  copyFileName: resolvedOriginalFileName,
+                  storagePath: uploadedFile.path,
+                  uploadBatchId,
+                },
+              });
+              copiedCount += 1;
+            }
+            publishedCount += 1;
+          }
           setPublishProgress({ done: index + 1, total: selectedFiles.length });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
+          if (/Upload cancelado pelo fotografo/i.test(message)) {
+            throw fileError;
+          }
           const friendlyMessage = /sess[aã]o expirada/i.test(message)
             ? 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.'
             : message;
@@ -1607,8 +1756,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           ? ` ${previewWarnings.length} preview(s) nao foram gerados e ficaram com fallback visual.`
           : '';
         alert(skippedDuplicateCount > 0
-          ? `Upload concluido: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
-          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s).${previewWarningText}`);
+          ? `Upload concluido: ${publishedCount} publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
+          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s).${previewWarningText}`);
       }
     } catch (error) {
       console.error("Erro no upload:", error);
@@ -3299,6 +3448,143 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       Cancelar
                     </button>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Duplicate Upload Modal */}
+      <AnimatePresence>
+        {duplicateConflict && (
+          <div className="fixed inset-0 z-120 flex items-center justify-center p-4 md:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-black/90 backdrop-blur-md"
+            />
+
+            <motion.div
+              initial={{ scale: 0.94, y: 18 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.94, y: 18 }}
+              className="relative w-full max-w-5xl max-h-[92vh] overflow-y-auto bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.7)] text-white"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="duplicate-upload-title"
+            >
+              <div className="p-5 md:p-7 border-b border-white/10">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-yellow-500/10 border border-yellow-500/30 text-yellow-300 font-mono text-[10px] uppercase tracking-widest mb-3">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      Nome duplicado
+                    </div>
+                    <h3 id="duplicate-upload-title" className="font-sans font-black text-2xl md:text-4xl uppercase tracking-normal">
+                      Arquivo ja existe neste evento
+                    </h3>
+                    <p className="mt-2 font-mono text-[10px] md:text-xs uppercase tracking-widest text-gray-500">
+                      Evento: {duplicateConflict.eventName}
+                      {duplicateConflict.remainingCount > 0 ? ` - ${duplicateConflict.remainingCount} arquivo(s) restante(s) no lote` : ''}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => resolveDuplicateConflict('cancel')}
+                    className="self-start p-2 border border-white/10 text-gray-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                    aria-label="Cancelar upload"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="p-5 md:p-7 space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="border border-white/10 bg-[#080d14] overflow-hidden">
+                    <div className="aspect-video bg-black flex items-center justify-center">
+                      {duplicateConflict.existingProduct.type === 'VIDEO' && !duplicateConflict.existingProduct.thumbnailUrl ? (
+                        <video
+                          src={duplicateConflict.existingProduct.url}
+                          className="w-full h-full object-cover"
+                          muted
+                          preload="metadata"
+                        />
+                      ) : (
+                        <img
+                          src={duplicateConflict.existingProduct.thumbnailUrl || duplicateConflict.existingProduct.url}
+                          alt={duplicateConflict.existingProduct.name}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-1">Foto existente</p>
+                      <p className="font-mono text-sm break-all text-white">
+                        {duplicateConflict.existingProduct.originalFileName || duplicateConflict.existingProduct.name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="border border-white/10 bg-[#080d14] overflow-hidden">
+                    <div className="aspect-video bg-black flex items-center justify-center">
+                      {duplicateConflict.item.file.type.startsWith('video') ? (
+                        <video
+                          src={duplicateConflict.item.previewUrl}
+                          className="w-full h-full object-cover"
+                          muted
+                          preload="metadata"
+                        />
+                      ) : (
+                        <img
+                          src={duplicateConflict.item.previewUrl}
+                          alt={duplicateConflict.item.file.name}
+                          className="w-full h-full object-cover"
+                        />
+                      )}
+                    </div>
+                    <div className="p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-1">Arquivo enviado</p>
+                      <p className="font-mono text-sm break-all text-white">{duplicateConflict.item.file.name}</p>
+                    </div>
+                  </div>
+                </div>
+
+                <label className="flex items-start gap-3 border border-white/10 bg-white/[0.03] p-4 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={applyDuplicateChoiceToAll}
+                    onChange={(event) => setApplyDuplicateChoiceToAll(event.target.checked)}
+                    className="mt-1 h-4 w-4 accent-brutal-accent"
+                  />
+                  <span>
+                    <span className="block font-sans font-black text-sm uppercase">Aplicar para todos</span>
+                    <span className="block mt-1 font-mono text-[10px] uppercase tracking-widest text-gray-500">
+                      Usa a mesma escolha para os proximos arquivos duplicados deste lote.
+                    </span>
+                  </span>
+                </label>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+                  <button
+                    onClick={() => resolveDuplicateConflict('cancel')}
+                    className="h-13 px-4 border border-white/15 bg-transparent text-white font-display text-sm uppercase tracking-widest hover:bg-white/10 transition-colors cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => resolveDuplicateConflict('copy')}
+                    className="h-13 px-4 border border-white/15 bg-white text-brutal-black font-display text-sm uppercase tracking-widest hover:bg-gray-200 transition-colors cursor-pointer"
+                  >
+                    Enviar como copia
+                  </button>
+                  <button
+                    onClick={() => resolveDuplicateConflict('replace')}
+                    className="h-13 px-4 bg-brutal-accent text-white border border-brutal-accent font-display text-sm uppercase tracking-widest hover:brightness-110 transition-colors cursor-pointer"
+                  >
+                    Substituir
+                  </button>
                 </div>
               </div>
             </motion.div>

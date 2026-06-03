@@ -315,6 +315,14 @@ function sanitizeStorageFileName(fileName: string) {
   return normalized || 'captura';
 }
 
+function normalizeFileName(value?: string | null) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+}
+
 async function attachOrderItems(orders: SupabaseRow<Order>[], useAuth: boolean): Promise<Order[]> {
   if (orders.length === 0) return orders;
 
@@ -452,6 +460,39 @@ export const productService = {
     }
   },
 
+  async findExistingProductByOriginalFileName(vendedorId: string, originalFileName: string, eventName: string): Promise<Product | null> {
+    if (!originalFileName || !eventName || isMockMode) return null;
+
+    const normalizedTarget = normalizeFileName(originalFileName);
+    const normalizedEvent = eventName.trim().toLowerCase();
+    const baseName = originalFileName.replace(/\.[^.]+$/, '').trim();
+    const params = new URLSearchParams({
+      select: '*',
+      vendedorId: `eq.${vendedorId}`,
+      event: `eq.${eventName}`,
+      status: 'neq.removed',
+      order: 'createdAt.desc',
+      limit: '200',
+    });
+
+    try {
+      const rows = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+      const match = rows.find((product) => (
+        normalizeFileName(product.originalFileName) === normalizedTarget ||
+        normalizeFileName(product.name) === normalizeFileName(baseName)
+      ));
+      if (match) return (await signMediaUrls([match]))[0];
+
+      return rows.find((product) => (product.event || '').trim().toLowerCase() === normalizedEvent && normalizeFileName(product.name) === normalizeFileName(baseName)) ?? null;
+    } catch (error) {
+      if (/originalFileName|schema cache|does not exist|column/i.test(String(error instanceof Error ? error.message : error))) {
+        console.warn('Campo originalFileName ausente no banco; upload seguira sem deduplicacao por nome.');
+        return null;
+      }
+      throw error;
+    }
+  },
+
   async updateProduct(id: string, product: Pick<Product, 'name' | 'price' | 'event' | 'checkpoint' | 'bib' | 'status'>): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
@@ -471,6 +512,64 @@ export const productService = {
 
     if (!updated) throw new Error('Produto nao encontrado.');
     return updated;
+  },
+
+  async replaceProductMedia(id: string, changes: Partial<Pick<Product, 'name' | 'price' | 'url' | 'type' | 'event' | 'checkpoint' | 'bib' | 'thumbnailUrl' | 'watermarkUrl' | 'storagePath' | 'fileHash' | 'fileSize' | 'originalFileName' | 'thumbnailHash' | 'uploadBatchId' | 'status'>>): Promise<Product> {
+    if (isMockMode) {
+      const existingProduct = mockProducts.find((item) => item.id === id);
+      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      const updatedProduct = { ...existingProduct, ...changes, updatedAt: new Date().toISOString() } as Product;
+      mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
+      return updatedProduct;
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${params.toString()}&${selectAll}`,
+      {
+        ...changes,
+        updatedAt: new Date().toISOString(),
+      },
+      true,
+    );
+
+    if (!updated) throw new Error('Produto nao encontrado.');
+    return updated;
+  },
+
+  async logUploadConflictAction(input: { action: 'upload_replace' | 'upload_copy'; productId?: string | null; metadata: Record<string, unknown> }) {
+    if (isMockMode) return;
+    const user = getCurrentUser();
+    const token = getCurrentAccessToken();
+
+    if (token) {
+      try {
+        const response = await fetch('/api/photographers/upload-log', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(input),
+        });
+
+        if (response.ok) return;
+      } catch (error) {
+        console.warn('Endpoint de auditoria de upload indisponivel, tentando Supabase direto:', error);
+      }
+    }
+
+    await supabaseRest.post('/rest/v1/admin_activity_logs', {
+      actorId: user?.id ?? null,
+      actorEmail: user?.email ?? null,
+      action: input.action,
+      targetType: 'product',
+      targetId: input.productId ?? null,
+      metadata: input.metadata,
+      createdAt: new Date().toISOString(),
+    }, true).catch((error) => {
+      console.warn('Nao foi possivel registrar auditoria de upload duplicado:', error);
+    });
   },
 
   async renameEventProducts(vendedorId: string, previousEventName: string, nextEventName: string): Promise<Product[]> {

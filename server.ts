@@ -1913,6 +1913,43 @@ app.post("/api/downloads/authorize", async (req, res) => {
 
 // Photographer signup can require email confirmation, which may prevent the client from getting an auth session
 // to insert into `public.photographers` (RLS). This endpoint registers a pending photographer record for admin approval.
+app.post("/api/photographers/upload-log", async (req, res) => {
+  const authUser = await getAuthenticatedRequestUser(req);
+  if (!authUser) {
+    return res.status(401).json({ error: "Sessao expirada. Entre novamente." });
+  }
+
+  const isPhotographer = await isVerifiedPhotographerUser(authUser.id);
+  if (!isPhotographer) {
+    return res.status(403).json({ error: "Apenas fotografos aprovados podem registrar auditoria de upload." });
+  }
+
+  const { action, productId, metadata } = req.body ?? {};
+  if (action !== "upload_replace" && action !== "upload_copy") {
+    return res.status(400).json({ error: "Acao de auditoria invalida." });
+  }
+
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from("admin_activity_logs")
+      .insert({
+        actorId: authUser.id,
+        actorEmail: authUser.email,
+        action,
+        targetType: "product",
+        targetId: typeof productId === "string" && productId.trim() ? productId.trim() : null,
+        metadata: typeof metadata === "object" && metadata !== null ? metadata : {},
+        createdAt: new Date().toISOString(),
+      });
+
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.error("Erro ao registrar auditoria de upload:", error);
+    return res.status(500).json({ error: "Nao foi possivel registrar auditoria de upload." });
+  }
+});
+
 app.post("/api/photographers/request", async (req, res) => {
   let pool: pg.Pool | null = null;
 

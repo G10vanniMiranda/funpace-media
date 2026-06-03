@@ -20,7 +20,8 @@
     "payments:audit": "node scripts/audit-payments.mjs",
     "supabase:schema:apply": "node scripts/apply-supabase-schema.mjs",
     "supabase:schema:validate": "node scripts/validate-supabase-schema.mjs",
-    "supabase:admin:set": "node scripts/set-supabase-admin.mjs"
+    "supabase:admin:set": "node scripts/set-supabase-admin.mjs",
+    "supabase:multiphoto:verify": "node scripts/verify-multiphoto-face-architecture.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",

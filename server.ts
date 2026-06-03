@@ -10,6 +10,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
 import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
+import adminApiHandler from "./api/admin";
 import type { PaymentMethod } from "./server/payments/providers/types";
 
 dotenv.config();
@@ -1009,6 +1010,15 @@ app.get("/api/health", async (req, res) => {
   }
 
   res.json(status);
+});
+
+app.all([
+  "/api/admin",
+  "/api/admin/snapshot",
+  "/api/admin/orders/status",
+  "/api/admin/payments/recovery",
+], async (req, res) => {
+  return adminApiHandler(req, res);
 });
 
 app.get("/api/auth/google/status", async (req, res) => {

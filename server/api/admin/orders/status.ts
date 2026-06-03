@@ -100,10 +100,17 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Status de pedido invalido.' });
     }
 
+    const [existing] = await supabaseRequest<any[]>(
+      `/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=*`,
+    );
+    if (!existing) return res.status(404).json({ error: 'Pedido nao encontrado.' });
+
     const manualPaymentId = `manual:${orderId}`;
     const orderPatch: Record<string, any> = { status, updatedAt: new Date().toISOString() };
     if (status === 'paid') {
       orderPatch.paymentExternalId = manualPaymentId;
+    } else if (existing.paymentExternalId?.startsWith?.('manual:')) {
+      orderPatch.paymentExternalId = null;
     }
 
     const [updated] = await supabaseRequest<any[]>(
@@ -154,6 +161,61 @@ export default async function handler(req: any, res: any) {
         }),
       });
       await fulfillPaidOrder(orderId);
+    } else {
+      await supabaseRequest(`/rest/v1/payments?orderId=eq.${encodeURIComponent(orderId)}`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status,
+          updatedAt: new Date().toISOString(),
+        }),
+      }).catch((error) => console.error('Nao foi possivel sincronizar pagamentos do pedido:', error));
+
+      if (existing.status === 'paid') {
+        const items = await supabaseRequest<any[]>(
+          `/rest/v1/order_items?select=id,productId&orderId=eq.${encodeURIComponent(orderId)}`,
+        ).catch(() => []);
+
+        await supabaseRequest(`/rest/v1/download_access?orderId=eq.${encodeURIComponent(orderId)}`, {
+          method: 'DELETE',
+          headers: { Prefer: 'return=minimal' },
+        }).catch((error) => console.error('Nao foi possivel remover download_access do pedido:', error));
+
+        await supabaseRequest(`/rest/v1/photographer_transactions?orderId=eq.${encodeURIComponent(orderId)}`, {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ status: 'cancelled' }),
+        }).catch((error) => console.error('Nao foi possivel cancelar transacoes do fotografo:', error));
+
+        for (const item of items) {
+          const rows = await supabaseRequest<any[]>(
+            `/rest/v1/products?select=salesCount&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
+          ).catch(() => []);
+          const nextSalesCount = Math.max(0, Number(rows[0]?.salesCount || 0) - 1);
+          await supabaseRequest(`/rest/v1/products?id=eq.${encodeURIComponent(item.productId)}`, {
+            method: 'PATCH',
+            headers: { Prefer: 'return=minimal' },
+            body: JSON.stringify({ salesCount: nextSalesCount }),
+          }).catch(() => undefined);
+        }
+      }
+
+      await supabaseRequest('/rest/v1/payment_events?on_conflict=provider,eventId', {
+        method: 'POST',
+        headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+        body: JSON.stringify({
+          provider: updated.paymentProvider || 'manual',
+          eventId: `${orderId}:admin-status-${status}`,
+          orderId,
+          status,
+          payload: {
+            source: 'admin_status_update',
+            previousStatus: existing.status,
+            actorId: adminUser.id,
+            actorEmail: adminUser.email,
+          },
+        }),
+      }).catch((error) => console.error('Nao foi possivel registrar evento de status admin:', error));
     }
 
     return res.status(200).json({ order: updated });

@@ -275,6 +275,7 @@ export default async function handler(req: any, res: any) {
     const transactionNsu = getPayloadValue(payload, ['transaction_nsu', 'transactionNSU', 'transaction_id', 'transactionId', 'nsu']);
     const slug = getPayloadValue(payload, ['invoice_slug', 'invoiceSlug', 'slug', 'invoice_id', 'invoiceId']);
     const eventId = getPayloadValue(payload, ['id', 'event_id', 'eventId']) || `${orderId}:${transactionNsu || slug || Date.now()}`;
+    const payloadStatus = mapPaymentCheckStatus(payload);
 
     if (!isUuid(orderId)) {
       return res.status(400).json({ success: false, received: false, error: 'Pedido invalido no webhook.' });
@@ -283,14 +284,33 @@ export default async function handler(req: any, res: any) {
       await recordPaymentEvent({
         eventId,
         orderId,
-        status: 'pending',
-        payload: { ...payload, webhook_error: 'missing_transaction_or_slug' },
+        status: payloadStatus,
+        payload: {
+          ...payload,
+          webhook_warning: 'missing_transaction_or_slug',
+          requires_admin_recovery: payloadStatus === 'paid',
+          hasTransactionNsu: Boolean(transactionNsu),
+          hasSlug: Boolean(slug),
+        },
       });
-      return res.status(400).json({
-        success: false,
-        received: false,
+      await recordPayment({
         orderId,
-        error: 'Webhook sem transaction_nsu ou invoice_slug.',
+        providerPaymentId: transactionNsu || `infinitepay:${orderId}:missing-identifiers`,
+        method: normalizePaymentMethod(getPayloadValue(payload, ['capture_method', 'payment_method', 'method'])),
+        status: payloadStatus,
+        rawResponse: {
+          ...payload,
+          webhook_warning: 'missing_transaction_or_slug',
+          requires_admin_recovery: payloadStatus === 'paid',
+        },
+      }).catch((error) => console.error('webhook:payment_record_missing_identifiers_failed', error));
+      return res.status(202).json({
+        success: true,
+        received: true,
+        orderId,
+        status: payloadStatus,
+        requiresAdminRecovery: payloadStatus === 'paid',
+        warning: 'Webhook sem transaction_nsu ou invoice_slug; evento registrado para recuperacao.',
       });
     }
 

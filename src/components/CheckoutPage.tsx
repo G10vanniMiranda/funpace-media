@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Copy, CreditCard, ExternalLink, Image as ImageIcon, Loader2, QrCode, ShieldCheck, Smartphone, Tag, Trash2 } from 'lucide-react';
 import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
+import { isValidAuthEmail, normalizeAuthEmail } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 import { ProtectedMedia } from './ProtectedMedia';
@@ -67,7 +68,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const meetsMinimumTotal = total > MIN_CHECKOUT_TOTAL;
   const phoneDigits = onlyWhatsappDigits(phone);
   const contactValid = fullName.trim().length >= 3 &&
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()) &&
+    isValidAuthEmail(email) &&
     phoneDigits.length >= 10 &&
     isValidCpf(cpf);
   const isSubmitting = Boolean(submittingMethod);
@@ -87,7 +88,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
       const normalizedCoupon = couponCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
       const result = await onCheckout({
         fullName: fullName.trim(),
-        email: email.trim().toLowerCase(),
+        email: normalizeAuthEmail(email),
         phone: phoneDigits,
         cpf,
       }, paymentMethod, normalizedCoupon || undefined);

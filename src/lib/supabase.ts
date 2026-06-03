@@ -58,9 +58,67 @@ function getSessionStorageKey() {
 }
 
 export const supabaseConfig = {
-  url: __SUPABASE_URL__,
-  anonKey: __SUPABASE_ANON_KEY__,
+  url: typeof __SUPABASE_URL__ !== 'undefined' ? __SUPABASE_URL__ : '',
+  anonKey: typeof __SUPABASE_ANON_KEY__ !== 'undefined' ? __SUPABASE_ANON_KEY__ : '',
 };
+
+export function normalizeAuthEmail(value: string) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFKC');
+}
+
+export function isValidAuthEmail(value: string) {
+  const email = normalizeAuthEmail(value);
+  if (email.length < 6 || email.length > 254) return false;
+  if (email.includes('..')) return false;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+}
+
+function authErrorMessage(raw: string, fallback = 'Nao foi possivel concluir a autenticacao.') {
+  const upper = raw.toUpperCase();
+
+  if (upper.includes('INVALID_EMAIL') || upper.includes('INVALID EMAIL') || upper.includes('EMAIL ADDRESS IS INVALID')) {
+    return 'E-mail invalido. Confira se digitou no formato nome@provedor.com.';
+  }
+  if (upper.includes('USER_ALREADY_REGISTERED') || upper.includes('USER ALREADY REGISTERED') || upper.includes('ALREADY REGISTERED')) {
+    return 'Este e-mail ja possui conta. Use Entrar ou recupere a senha.';
+  }
+  if (upper.includes('EMAIL_NOT_CONFIRMED') || upper.includes('NOT CONFIRMED')) {
+    return 'E-mail ainda nao confirmado. Verifique sua caixa de entrada e spam, ou reenvie a confirmacao.';
+  }
+  if (upper.includes('WEAK_PASSWORD') || upper.includes('PASSWORD') && upper.includes('6')) {
+    return 'Senha muito curta. Use pelo menos 6 caracteres.';
+  }
+  if (upper.includes('RATE') || upper.includes('TOO MANY') || upper.includes('OVER_EMAIL_SEND_RATE_LIMIT')) {
+    return 'Muitas tentativas com este e-mail. Aguarde alguns minutos e tente novamente.';
+  }
+  if (upper.includes('SIGNUP') && upper.includes('DISABLED')) {
+    return 'Cadastro por e-mail esta desativado no Supabase. Ative Authentication > Providers > Email.';
+  }
+  if (upper.includes('SMTP') || upper.includes('EMAIL PROVIDER')) {
+    return 'Falha no envio do e-mail de confirmacao. Verifique o SMTP do Supabase.';
+  }
+
+  return raw || fallback;
+}
+
+function recordAuthDiagnostic(input: { action: string; email?: string; status: 'success' | 'error' | 'pending_confirmation'; detail?: string }) {
+  try {
+    const key = 'funpace:auth-diagnostics:v1';
+    const current = JSON.parse(localStorage.getItem(key) || '[]');
+    const entry = {
+      ...input,
+      email: input.email ? normalizeAuthEmail(input.email).replace(/^(.{2}).*(@.*)$/, '$1***$2') : undefined,
+      at: new Date().toISOString(),
+      path: window.location.pathname,
+    };
+    localStorage.setItem(key, JSON.stringify([entry, ...(Array.isArray(current) ? current : [])].slice(0, 20)));
+  } catch {
+    // diagnostics must never block auth
+  }
+}
 
 function assertSupabaseConfig() {
   if (!supabaseConfig.url || !supabaseConfig.anonKey) {
@@ -275,10 +333,10 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
         throw new Error('E-mail nao confirmado. Verifique sua caixa de entrada e SPAM para confirmar, ou use Google para entrar.');
       }
 
-      if (msg) throw new Error(msg);
+      if (msg) throw new Error(authErrorMessage(msg));
     }
 
-    throw new Error(raw || `Supabase request failed with status ${response.status}`);
+    throw new Error(authErrorMessage(raw || `Supabase request failed with status ${response.status}`));
   }
 
   if (response.status === 204) return undefined as T;
@@ -655,39 +713,85 @@ export const updateCurrentUserProfile = async (input: { name?: string; avatarUrl
 
 export const requestPasswordReset = async (email: string) => {
   assertSupabaseConfig();
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!isValidAuthEmail(normalizedEmail)) {
+    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+  }
   const redirectTo = `${window.location.origin}/minha-conta`;
   await supabaseFetch('/auth/v1/recover', {
     method: 'POST',
-    body: JSON.stringify({ email, redirect_to: redirectTo }),
+    body: JSON.stringify({ email: normalizedEmail, redirect_to: redirectTo }),
   });
 };
 
 export const loginWithEmail = async (email: string, password: string) => {
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!isValidAuthEmail(normalizedEmail)) {
+    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+  }
+  if (!password) throw new Error('Informe sua senha.');
+
   const session = await supabaseFetch<SupabaseSession>('/auth/v1/token?grant_type=password', {
     method: 'POST',
-    body: JSON.stringify({ email, password }),
+    body: JSON.stringify({ email: normalizedEmail, password }),
   });
   setStoredSession(session);
   window.dispatchEvent(new Event('supabase-auth-changed'));
+  recordAuthDiagnostic({ action: 'login', email: normalizedEmail, status: 'success' });
   return toAppUser(session.user);
 };
 
 export const registerWithEmail = async (email: string, password: string, name: string, cpf?: string, phone?: string | null, instagram?: string | null) => {
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!isValidAuthEmail(normalizedEmail)) {
+    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+  }
+  if (!password || password.length < 6) {
+    throw new Error('Senha muito curta. Use pelo menos 6 caracteres.');
+  }
+
+  const emailRedirectTo = `${window.location.origin}/auth/callback`;
   const response = await supabaseFetch<SupabaseSignupResponse>('/auth/v1/signup', {
     method: 'POST',
     body: JSON.stringify({
-      email,
+      email: normalizedEmail,
       password,
+      email_redirect_to: emailRedirectTo,
       data: { name, cpf: cpf || null, phone: phone || null, instagram: instagram || null, preferred_username: instagram || null },
     }),
   });
 
   if (response.access_token && response.user) {
     setStoredSession(response as SupabaseSession);
+    recordAuthDiagnostic({ action: 'register', email: normalizedEmail, status: 'success' });
+    window.dispatchEvent(new Event('supabase-auth-changed'));
+    return toAppUser(response.user);
+  } else {
+    recordAuthDiagnostic({ action: 'register', email: normalizedEmail, status: 'pending_confirmation', detail: 'signup_without_session' });
   }
 
   window.dispatchEvent(new Event('supabase-auth-changed'));
-  return toAppUser(response.user ?? null);
+  return null;
+};
+
+export const resendSignupConfirmation = async (email: string) => {
+  assertSupabaseConfig();
+  const normalizedEmail = normalizeAuthEmail(email);
+  if (!isValidAuthEmail(normalizedEmail)) {
+    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+  }
+
+  await supabaseFetch('/auth/v1/resend', {
+    method: 'POST',
+    body: JSON.stringify({
+      type: 'signup',
+      email: normalizedEmail,
+      options: {
+        email_redirect_to: `${window.location.origin}/auth/callback`,
+      },
+    }),
+  });
+  recordAuthDiagnostic({ action: 'resend_signup_confirmation', email: normalizedEmail, status: 'success' });
 };
 
 export const logout = async () => {

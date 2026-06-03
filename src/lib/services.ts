@@ -911,6 +911,23 @@ export interface CreateCheckoutResult {
   provider: string;
   status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
   pix?: { qrCode?: string; qrCodeImage?: string; expiresAt?: string } | null;
+  requestId?: string;
+}
+
+function createCheckoutClientError(input: { response: Response; data: any; raw: string }) {
+  const detail = String(input.data?.error || input.data?.message || input.data?.msg || input.raw || '').trim();
+  const requestId = input.data?.requestId ? ` Codigo: ${input.data.requestId}.` : '';
+  const isPlatformCrash = /FUNCTION_INVOCATION_FAILED|A server error has occurred|Internal Server Error/i.test(detail);
+
+  if (isPlatformCrash) {
+    return new Error(`Nao foi possivel iniciar o pagamento. Tente novamente em alguns minutos.${requestId}`);
+  }
+
+  if (detail) {
+    return new Error(`Nao foi possivel iniciar o pagamento: ${detail}${requestId}`);
+  }
+
+  return new Error(`Nao foi possivel iniciar o pagamento. HTTP ${input.response.status}.${requestId}`);
 }
 
 export const paymentService = {
@@ -934,8 +951,7 @@ export const paymentService = {
     }
 
     if (!response.ok || !data?.url) {
-      const detail = data?.error || data?.message || data?.msg || raw;
-      throw new Error(detail ? `Nao foi possivel iniciar o pagamento: ${detail}` : `Nao foi possivel iniciar o pagamento. HTTP ${response.status}`);
+      throw createCheckoutClientError({ response, data, raw });
     }
 
     return {
@@ -948,6 +964,7 @@ export const paymentService = {
       provider: data.provider || 'infinitepay',
       status: data.status || 'pending',
       pix: data.pix || null,
+      requestId: data.requestId || undefined,
     };
   },
 

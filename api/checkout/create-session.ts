@@ -13,6 +13,23 @@ type CheckoutProviderResult = {
   rawResponse: any;
 };
 
+function createRequestId() {
+  return `chk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function logCheckout(level: 'info' | 'error', message: string, detail: Record<string, unknown> = {}) {
+  const payload = { source: 'checkout-create-session', message, ...detail };
+  if (level === 'error') {
+    console.error(payload);
+    return;
+  }
+  console.info(payload);
+}
+
+function sanitizeErrorMessage(error: any) {
+  return error instanceof Error ? error.message : String(error || 'erro desconhecido');
+}
+
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
@@ -109,6 +126,18 @@ function getSupabaseConfig() {
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), supabaseKey };
 }
 
+function assertCheckoutEnvironment() {
+  const missing = [
+    !getInfinitePayHandleSafe() ? 'INFINITEPAY_HANDLE' : '',
+    !(process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL) ? 'SUPABASE_URL' : '',
+    !(process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY) ? 'SUPABASE_SERVICE_ROLE_KEY' : '',
+  ].filter(Boolean);
+
+  if (missing.length > 0) {
+    throw Object.assign(new Error(`Configuracao de checkout incompleta: ${missing.join(', ')}`), { statusCode: 500 });
+  }
+}
+
 async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
   const { supabaseUrl, supabaseKey } = getSupabaseConfig();
   const response = await fetch(`${supabaseUrl}${path}`, {
@@ -145,6 +174,10 @@ function getInfinitePayHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;
   if (!handle) throw new Error('INFINITEPAY_HANDLE nao configurado.');
   return handle;
+}
+
+function getInfinitePayHandleSafe() {
+  return String(process.env.INFINITEPAY_HANDLE || '').trim();
 }
 
 async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs = 7000) {
@@ -451,39 +484,50 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
 }
 
 export default async function handler(req: any, res: any) {
-  if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'checkout', windowMs: 60 * 1000, max: 30 })) return;
-  if (rejectUntrustedBrowserOrigin(req, res)) return;
-
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
-  }
-
+  const requestId = createRequestId();
   try {
+    if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
+    if (rateLimit(req, res, { keyPrefix: 'checkout', windowMs: 60 * 1000, max: 30 })) return;
+    if (rejectUntrustedBrowserOrigin(req, res)) return;
+
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Metodo nao permitido.', requestId });
+    }
+
+    assertCheckoutEnvironment();
     assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
     const { items, successUrl, cancelUrl, buyer, paymentMethod: rawPaymentMethod, couponCode } = getJsonBody(req);
     const authUser = await getAuthenticatedRequestUser(req);
     const paymentMethod: PaymentMethod = rawPaymentMethod === 'pix' || rawPaymentMethod === 'credit_card' ? rawPaymentMethod : 'checkout';
 
+    logCheckout('info', 'request_received', {
+      requestId,
+      method: req.method,
+      itemCount: Array.isArray(items) ? items.length : 0,
+      paymentMethod,
+      hasCoupon: Boolean(couponCode),
+      hasAuth: Boolean(authUser?.id),
+    });
+
     if (!authUser?.id) {
-      return res.status(401).json({ error: 'Entre novamente para iniciar o pagamento.' });
+      return res.status(401).json({ error: 'Entre novamente para iniciar o pagamento.', requestId });
     }
 
     if (!buyer?.cpf || !isValidCpf(buyer.cpf)) {
-      return res.status(400).json({ error: 'CPF valido e obrigatorio para pagamento.' });
+      return res.status(400).json({ error: 'CPF valido e obrigatorio para pagamento.', requestId });
     }
 
     if (!buyer?.fullName || !buyer?.email) {
-      return res.status(400).json({ error: 'Dados do comprador incompletos.' });
+      return res.status(400).json({ error: 'Dados do comprador incompletos.', requestId });
     }
 
     if (!Array.isArray(items) || items.length === 0) {
-      return res.status(400).json({ error: 'Carrinho vazio.' });
+      return res.status(400).json({ error: 'Carrinho vazio.', requestId });
     }
 
     const productIds = [...new Set(items.map((item: any) => String(item.id || '').trim()))].filter(Boolean);
     if (productIds.length !== items.length || productIds.some((id) => !isValidCartProductId(id))) {
-      return res.status(400).json({ error: 'Carrinho contem produto invalido.' });
+      return res.status(400).json({ error: 'Carrinho contem produto invalido.', requestId });
     }
 
     const products = await supabaseRequest<any[]>(
@@ -491,18 +535,18 @@ export default async function handler(req: any, res: any) {
     );
 
     if (products.length !== productIds.length) {
-      return res.status(400).json({ error: 'Um ou mais produtos nao estao disponiveis.' });
+      return res.status(400).json({ error: 'Um ou mais produtos nao estao disponiveis.', requestId });
     }
 
     const subtotal = roundMoney(products.reduce((sum: number, product: any) => sum + Number(product.price), 0));
     if (subtotal <= 1) {
-      return res.status(400).json({ error: 'A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.' });
+      return res.status(400).json({ error: 'A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.', requestId });
     }
     let couponResult;
     try {
       couponResult = await validateCoupon({ code: couponCode, subtotal, itemCount: products.length });
     } catch (error: any) {
-      return res.status(400).json({ error: error?.message || 'Cupom invalido.' });
+      return res.status(400).json({ error: error?.message || 'Cupom invalido.', requestId });
     }
     const discountTotal = couponResult.discountTotal;
     const total = roundMoney(subtotal - discountTotal);
@@ -511,7 +555,7 @@ export default async function handler(req: any, res: any) {
     const buyerName = String(buyer.fullName).trim();
     const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
     if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
-      return res.status(403).json({ error: 'Use o mesmo e-mail da conta logada para finalizar a compra.' });
+      return res.status(403).json({ error: 'Use o mesmo e-mail da conta logada para finalizar a compra.', requestId });
     }
 
     const buyerEmail = authUser.email || inputBuyerEmail;
@@ -550,8 +594,10 @@ export default async function handler(req: any, res: any) {
 
     const orderId = order?.id;
     if (!orderId) {
-      return res.status(500).json({ error: 'Supabase nao retornou o ID do pedido.' });
+      return res.status(500).json({ error: 'Supabase nao retornou o ID do pedido.', requestId });
     }
+
+    logCheckout('info', 'order_created', { requestId, orderId, itemCount: checkoutProducts.length, total });
 
     await supabaseRequest('/rest/v1/order_items', {
       method: 'POST',
@@ -593,13 +639,23 @@ export default async function handler(req: any, res: any) {
         webhookUrl: getInfinitePayWebhookUrl(req),
       });
     } catch (error: any) {
+      logCheckout('error', 'provider_checkout_failed', {
+        requestId,
+        orderId,
+        provider: 'infinitepay',
+        error: sanitizeErrorMessage(error),
+      });
       await supabaseRequest(`/rest/v1/orders?id=eq.${orderId}`, {
         method: 'PATCH',
         headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({ status: 'failed' }),
       }).catch(() => undefined);
 
-      return res.status(502).json({ error: error?.message || 'Falha ao gerar checkout com infinitepay.' });
+      return res.status(502).json({
+        error: error?.message || 'Falha ao gerar checkout com infinitepay.',
+        code: 'PAYMENT_PROVIDER_FAILED',
+        requestId,
+      });
     }
 
     await recordPayment({
@@ -632,6 +688,14 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    logCheckout('info', 'checkout_created', {
+      requestId,
+      orderId,
+      provider: paymentResult.provider,
+      status: paymentResult.status,
+      hasCheckoutUrl: Boolean(paymentResult.checkoutUrl),
+    });
+
     return res.status(200).json({
       url: paymentResult.checkoutUrl,
       paymentUrl: paymentResult.checkoutUrl,
@@ -644,11 +708,19 @@ export default async function handler(req: any, res: any) {
       provider: paymentResult.provider,
       status: paymentResult.status,
       pix: paymentResult.pix || null,
+      requestId,
     });
   } catch (error: any) {
+    logCheckout('error', 'handler_failed', {
+      requestId,
+      statusCode: Number(error?.statusCode || 500),
+      error: sanitizeErrorMessage(error),
+    });
     const safe = publicError(error, 'Erro interno ao criar checkout.');
     return res.status(safe.statusCode).json({
       error: safe.message,
+      code: 'CHECKOUT_CREATE_SESSION_FAILED',
+      requestId,
       source: 'checkout-create-session',
     });
   }

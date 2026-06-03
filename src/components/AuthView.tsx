@@ -1,6 +1,6 @@
 import { useState, FormEvent } from 'react';
 import { Mail, Lock, User, ArrowRight, X, Loader2 } from 'lucide-react';
-import { loginWithEmail, registerWithEmail, loginWithGoogle, requestPasswordReset } from '../lib/supabase';
+import { isValidAuthEmail, loginWithEmail, normalizeAuthEmail, registerWithEmail, loginWithGoogle, requestPasswordReset, resendSignupConfirmation } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 import { motion, AnimatePresence } from 'motion/react';
@@ -22,25 +22,57 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
   const [cpf, setCpf] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingConfirmationEmail, setPendingConfirmationEmail] = useState<string | null>(null);
+  const [fieldError, setFieldError] = useState<{ email?: string; password?: string; name?: string; phone?: string; cpf?: string }>({});
   const [loading, setLoading] = useState(false);
+
+  const validateFields = () => {
+    const nextErrors: typeof fieldError = {};
+    const normalizedEmail = normalizeAuthEmail(email);
+
+    if (!isValidAuthEmail(normalizedEmail)) {
+      nextErrors.email = 'Digite um e-mail valido, como nome@gmail.com.';
+    }
+    if (!password || password.length < 6) {
+      nextErrors.password = 'Use pelo menos 6 caracteres.';
+    }
+    if (mode === 'register') {
+      if (!name.trim()) nextErrors.name = 'Informe seu nome completo.';
+      const phoneDigits = onlyWhatsappDigits(phone);
+      if (phoneDigits.length < 10) nextErrors.phone = 'Informe um WhatsApp valido.';
+      if (cpf && !isValidCpf(cpf)) nextErrors.cpf = 'CPF invalido.';
+    }
+
+    setFieldError(nextErrors);
+    return Object.keys(nextErrors).length === 0;
+  };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     setError(null);
     setMessage(null);
+    setFieldError({});
+    setPendingConfirmationEmail(null);
+
+    if (!validateFields()) return;
+
     setLoading(true);
 
     try {
+      const normalizedEmail = normalizeAuthEmail(email);
       if (mode === 'login') {
-        await loginWithEmail(email, password);
+        await loginWithEmail(normalizedEmail, password);
+        onSuccess();
       } else {
-        if (!name.trim()) throw new Error('Por favor, informe seu nome.');
         const phoneDigits = onlyWhatsappDigits(phone);
-        if (phoneDigits.length < 10) throw new Error('Por favor, informe um telefone valido.');
-        if (cpf && !isValidCpf(cpf)) throw new Error('CPF invalido.');
-        await registerWithEmail(email, password, name, onlyCpfDigits(cpf), phoneDigits);
+        const createdUser = await registerWithEmail(normalizedEmail, password, name.trim(), onlyCpfDigits(cpf), phoneDigits);
+        if (!createdUser?.id) {
+          setPendingConfirmationEmail(normalizedEmail);
+          setMessage('Conta criada. Confirme seu e-mail para entrar e continuar a compra. Seu carrinho foi mantido.');
+          return;
+        }
+        onSuccess();
       }
-      onSuccess();
     } catch (err: any) {
       setError(err.message || 'Ocorreu um erro. Tente novamente.');
     } finally {
@@ -55,13 +87,39 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
       setError('Informe seu e-mail para recuperar a senha.');
       return;
     }
+    const normalizedEmail = normalizeAuthEmail(email);
+    if (!isValidAuthEmail(normalizedEmail)) {
+      setFieldError({ email: 'Digite um e-mail valido, como nome@gmail.com.' });
+      return;
+    }
 
     setLoading(true);
     try {
-      await requestPasswordReset(email.trim().toLowerCase());
+      await requestPasswordReset(normalizedEmail);
       setMessage('Enviamos um link de recuperacao para seu e-mail.');
     } catch (err: any) {
       setError(err?.message || 'Nao foi possivel enviar a recuperacao de senha.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendConfirmation = async () => {
+    const normalizedEmail = normalizeAuthEmail(pendingConfirmationEmail || email);
+    setError(null);
+    setMessage(null);
+    if (!isValidAuthEmail(normalizedEmail)) {
+      setFieldError({ email: 'Digite um e-mail valido para reenviar a confirmacao.' });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      await resendSignupConfirmation(normalizedEmail);
+      setPendingConfirmationEmail(normalizedEmail);
+      setMessage('Reenviamos a confirmacao. Confira a caixa de entrada e o spam.');
+    } catch (err: any) {
+      setError(err?.message || 'Nao foi possivel reenviar a confirmacao.');
     } finally {
       setLoading(false);
     }
@@ -80,6 +138,13 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
   };
 
   const googleEnabled = !isMockMode && isGoogleAuthEnabled;
+  const toggleMode = () => {
+    setMode((current) => current === 'login' ? 'register' : 'login');
+    setError(null);
+    setMessage(null);
+    setFieldError({});
+    setPendingConfirmationEmail(null);
+  };
 
   return (
     <div className="fixed inset-0 z-60 flex items-center justify-center p-4">
@@ -130,11 +195,15 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                       type="text"
                       required
                       value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className="w-full h-14 pl-12 pr-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm"
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        setFieldError((current) => ({ ...current, name: undefined }));
+                      }}
+                      className={`w-full h-14 pl-12 pr-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm ${fieldError.name ? 'border-red-500' : ''}`}
                       placeholder="CORREDOR RELAMPAGO"
                     />
                   </div>
+                  {fieldError.name && <p className="font-mono text-[10px] uppercase text-red-600">{fieldError.name}</p>}
                 </div>
 
                 <div className="space-y-1">
@@ -142,23 +211,31 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                   <input
                     type="tel"
                     value={formatWhatsapp(phone)}
-                    onChange={(e) => setPhone(formatWhatsapp(e.target.value))}
-                    className="w-full h-14 px-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm"
+                    onChange={(e) => {
+                      setPhone(formatWhatsapp(e.target.value));
+                      setFieldError((current) => ({ ...current, phone: undefined }));
+                    }}
+                    className={`w-full h-14 px-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm ${fieldError.phone ? 'border-red-500' : ''}`}
                     placeholder="(00) 90000-0000"
                     inputMode="tel"
                     maxLength={16}
                     required
                   />
+                  {fieldError.phone && <p className="font-mono text-[10px] uppercase text-red-600">{fieldError.phone}</p>}
                 </div>
                 <div className="space-y-1">
                   <label className="font-mono text-[10px] uppercase tracking-widest font-bold">CPF Opcional</label>
                   <input
                     type="text"
                     value={formatCpf(cpf)}
-                    onChange={(e) => setCpf(onlyCpfDigits(e.target.value))}
-                    className="w-full h-14 px-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm"
+                    onChange={(e) => {
+                      setCpf(onlyCpfDigits(e.target.value));
+                      setFieldError((current) => ({ ...current, cpf: undefined }));
+                    }}
+                    className={`w-full h-14 px-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm ${fieldError.cpf ? 'border-red-500' : ''}`}
                     placeholder="000.000.000-00"
                   />
+                  {fieldError.cpf && <p className="font-mono text-[10px] uppercase text-red-600">{fieldError.cpf}</p>}
                 </div>
               </motion.div>
             )}
@@ -172,11 +249,16 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                 type="email"
                 required
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full h-14 pl-12 pr-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm"
-                placeholder="SEU@EMAIL.COM"
+                onChange={(e) => {
+                  setEmail(e.target.value);
+                  setFieldError((current) => ({ ...current, email: undefined }));
+                }}
+                onBlur={() => setEmail(normalizeAuthEmail(email))}
+                className={`w-full h-14 pl-12 pr-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm ${fieldError.email ? 'border-red-500' : ''}`}
+                placeholder="seu@email.com"
               />
             </div>
+            {fieldError.email && <p className="font-mono text-[10px] uppercase text-red-600">{fieldError.email}</p>}
           </div>
 
           <div className="space-y-1">
@@ -187,11 +269,16 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                 type="password"
                 required
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full h-14 pl-12 pr-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm"
+                minLength={6}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  setFieldError((current) => ({ ...current, password: undefined }));
+                }}
+                className={`w-full h-14 pl-12 pr-4 bg-white brutal-border focus:border-brutal-accent transition-colors outline-none font-mono text-sm ${fieldError.password ? 'border-red-500' : ''}`}
                 placeholder="********"
               />
             </div>
+            {fieldError.password && <p className="font-mono text-[10px] uppercase text-red-600">{fieldError.password}</p>}
           </div>
 
           {error && (
@@ -204,6 +291,22 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             <p className="bg-green-100 border-l-4 border-green-500 p-3 text-green-700 font-mono text-xs uppercase">
               {message}
             </p>
+          )}
+
+          {pendingConfirmationEmail && (
+            <div className="bg-yellow-50 border-l-4 border-yellow-500 p-3 space-y-3">
+              <p className="text-yellow-800 font-mono text-xs uppercase leading-relaxed">
+                Depois de confirmar o e-mail, volte aqui e use Entrar. Seu carrinho continua salvo.
+              </p>
+              <button
+                type="button"
+                onClick={handleResendConfirmation}
+                disabled={loading}
+                className="min-h-10 w-full bg-white brutal-border font-display text-xs uppercase tracking-widest hover:bg-yellow-100 disabled:opacity-60"
+              >
+                Reenviar confirmacao
+              </button>
+            </div>
           )}
 
           <button
@@ -258,7 +361,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
         <p className="mt-8 text-center font-mono text-xs uppercase tracking-widest">
           {mode === 'login' ? 'Nao tem uma conta?' : 'Ja possui conta?'}
           <button
-            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+            onClick={toggleMode}
             className="ml-2 text-brutal-accent font-bold hover:underline cursor-pointer"
           >
             {mode === 'login' ? 'Crie agora' : 'Entre aqui'}

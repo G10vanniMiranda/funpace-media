@@ -91,6 +91,10 @@ app.use((_req, res, next) => {
   next();
 });
 
+function normalizeOriginValue(origin: string) {
+  return origin.trim().replace(/\/+$/, "");
+}
+
 function getAllowedOrigins() {
   return new Set([
     "https://funpace.media",
@@ -105,18 +109,31 @@ function getAllowedOrigins() {
     process.env.VITE_FRONTEND_URL,
     ...(process.env.ALLOWED_ORIGINS || "").split(","),
     ...(process.env.CORS_ORIGINS || "").split(","),
-  ].filter((origin): origin is string => Boolean(origin)).map((origin) => origin.replace(/\/+$/, "")));
+  ].filter((origin): origin is string => Boolean(origin?.trim())).map(normalizeOriginValue));
 }
 
 const allowedOrigins = getAllowedOrigins();
 
 function isAllowedRequestOrigin(value: string) {
   try {
-    const origin = new URL(value).origin.replace(/\/+$/, "");
+    const origin = normalizeOriginValue(new URL(value).origin);
     return allowedOrigins.has(origin);
   } catch {
     return false;
   }
+}
+
+function logBlockedOrigin(req: express.Request, input: { source: "cors" | "browser-origin"; origin?: string; referer?: string }) {
+  if (process.env.NODE_ENV !== "production" && process.env.CORS_DEBUG !== "true") return;
+
+  console.warn("Origem bloqueada pelo CORS/origin guard:", {
+    source: input.source,
+    method: req.method,
+    path: req.originalUrl || req.url,
+    origin: input.origin || null,
+    referer: input.referer || null,
+    userAgent: req.header("user-agent") || null,
+  });
 }
 
 function rejectUntrustedBrowserOrigin(req: express.Request, res: express.Response, next: express.NextFunction) {
@@ -129,6 +146,7 @@ function rejectUntrustedBrowserOrigin(req: express.Request, res: express.Respons
   const referer = req.header("referer");
 
   if ((origin && !isAllowedRequestOrigin(origin)) || (!origin && referer && !isAllowedRequestOrigin(referer))) {
+    logBlockedOrigin(req, { source: "browser-origin", origin, referer });
     res.status(403).json({ error: "Origem nao autorizada." });
     return;
   }
@@ -166,18 +184,29 @@ setInterval(() => {
   }
 }, 60_000).unref();
 
-app.use(cors({
-  origin(origin, callback) {
-    const normalizedOrigin = origin?.replace(/\/+$/, "");
+app.use((req, res, next) => {
+  cors({
+    origin(origin, callback) {
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
 
-    if (!normalizedOrigin || allowedOrigins.has(normalizedOrigin)) {
-      callback(null, true);
-      return;
-    }
+      const normalizedOrigin = normalizeOriginValue(origin);
+      if (allowedOrigins.has(normalizedOrigin)) {
+        callback(null, true);
+        return;
+      }
 
-    callback(new Error("Origem nao permitida pelo CORS."));
-  },
-}));
+      logBlockedOrigin(req, {
+        source: "cors",
+        origin: normalizedOrigin,
+        referer: req.header("referer"),
+      });
+      callback(new Error("Origem nao permitida pelo CORS."));
+    },
+  })(req, res, next);
+});
 
 app.use(express.json({
   limit: process.env.JSON_BODY_LIMIT || "200kb",
@@ -714,8 +743,10 @@ function getAllowedRedirectOrigins(req: express.Request) {
     "https://funpace.media",
     "https://www.funpace.media",
     process.env.FRONTEND_URL,
+    process.env.VITE_FRONTEND_URL,
+    ...(process.env.ALLOWED_ORIGINS || "").split(","),
     ...(process.env.CORS_ORIGINS || "").split(","),
-  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, "")));
+  ].filter((origin) => Boolean(String(origin || "").trim())).map((origin) => normalizeOriginValue(String(origin))));
 }
 
 function buildSafeCheckoutSuccessUrl(req: express.Request, inputUrl: string | undefined, orderId: string) {
@@ -2265,6 +2296,13 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
 
   const message = String(error?.message || "");
   const status = Number(error?.status || error?.statusCode || 500);
+  const isCorsOriginError = message === "Origem nao permitida pelo CORS.";
+
+  if (isCorsOriginError) {
+    res.status(403).json({ error: "Origem nao permitida pelo CORS." });
+    return;
+  }
+
   const isUploadBodyError = req.path === "/api/media/upload" &&
     (status === 413 || /request entity too large|payload too large|entity too large|too large/i.test(message));
 

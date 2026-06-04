@@ -122,6 +122,166 @@ alter table public.photographers add column if not exists "profilePhoto" text;
 alter table public.photographers add column if not exists "coverPhoto" text;
 alter table public.photographers add column if not exists city text;
 
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values
+  ('photographer-avatars', 'photographer-avatars', true, 5242880, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp']),
+  ('photographer-covers', 'photographer-covers', true, 10485760, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp']),
+  ('event-covers', 'event-covers', true, 10485760, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+on conflict (id) do update
+set
+  public = excluded.public,
+  file_size_limit = excluded.file_size_limit,
+  allowed_mime_types = excluded.allowed_mime_types;
+
+drop policy if exists "photographer_profile_images_public_select" on storage.objects;
+create policy "photographer_profile_images_public_select"
+on storage.objects
+for select
+using (bucket_id in ('photographer-avatars', 'photographer-covers'));
+
+drop policy if exists "event_covers_public_select" on storage.objects;
+create policy "event_covers_public_select"
+on storage.objects
+for select
+using (bucket_id = 'event-covers');
+
+drop policy if exists "photographer_avatars_insert_own_folder" on storage.objects;
+create policy "photographer_avatars_insert_own_folder"
+on storage.objects
+for insert
+with check (
+  bucket_id = 'photographer-avatars'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'avatars'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+drop policy if exists "photographer_avatars_update_own_folder" on storage.objects;
+create policy "photographer_avatars_update_own_folder"
+on storage.objects
+for update
+using (
+  bucket_id = 'photographer-avatars'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'avatars'
+  and (storage.foldername(name))[2] = auth.uid()::text
+)
+with check (
+  bucket_id = 'photographer-avatars'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'avatars'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+drop policy if exists "photographer_avatars_delete_own_folder" on storage.objects;
+create policy "photographer_avatars_delete_own_folder"
+on storage.objects
+for delete
+using (
+  bucket_id = 'photographer-avatars'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'avatars'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+drop policy if exists "photographer_covers_insert_own_folder" on storage.objects;
+create policy "photographer_covers_insert_own_folder"
+on storage.objects
+for insert
+with check (
+  bucket_id = 'photographer-covers'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'covers'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+drop policy if exists "photographer_covers_update_own_folder" on storage.objects;
+create policy "photographer_covers_update_own_folder"
+on storage.objects
+for update
+using (
+  bucket_id = 'photographer-covers'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'covers'
+  and (storage.foldername(name))[2] = auth.uid()::text
+)
+with check (
+  bucket_id = 'photographer-covers'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'covers'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+drop policy if exists "photographer_covers_delete_own_folder" on storage.objects;
+create policy "photographer_covers_delete_own_folder"
+on storage.objects
+for delete
+using (
+  bucket_id = 'photographer-covers'
+  and auth.uid() is not null
+  and (storage.foldername(name))[1] = 'covers'
+  and (storage.foldername(name))[2] = auth.uid()::text
+);
+
+drop policy if exists "event_covers_insert_own_folder" on storage.objects;
+create policy "event_covers_insert_own_folder"
+on storage.objects
+for insert
+with check (
+  bucket_id = 'event-covers'
+  and (
+    public.is_admin()
+    or (
+      auth.uid() is not null
+      and (storage.foldername(name))[1] = 'covers'
+      and (storage.foldername(name))[2] = auth.uid()::text
+    )
+  )
+);
+
+drop policy if exists "event_covers_update_own_folder" on storage.objects;
+create policy "event_covers_update_own_folder"
+on storage.objects
+for update
+using (
+  bucket_id = 'event-covers'
+  and (
+    public.is_admin()
+    or (
+      auth.uid() is not null
+      and (storage.foldername(name))[1] = 'covers'
+      and (storage.foldername(name))[2] = auth.uid()::text
+    )
+  )
+)
+with check (
+  bucket_id = 'event-covers'
+  and (
+    public.is_admin()
+    or (
+      auth.uid() is not null
+      and (storage.foldername(name))[1] = 'covers'
+      and (storage.foldername(name))[2] = auth.uid()::text
+    )
+  )
+);
+
+drop policy if exists "event_covers_delete_own_folder" on storage.objects;
+create policy "event_covers_delete_own_folder"
+on storage.objects
+for delete
+using (
+  bucket_id = 'event-covers'
+  and (
+    public.is_admin()
+    or (
+      auth.uid() is not null
+      and (storage.foldername(name))[1] = 'covers'
+      and (storage.foldername(name))[2] = auth.uid()::text
+    )
+  )
+);
+
 create table if not exists public.customers (
   id text primary key,
   email text not null unique check (char_length(email) <= 256),
@@ -192,6 +352,7 @@ create table if not exists public.events (
   location text,
   checkpoint text,
   "coverImage" text,
+  "coverMediaId" uuid references public.products(id) on delete set null,
   "bannerImage" text,
   "defaultPrice" numeric(10, 2) check ("defaultPrice" is null or "defaultPrice" > 0),
   "isPublished" boolean not null default true,
@@ -206,6 +367,7 @@ alter table public.events add column if not exists "photographerId" text referen
 alter table public.events add column if not exists slug text unique;
 alter table public.events add column if not exists description text;
 alter table public.events add column if not exists "coverImage" text;
+alter table public.events add column if not exists "coverMediaId" uuid references public.products(id) on delete set null;
 alter table public.events add column if not exists "bannerImage" text;
 alter table public.events add column if not exists "defaultPrice" numeric(10, 2);
 alter table public.events add column if not exists "isPublished" boolean not null default true;
@@ -457,6 +619,7 @@ create index if not exists events_date_idx on public.events (date);
 create index if not exists events_status_idx on public.events (status);
 create index if not exists events_photographer_id_idx on public.events ("photographerId");
 create index if not exists events_slug_idx on public.events (slug);
+create index if not exists events_cover_media_id_idx on public.events ("coverMediaId");
 create index if not exists photographers_email_idx on public.photographers (email);
 create index if not exists photographers_slug_idx on public.photographers (slug);
 create index if not exists photographers_verified_idx on public.photographers (verified);

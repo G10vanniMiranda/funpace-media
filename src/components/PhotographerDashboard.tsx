@@ -90,8 +90,18 @@ type EventFormState = {
   status: Event['status'];
   isPublished: boolean;
   coverImage: string;
+  coverMediaId: string;
   bannerImage: string;
 };
+
+type ProfileImageKind = 'avatar' | 'cover';
+
+type PendingProfileImage = {
+  file: File;
+  previewUrl: string;
+};
+
+type PendingEventCover = PendingProfileImage;
 
 const PHOTOGRAPHER_PERIOD_OPTIONS: Array<{ key: PhotographerPeriodKey; label: string }> = [
   { key: 'today', label: 'Hoje' },
@@ -111,6 +121,9 @@ const imagePreviewMaxSide = 960;
 const imagePreviewQuality = 0.84;
 const videoPreviewMaxSide = 960;
 const videoPreviewQuality = 0.82;
+const profileAvatarMaxBytes = 5 * 1024 * 1024;
+const profileCoverMaxBytes = 10 * 1024 * 1024;
+const profileImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
@@ -331,6 +344,115 @@ function SaleThumbnail({ sale }: { sale: PhotographerSale }) {
       className="w-full h-full object-cover"
       onError={() => setFailed(true)}
     />
+  );
+}
+
+function ProfileImageUploader({
+  kind,
+  label,
+  description,
+  actionLabel,
+  previewUrl,
+  error,
+  disabled,
+  onSelect,
+  onRemove,
+}: {
+  kind: ProfileImageKind;
+  label: string;
+  description: string;
+  actionLabel: string;
+  previewUrl: string;
+  error: string;
+  disabled?: boolean;
+  onSelect: (file: File | null) => void;
+  onRemove: () => void;
+}) {
+  const inputId = `profile-${kind}-upload`;
+  const inputRef = React.useRef<HTMLInputElement | null>(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+
+  const handleFiles = (files: FileList | null) => {
+    onSelect(files?.[0] ?? null);
+    if (inputRef.current) inputRef.current.value = '';
+  };
+
+  return (
+    <div className="space-y-3 md:col-span-2">
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">{label}</p>
+        <p className="font-mono text-[10px] uppercase tracking-widest text-gray-600 mt-1">{description}</p>
+      </div>
+
+      <div
+        onDragOver={(event) => {
+          event.preventDefault();
+          setIsDragging(true);
+        }}
+        onDragLeave={() => setIsDragging(false)}
+        onDrop={(event) => {
+          event.preventDefault();
+          setIsDragging(false);
+          handleFiles(event.dataTransfer.files);
+        }}
+        className={`grid gap-4 border border-dashed p-4 transition-colors md:grid-cols-[180px_minmax(0,1fr)] ${isDragging
+          ? 'border-brutal-accent bg-brutal-accent/10'
+          : 'border-white/20 bg-[#080d14]'
+          }`}
+      >
+        <div className={`${kind === 'avatar' ? 'aspect-square' : 'aspect-[16/6] md:aspect-[4/3]'} overflow-hidden border border-white/10 bg-[#05080d]`}>
+          {previewUrl ? (
+            <img src={previewUrl} alt={label} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-gray-600">
+              {kind === 'avatar' ? <Users className="h-10 w-10" /> : <ImageIcon className="h-10 w-10" />}
+            </div>
+          )}
+        </div>
+
+        <div className="flex min-w-0 flex-col justify-center gap-3">
+          <input
+            ref={inputRef}
+            id={inputId}
+            type="file"
+            accept="image/jpeg,image/jpg,image/png,image/webp"
+            className="hidden"
+            disabled={disabled}
+            onChange={(event) => handleFiles(event.target.files)}
+          />
+          <div className="flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              disabled={disabled}
+              onClick={() => inputRef.current?.click()}
+              className="inline-flex h-11 items-center justify-center gap-2 border border-brutal-accent bg-brutal-accent px-4 font-sans text-xs font-black uppercase tracking-wide text-white transition-colors hover:bg-white hover:text-brutal-accent disabled:opacity-60"
+            >
+              <Upload className="h-4 w-4" />
+              {actionLabel}
+            </button>
+            {previewUrl && (
+              <button
+                type="button"
+                disabled={disabled}
+                onClick={onRemove}
+                className="inline-flex h-11 items-center justify-center gap-2 border border-white/15 bg-white/5 px-4 font-sans text-xs font-black uppercase tracking-wide text-gray-300 transition-colors hover:border-red-400 hover:text-red-300 disabled:opacity-60"
+              >
+                <X className="h-4 w-4" />
+                Remover
+              </button>
+            )}
+          </div>
+          <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">
+            Arraste uma imagem aqui ou selecione da galeria no celular.
+          </p>
+          {error && (
+            <p className="font-mono text-[10px] uppercase tracking-widest text-red-300">
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -591,6 +713,148 @@ function formatUploadErrorMessage(message: string, file?: File) {
   return message;
 }
 
+function validateProfileImageFile(file: File, kind: ProfileImageKind) {
+  const limit = kind === 'avatar' ? profileAvatarMaxBytes : profileCoverMaxBytes;
+  const label = kind === 'avatar' ? 'foto de perfil' : 'banner de capa';
+
+  if (!profileImageTypes.has(file.type.toLowerCase())) {
+    throw new Error(`Formato invalido para ${label}. Envie JPG, JPEG, PNG ou WEBP.`);
+  }
+
+  if (file.size > limit) {
+    throw new Error(`${label[0].toUpperCase()}${label.slice(1)} muito grande (${formatFileSize(file.size)}). O limite e ${formatFileSize(limit)}.`);
+  }
+}
+
+function validateEventCoverFile(file: File) {
+  if (!profileImageTypes.has(file.type.toLowerCase())) {
+    throw new Error('Formato invalido para capa do evento. Envie JPG, JPEG, PNG ou WEBP.');
+  }
+
+  if (file.size > profileCoverMaxBytes) {
+    throw new Error(`Capa do evento muito grande (${formatFileSize(file.size)}). O limite e ${formatFileSize(profileCoverMaxBytes)}.`);
+  }
+}
+
+async function prepareProfileImageForUpload(file: File, kind: ProfileImageKind): Promise<File> {
+  validateProfileImageFile(file, kind);
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const targetWidth = kind === 'avatar' ? 512 : 1600;
+      const targetHeight = kind === 'avatar' ? 512 : 600;
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        reject(new Error('Nao foi possivel preparar a imagem neste navegador.'));
+        return;
+      }
+
+      const sourceRatio = image.width / image.height;
+      const targetRatio = targetWidth / targetHeight;
+      let sourceWidth = image.width;
+      let sourceHeight = image.height;
+      let sourceX = 0;
+      let sourceY = 0;
+
+      if (sourceRatio > targetRatio) {
+        sourceWidth = Math.round(image.height * targetRatio);
+        sourceX = Math.round((image.width - sourceWidth) / 2);
+      } else {
+        sourceHeight = Math.round(image.width / targetRatio);
+        sourceY = Math.round((image.height - sourceHeight) / 2);
+      }
+
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
+
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Nao foi possivel comprimir a imagem.'));
+          return;
+        }
+
+        const baseName = (file.name.replace(/\.[^.]+$/, '') || (kind === 'avatar' ? 'perfil' : 'banner')).slice(0, 80);
+        resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', kind === 'avatar' ? 0.88 : 0.84);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Nao foi possivel ler a imagem selecionada.'));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+async function prepareEventCoverForUpload(file: File): Promise<File> {
+  validateEventCoverFile(file);
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      const targetWidth = 1600;
+      const targetHeight = 900;
+      const canvas = document.createElement('canvas');
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        reject(new Error('Nao foi possivel preparar a capa neste navegador.'));
+        return;
+      }
+
+      const sourceRatio = image.width / image.height;
+      const targetRatio = targetWidth / targetHeight;
+      let sourceWidth = image.width;
+      let sourceHeight = image.height;
+      let sourceX = 0;
+      let sourceY = 0;
+
+      if (sourceRatio > targetRatio) {
+        sourceWidth = Math.round(image.height * targetRatio);
+        sourceX = Math.round((image.width - sourceWidth) / 2);
+      } else {
+        sourceHeight = Math.round(image.width / targetRatio);
+        sourceY = Math.round((image.height - sourceHeight) / 2);
+      }
+
+      context.imageSmoothingEnabled = true;
+      context.imageSmoothingQuality = 'high';
+      context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          reject(new Error('Nao foi possivel comprimir a capa do evento.'));
+          return;
+        }
+
+        const baseName = (file.name.replace(/\.[^.]+$/, '') || 'capa-evento').slice(0, 80);
+        resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
+      }, 'image/jpeg', 0.84);
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error('Nao foi possivel ler a capa selecionada.'));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
 function waitForPreviewReady(file: File, previewUrl: string): Promise<void> {
   if (file.type.startsWith('video')) {
     return new Promise((resolve) => {
@@ -677,10 +941,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     status: 'scheduled',
     isPublished: true,
     coverImage: '',
+    coverMediaId: '',
     bannerImage: '',
   }));
   const [eventError, setEventError] = useState('');
   const [isSavingEvent, setIsSavingEvent] = useState(false);
+  const [pendingEventCover, setPendingEventCover] = useState<PendingEventCover | null>(null);
+  const pendingEventCoverRef = React.useRef<PendingEventCover | null>(null);
+  const [eventCoverError, setEventCoverError] = useState('');
   const [selectedEventId, setSelectedEventId] = useState('');
   const [batchPriceInput, setBatchPriceInput] = useState('19.90');
   const [previewIndex, setPreviewIndex] = useState(0);
@@ -699,6 +967,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const periodMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileImageErrors, setProfileImageErrors] = useState<Record<ProfileImageKind, string>>({ avatar: '', cover: '' });
+  const [pendingProfileImages, setPendingProfileImages] = useState<Record<ProfileImageKind, PendingProfileImage | null>>({
+    avatar: null,
+    cover: null,
+  });
+  const pendingProfileImagesRef = React.useRef<Record<ProfileImageKind, PendingProfileImage | null>>({
+    avatar: null,
+    cover: null,
+  });
   const [profileForm, setProfileForm] = useState(() => ({
     name: photographer.name,
     displayName: photographer.displayName || photographer.name,
@@ -722,6 +999,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const duplicateBatchActionRef = React.useRef<Exclude<DuplicateUploadAction, 'cancel'> | null>(null);
   const currentPreview = selectedFiles[previewIndex];
 
+  React.useEffect(() => {
+    pendingProfileImagesRef.current = pendingProfileImages;
+  }, [pendingProfileImages]);
+
+  React.useEffect(() => {
+    pendingEventCoverRef.current = pendingEventCover;
+  }, [pendingEventCover]);
+
+  React.useEffect(() => {
+    return () => {
+      Object.values(pendingProfileImagesRef.current).forEach((item) => {
+        if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+      });
+      if (pendingEventCoverRef.current?.previewUrl) URL.revokeObjectURL(pendingEventCoverRef.current.previewUrl);
+    };
+  }, []);
+
   const publicProfileUrl = currentPhotographer.slug
     ? `/fotografo/${currentPhotographer.slug}`
     : `/fotografo/${normalizeUploadName(profileForm.displayName || profileForm.name).replace(/[^a-z0-9]+/g, '-')}`;
@@ -729,23 +1023,74 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const handleSavePublicProfile = async () => {
     setIsSavingProfile(true);
     try {
+      const uploadedAvatar = pendingProfileImages.avatar
+        ? await photographerService.uploadProfilePhoto(currentPhotographer.id, await prepareProfileImageForUpload(pendingProfileImages.avatar.file, 'avatar'))
+        : null;
+      const uploadedCover = pendingProfileImages.cover
+        ? await photographerService.uploadCoverPhoto(currentPhotographer.id, await prepareProfileImageForUpload(pendingProfileImages.cover.file, 'cover'))
+        : null;
+      const nextAvatar = uploadedAvatar?.publicUrl || profileForm.avatar.trim();
+      const nextCover = uploadedCover?.publicUrl || profileForm.coverPhoto.trim();
       const updated = await photographerService.updateOwnPublicProfile(currentPhotographer.id, {
         name: profileForm.name.trim() || currentPhotographer.name,
         displayName: profileForm.displayName.trim() || profileForm.name.trim() || currentPhotographer.name,
         bio: profileForm.bio.trim(),
         instagram: profileForm.instagram.replace(/^@/, '').trim() || null,
         city: profileForm.city.trim() || null,
-        avatar: profileForm.avatar.trim(),
-        profilePhoto: profileForm.avatar.trim(),
-        coverPhoto: profileForm.coverPhoto.trim() || null,
+        avatar: nextAvatar,
+        profilePhoto: nextAvatar,
+        coverPhoto: nextCover || null,
       });
       setCurrentPhotographer(updated);
+      setProfileForm((current) => ({
+        ...current,
+        avatar: updated.profilePhoto || updated.avatar || '',
+        coverPhoto: updated.coverPhoto || '',
+      }));
+      setPendingProfileImages((current) => {
+        Object.values(current).forEach((item) => {
+          if (item?.previewUrl) URL.revokeObjectURL(item.previewUrl);
+        });
+        return { avatar: null, cover: null };
+      });
       alert('Perfil publico atualizado.');
     } catch (error) {
       console.error('Erro ao salvar perfil publico:', error);
       alert(error instanceof Error ? error.message : 'Nao foi possivel salvar o perfil publico.');
     } finally {
       setIsSavingProfile(false);
+    }
+  };
+
+  const handleSelectProfileImage = (kind: ProfileImageKind, file: File | null) => {
+    if (!file) return;
+
+    try {
+      validateProfileImageFile(file, kind);
+      const previewUrl = URL.createObjectURL(file);
+      setProfileImageErrors((current) => ({ ...current, [kind]: '' }));
+      setPendingProfileImages((current) => {
+        if (current[kind]?.previewUrl) URL.revokeObjectURL(current[kind]!.previewUrl);
+        return { ...current, [kind]: { file, previewUrl } };
+      });
+    } catch (error) {
+      setProfileImageErrors((current) => ({
+        ...current,
+        [kind]: error instanceof Error ? error.message : 'Nao foi possivel selecionar a imagem.',
+      }));
+    }
+  };
+
+  const handleRemoveProfileImage = (kind: ProfileImageKind) => {
+    setPendingProfileImages((current) => {
+      if (current[kind]?.previewUrl) URL.revokeObjectURL(current[kind]!.previewUrl);
+      return { ...current, [kind]: null };
+    });
+    setProfileImageErrors((current) => ({ ...current, [kind]: '' }));
+    if (kind === 'avatar') {
+      setProfileForm((current) => ({ ...current, avatar: '' }));
+    } else {
+      setProfileForm((current) => ({ ...current, coverPhoto: '' }));
     }
   };
 
@@ -756,6 +1101,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     return products
       .filter((product) => (
         (product.status ?? 'published') !== 'removed' &&
+        product.type === 'IMG' &&
         normalizeCatalogText(product.event || '') === normalizedEventName &&
         Boolean(product.thumbnailUrl || product.url)
       ))
@@ -764,7 +1110,6 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const rightTime = getTimestamp(right.createdAt);
         return rightTime - leftTime || String(left.name || '').localeCompare(String(right.name || ''), 'pt-BR', { sensitivity: 'base' });
       })
-      .slice(0, 24);
   }, [products, eventForm.name]);
 
   React.useEffect(() => {
@@ -1173,6 +1518,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
   const resetEventForm = () => {
     setShowEventModal(false);
+    setPendingEventCover((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
     setEventForm({
       id: null,
       name: '',
@@ -1183,12 +1532,18 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       status: 'scheduled',
       isPublished: true,
       coverImage: '',
+      coverMediaId: '',
       bannerImage: '',
     });
     setEventError('');
+    setEventCoverError('');
   };
 
   const openNewEventModal = () => {
+    setPendingEventCover((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
     setEventForm({
       id: null,
       name: '',
@@ -1199,13 +1554,19 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       status: 'scheduled',
       isPublished: true,
       coverImage: '',
+      coverMediaId: '',
       bannerImage: '',
     });
     setEventError('');
+    setEventCoverError('');
     setShowEventModal(true);
   };
 
   const handleEditEvent = (eventItem: Event) => {
+    setPendingEventCover((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
     setEventForm({
       id: eventItem.id,
       name: eventItem.name,
@@ -1216,9 +1577,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       status: eventItem.status,
       isPublished: eventItem.isPublished !== false,
       coverImage: eventItem.coverImage || '',
+      coverMediaId: eventItem.coverMediaId || '',
       bannerImage: eventItem.bannerImage || '',
     });
     setEventError('');
+    setEventCoverError('');
     setActiveTab('events');
     setShowEventModal(true);
   };
@@ -1235,6 +1598,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     setIsSavingEvent(true);
     try {
+      const uploadedCover = pendingEventCover
+        ? await eventService.uploadEventCover(photographer.id, await prepareEventCoverForUpload(pendingEventCover.file))
+        : null;
       const previousEventName = eventForm.id
         ? availableEvents.find((eventItem) => eventItem.id === eventForm.id)?.name || ''
         : '';
@@ -1247,7 +1613,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         description: eventForm.description.trim() || null,
         status: eventForm.status,
         isPublished: eventForm.isPublished,
-        coverImage: eventForm.coverImage.trim() || null,
+        coverImage: uploadedCover?.publicUrl || eventForm.coverImage.trim() || null,
+        coverMediaId: uploadedCover ? null : eventForm.coverMediaId || null,
         bannerImage: eventForm.bannerImage.trim() || null,
       };
       const saved = eventForm.id
@@ -1276,6 +1643,43 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     } finally {
       setIsSavingEvent(false);
     }
+  };
+
+  const handleSelectEventCoverFile = (file: File | null) => {
+    if (!file) return;
+
+    try {
+      validateEventCoverFile(file);
+      const previewUrl = URL.createObjectURL(file);
+      setEventCoverError('');
+      setPendingEventCover((current) => {
+        if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+        return { file, previewUrl };
+      });
+      setEventForm((current) => ({ ...current, coverMediaId: '' }));
+    } catch (error) {
+      setEventCoverError(error instanceof Error ? error.message : 'Nao foi possivel selecionar a capa.');
+    }
+  };
+
+  const handleRemoveEventCover = () => {
+    setPendingEventCover((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setEventCoverError('');
+    setEventForm((current) => ({ ...current, coverImage: '', coverMediaId: '' }));
+  };
+
+  const handleSelectEventCoverProduct = (product: Product) => {
+    const coverUrl = product.thumbnailUrl || product.url;
+    if (!coverUrl) return;
+    setPendingEventCover((current) => {
+      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+      return null;
+    });
+    setEventCoverError('');
+    setEventForm((current) => ({ ...current, coverImage: coverUrl, coverMediaId: product.id }));
   };
 
   const handleToggleEventPublication = async (eventItem: Event) => {
@@ -2835,22 +3239,28 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
                     />
                   </label>
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Foto de perfil URL</span>
-                    <input
-                      value={profileForm.avatar}
-                      onChange={(event) => setProfileForm((current) => ({ ...current, avatar: event.target.value }))}
-                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
-                    />
-                  </label>
-                  <label className="space-y-2 md:col-span-2">
-                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Banner de capa URL</span>
-                    <input
-                      value={profileForm.coverPhoto}
-                      onChange={(event) => setProfileForm((current) => ({ ...current, coverPhoto: event.target.value }))}
-                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
-                    />
-                  </label>
+                  <ProfileImageUploader
+                    kind="avatar"
+                    label="Foto de perfil"
+                    description="JPG, PNG ou WEBP ate 5 MB. A imagem sera recortada em 512x512."
+                    actionLabel="Selecionar Foto"
+                    previewUrl={pendingProfileImages.avatar?.previewUrl || profileForm.avatar}
+                    error={profileImageErrors.avatar}
+                    disabled={isSavingProfile}
+                    onSelect={(file) => handleSelectProfileImage('avatar', file)}
+                    onRemove={() => handleRemoveProfileImage('avatar')}
+                  />
+                  <ProfileImageUploader
+                    kind="cover"
+                    label="Banner de capa"
+                    description="JPG, PNG ou WEBP ate 10 MB. A imagem sera otimizada em formato panoramico."
+                    actionLabel="Selecionar Banner"
+                    previewUrl={pendingProfileImages.cover?.previewUrl || profileForm.coverPhoto}
+                    error={profileImageErrors.cover}
+                    disabled={isSavingProfile}
+                    onSelect={(file) => handleSelectProfileImage('cover', file)}
+                    onRemove={() => handleRemoveProfileImage('cover')}
+                  />
                   <label className="space-y-2 md:col-span-2">
                     <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Biografia</span>
                     <textarea
@@ -2883,16 +3293,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
               <aside className="bg-[#0d131c] border border-white/10 overflow-hidden">
                 <div className="h-40 bg-[#05080d]">
-                  {profileForm.coverPhoto ? (
-                    <img src={profileForm.coverPhoto} alt="Banner" className="h-full w-full object-cover opacity-80" />
+                  {pendingProfileImages.cover?.previewUrl || profileForm.coverPhoto ? (
+                    <img src={pendingProfileImages.cover?.previewUrl || profileForm.coverPhoto} alt="Banner" className="h-full w-full object-cover opacity-80" />
                   ) : (
                     <div className="h-full w-full flex items-center justify-center text-gray-600"><ImageIcon className="w-10 h-10" /></div>
                   )}
                 </div>
                 <div className="p-5 -mt-12">
                   <div className="w-24 h-24 bg-white border-4 border-[#0d131c] overflow-hidden">
-                    {profileForm.avatar ? (
-                      <img src={profileForm.avatar} alt="Perfil" className="h-full w-full object-cover" />
+                    {pendingProfileImages.avatar?.previewUrl || profileForm.avatar ? (
+                      <img src={pendingProfileImages.avatar?.previewUrl || profileForm.avatar} alt="Perfil" className="h-full w-full object-cover" />
                     ) : (
                       <Users className="h-full w-full p-4 text-gray-300" />
                     )}
@@ -3313,13 +3723,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <div>
                       <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Capa do evento</label>
                       <p className="font-mono text-[10px] uppercase text-gray-600">
-                        Escolha uma midia ja enviada neste evento.
+                        Escolha uma foto ja enviada ou envie uma capa personalizada.
                       </p>
                     </div>
-                    {eventForm.coverImage && (
+                    {(eventForm.coverImage || pendingEventCover) && (
                       <button
                         type="button"
-                        onClick={() => setEventForm((current) => ({ ...current, coverImage: '' }))}
+                        onClick={handleRemoveEventCover}
                         className="shrink-0 h-9 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white hover:border-brutal-accent"
                       >
                         Remover capa
@@ -3327,55 +3737,111 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     )}
                   </div>
 
-                  {eventForm.coverImage && (
-                    <div className="mb-4">
-                      <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
-                      <div className="aspect-video max-w-sm bg-[#05080d] border border-brutal-accent overflow-hidden">
-                        {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                          <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
-                        ) : (
-                          <img src={eventForm.coverImage} alt="Capa atual do evento" className="w-full h-full object-cover" />
+                  <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,360px)_1fr] gap-4">
+                    <div className="space-y-4">
+                      <div>
+                        <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
+                        <div className={`aspect-video bg-[#05080d] border overflow-hidden ${eventForm.coverImage || pendingEventCover ? 'border-brutal-accent' : 'border-white/10'}`}>
+                          {pendingEventCover?.previewUrl || eventForm.coverImage ? (
+                            <img
+                              src={pendingEventCover?.previewUrl || eventForm.coverImage}
+                              alt="Capa atual do evento"
+                              className="w-full h-full object-cover"
+                              loading="lazy"
+                              decoding="async"
+                            />
+                          ) : (
+                            <div className="h-full w-full flex flex-col items-center justify-center text-center p-5">
+                              <ImageIcon className="w-9 h-9 text-gray-600 mb-3" />
+                              <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500">
+                                Nenhuma capa selecionada.
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                        {eventForm.coverMediaId && !pendingEventCover && (
+                          <p className="mt-2 font-mono text-[9px] uppercase tracking-widest text-brutal-accent">
+                            Capa vinculada a foto do evento
+                          </p>
                         )}
                       </div>
-                    </div>
-                  )}
 
-                  {eventCoverCandidates.length > 0 ? (
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {eventCoverCandidates.map((product) => {
-                        const coverUrl = product.thumbnailUrl || product.url;
-                        const isSelected = eventForm.coverImage === coverUrl;
-                        return (
-                          <button
-                            key={product.id}
-                            type="button"
-                            onClick={() => setEventForm((current) => ({ ...current, coverImage: coverUrl }))}
-                            className={`group text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
-                              }`}
-                          >
-                            <div className="aspect-video bg-black overflow-hidden">
-                              {coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                                <video src={coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" muted preload="metadata" />
-                              ) : (
-                                <img src={coverUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                              )}
-                            </div>
-                            <div className="p-2">
-                              <p className="font-mono text-[9px] uppercase text-gray-400 truncate">{product.name}</p>
-                              <p className="font-mono text-[8px] uppercase text-gray-600">{isSelected ? 'Capa selecionada' : 'Usar como capa'}</p>
-                            </div>
-                          </button>
-                        );
-                      })}
+                      <ProfileImageUploader
+                        kind="cover"
+                        label="Enviar nova capa"
+                        description="JPG, PNG ou WEBP ate 10 MB. A capa sera otimizada em 1600x900."
+                        actionLabel="Enviar Nova Capa"
+                        previewUrl={pendingEventCover?.previewUrl || ''}
+                        error={eventCoverError}
+                        disabled={isSavingEvent}
+                        onSelect={handleSelectEventCoverFile}
+                        onRemove={() => {
+                          setPendingEventCover((current) => {
+                            if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
+                            return null;
+                          });
+                          setEventCoverError('');
+                        }}
+                      />
                     </div>
-                  ) : (
-                    <div className="border border-dashed border-white/10 p-5 text-center">
-                      <ImageIcon className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                      <p className="font-mono text-[10px] uppercase text-gray-500">
-                        Envie fotos para este evento e depois escolha uma capa aqui.
-                      </p>
+
+                    <div>
+                      <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                        <div>
+                          <p className="font-mono text-[10px] uppercase font-bold text-gray-500">Escolher foto do evento</p>
+                          <p className="font-mono text-[10px] uppercase text-gray-600">
+                            {eventCoverCandidates.length} foto(s) encontrada(s) para "{eventForm.name || 'evento sem nome'}".
+                          </p>
+                        </div>
+                      </div>
+
+                      {eventCoverCandidates.length > 0 ? (
+                        <div className="max-h-[28rem] overflow-y-auto pr-1">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            {eventCoverCandidates.map((product) => {
+                              const coverUrl = product.thumbnailUrl || product.url;
+                              const isSelected = !pendingEventCover && (eventForm.coverMediaId === product.id || eventForm.coverImage === coverUrl);
+                              return (
+                                <button
+                                  key={product.id}
+                                  type="button"
+                                  onClick={() => handleSelectEventCoverProduct(product)}
+                                  className={`group relative text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
+                                    }`}
+                                >
+                                  <div className="aspect-video bg-black overflow-hidden">
+                                    <img
+                                      src={coverUrl}
+                                      alt={product.name}
+                                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                      loading="lazy"
+                                      decoding="async"
+                                    />
+                                  </div>
+                                  {isSelected && (
+                                    <div className="absolute top-2 right-2 h-7 w-7 bg-brutal-accent text-white border border-white flex items-center justify-center">
+                                      <CheckCircle2 className="w-4 h-4" />
+                                    </div>
+                                  )}
+                                  <div className="p-2">
+                                    <p className="font-mono text-[9px] uppercase text-gray-400 truncate">{product.name}</p>
+                                    <p className="font-mono text-[8px] uppercase text-gray-600">{isSelected ? 'Capa selecionada' : 'Usar como capa'}</p>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="border border-dashed border-white/10 p-5 text-center">
+                          <ImageIcon className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                          <p className="font-mono text-[10px] uppercase text-gray-500">
+                            Nenhuma foto enviada para este evento. Use "Enviar Nova Capa" para definir uma capa personalizada.
+                          </p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 <label className="h-14 px-4 bg-[#05080d] border border-white/15 flex items-center justify-between gap-3 cursor-pointer">

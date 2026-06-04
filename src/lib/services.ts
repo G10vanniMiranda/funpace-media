@@ -19,7 +19,7 @@ import {
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
-import { getCurrentAccessToken, getCurrentUser, supabaseRest } from './supabase';
+import { getCurrentAccessToken, getCurrentUser, supabaseConfig, supabaseRest } from './supabase';
 import { FUNPACE_CONTACT_EMAIL } from './contact';
 
 type SupabaseRow<T> = T & { id: string };
@@ -324,6 +324,58 @@ function sanitizeStorageFileName(fileName: string) {
     .toLowerCase();
 
   return normalized || 'captura';
+}
+
+function getSupabaseStoragePublicUrl(bucket: string, path: string) {
+  return `${supabaseConfig.url.replace(/\/+$/, '')}/storage/v1/object/public/${bucket}/${encodeURI(path)}`;
+}
+
+async function uploadSupabaseStorageObject(bucket: string, path: string, file: File) {
+  if (!supabaseConfig.url || !supabaseConfig.anonKey) {
+    throw new Error('Supabase Storage nao configurado.');
+  }
+
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) {
+    throw new Error('Sessao de fotografo ausente. Entre novamente para atualizar o perfil.');
+  }
+
+  const response = await fetch(`${supabaseConfig.url.replace(/\/+$/, '')}/storage/v1/object/${bucket}/${encodeURI(path)}`, {
+    method: 'POST',
+    headers: {
+      apikey: supabaseConfig.anonKey,
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': file.type || 'application/octet-stream',
+      'Cache-Control': '31536000',
+      'x-upsert': 'true',
+    },
+    body: file,
+  });
+
+  const raw = await response.text();
+  if (!response.ok) {
+    let message = raw;
+    try {
+      const payload = raw ? JSON.parse(raw) : {};
+      message = payload?.message || payload?.error || raw;
+    } catch {
+      // Keep raw message.
+    }
+
+    if (/bucket not found/i.test(message)) {
+      throw new Error(`Bucket ${bucket} nao encontrado. Crie os buckets photographer-avatars e photographer-covers no Supabase Storage.`);
+    }
+    if (/row-level security|violates row-level security/i.test(message)) {
+      throw new Error('Upload bloqueado pela politica do Storage. Aplique as policies dos buckets photographer-avatars e photographer-covers.');
+    }
+
+    throw new Error(message || `Falha no upload para ${bucket}.`);
+  }
+
+  return {
+    path,
+    publicUrl: getSupabaseStoragePublicUrl(bucket, path),
+  };
 }
 
 function normalizeFileName(value?: string | null) {
@@ -942,7 +994,7 @@ export const eventService = {
     }
   },
 
-  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & Partial<Pick<Event, 'photographerId' | 'description' | 'coverImage' | 'bannerImage' | 'isPublished'>>): Promise<Event> {
+  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & Partial<Pick<Event, 'photographerId' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'isPublished'>>): Promise<Event> {
     if (isMockMode) {
       const created = {
         id: `mock-event-${crypto.randomUUID()}`,
@@ -987,7 +1039,20 @@ export const eventService = {
     }
   },
 
-  async updateEvent(id: string, input: Partial<Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status' | 'description' | 'coverImage' | 'bannerImage' | 'isPublished' | 'isFeatured' | 'moderationStatus'>>): Promise<Event> {
+  async uploadEventCover(photographerId: string, file: File) {
+    if (isMockMode) {
+      return {
+        path: `mock/event-covers/${photographerId}/${file.name}`,
+        publicUrl: URL.createObjectURL(file),
+      };
+    }
+
+    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, '.jpg'));
+    const path = `covers/${photographerId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
+    return uploadSupabaseStorageObject('event-covers', path, file);
+  },
+
+  async updateEvent(id: string, input: Partial<Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'isPublished' | 'isFeatured' | 'moderationStatus'>>): Promise<Event> {
     if (isMockMode) {
       const events = loadLocalEvents();
       const existing = events.find((event) => event.id === id);
@@ -1850,6 +1915,32 @@ export const photographerService = {
 
     if (!updated) throw new Error('Fotografo nao encontrado.');
     return updated;
+  },
+
+  async uploadProfilePhoto(photographerId: string, file: File) {
+    if (isMockMode) {
+      return {
+        path: `mock/avatars/${photographerId}/${file.name}`,
+        publicUrl: URL.createObjectURL(file),
+      };
+    }
+
+    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, '.jpg'));
+    const path = `avatars/${photographerId}/${Date.now()}-${safeName}`;
+    return uploadSupabaseStorageObject('photographer-avatars', path, file);
+  },
+
+  async uploadCoverPhoto(photographerId: string, file: File) {
+    if (isMockMode) {
+      return {
+        path: `mock/covers/${photographerId}/${file.name}`,
+        publicUrl: URL.createObjectURL(file),
+      };
+    }
+
+    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, '.jpg'));
+    const path = `covers/${photographerId}/${Date.now()}-${safeName}`;
+    return uploadSupabaseStorageObject('photographer-covers', path, file);
   },
 };
 

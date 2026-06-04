@@ -85,6 +85,7 @@ export interface Event {
   location?: string | null;
   checkpoint?: string | null;
   coverImage?: string | null;
+  coverMediaId?: string | null;
   bannerImage?: string | null;
   isPublished?: boolean;
   isFeatured?: boolean;

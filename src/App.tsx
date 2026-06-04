@@ -33,7 +33,7 @@ import { CheckoutPaymentMethod, adminService, customerAccountService, productSer
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Loader2, MapPin, MessageCircle, ReceiptText, Scan, UserCircle, Video, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Instagram, Loader2, MapPin, MessageCircle, ReceiptText, Scan, Search, UserCircle, Video, X, XCircle } from 'lucide-react';
 import { useToast } from './contexts/ToastContext';
 import { buildWhatsappUrl } from './lib/contact';
 
@@ -84,6 +84,36 @@ function getStorefrontTimestamp(value?: string | null) {
 function getEventSlugFromPath(pathname: string) {
   const match = pathname.match(/^\/eventos\/([^/?#]+)/);
   return match ? decodeURIComponent(match[1]) : null;
+}
+
+function getPublicPhotographerSlugFromPath(pathname: string) {
+  const match = pathname.match(/^\/fotografo\/(?!definir-senha(?:\/|$))([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function getPublicEventSlugFromPath(pathname: string) {
+  const match = pathname.match(/^\/evento\/([^/?#]+)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
+function formatPublicDate(value?: string | null) {
+  if (!value) return 'Data a confirmar';
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+    .format(new Date(value.includes('T') ? value : `${value}T12:00:00`));
+}
+
+function getPhotographerPublicName(photographer: Photographer) {
+  return photographer.displayName || photographer.name;
+}
+
+function setMetaTag(selector: string, attributes: Record<string, string>, content: string) {
+  let meta = document.querySelector<HTMLMetaElement>(selector);
+  if (!meta) {
+    meta = document.createElement('meta');
+    Object.entries(attributes).forEach(([key, value]) => meta?.setAttribute(key, value));
+    document.head.appendChild(meta);
+  }
+  meta.content = content;
 }
 
 function loadStoredCart(): Product[] {
@@ -347,6 +377,8 @@ function Storefront() {
   const isEventsRoute = location.pathname === '/eventos';
   const isCustomerOrdersRoute = location.pathname === '/minhas-compras';
   const eventSlugFromPath = getEventSlugFromPath(location.pathname);
+  const publicPhotographerSlug = getPublicPhotographerSlugFromPath(location.pathname);
+  const publicEventSlug = getPublicEventSlugFromPath(location.pathname);
   const isEventDetailRoute = Boolean(eventSlugFromPath);
 
   React.useEffect(() => {
@@ -681,6 +713,32 @@ function Storefront() {
         />
       ) : (
         <>
+          {publicPhotographerSlug && (
+            <PublicPhotographerPage
+              slug={publicPhotographerSlug}
+              cartItems={cart}
+              favoriteProducts={favoriteProducts}
+              likedProductIds={likedProductIds}
+              heartCounts={heartCounts}
+              onAddToCart={handleAddToCart}
+              onToggleFavorite={handleToggleFavorite}
+            />
+          )}
+
+          {publicEventSlug && !publicPhotographerSlug && (
+            <PublicEventPage
+              slug={publicEventSlug}
+              cartItems={cart}
+              favoriteProducts={favoriteProducts}
+              likedProductIds={likedProductIds}
+              heartCounts={heartCounts}
+              onAddToCart={handleAddToCart}
+              onToggleFavorite={handleToggleFavorite}
+            />
+          )}
+
+          {!publicPhotographerSlug && !publicEventSlug && (
+            <>
           {!isEventsRoute && !isEventDetailRoute && !searchBib && !searchType && !selectedEventName && (
             <Hero
               eventQuery={eventQuery}
@@ -839,6 +897,8 @@ function Storefront() {
           {!searchType && !selectedEventName && activeView === 'photos' && (
             <div className="pb-6 md:pb-20" />
           )}
+            </>
+          )}
         </>
       )}
 
@@ -914,6 +974,366 @@ function Storefront() {
       </AnimatePresence>
 
       <Footer />
+    </div>
+  );
+}
+
+type PublicPageCartProps = {
+  cartItems: Product[];
+  favoriteProducts: Product[];
+  likedProductIds: Set<string>;
+  heartCounts: Record<string, number>;
+  onAddToCart: (product: Product) => void;
+  onToggleFavorite: (product: Product) => void;
+};
+
+function PublicPhotographerPage({
+  slug,
+  cartItems,
+  favoriteProducts,
+  likedProductIds,
+  heartCounts,
+  onAddToCart,
+  onToggleFavorite,
+}: PublicPageCartProps & { slug: string }) {
+  const navigate = useNavigate();
+  const [photographer, setPhotographer] = React.useState<Photographer | null>(null);
+  const [events, setEvents] = React.useState<Event[]>([]);
+  const [products, setProducts] = React.useState<Product[]>([]);
+  const [query, setQuery] = React.useState('');
+  const [cityFilter, setCityFilter] = React.useState('');
+  const [dateFilter, setDateFilter] = React.useState('');
+  const [activeView, setActiveView] = React.useState<'events' | 'photos'>('events');
+  const [isLoading, setIsLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadPublicPhotographer() {
+      setIsLoading(true);
+      try {
+        const profile = await photographerService.getPublicPhotographerBySlug(slug);
+        if (!profile) {
+          if (!cancelled) setPhotographer(null);
+          return;
+        }
+        const [profileEvents, profileProducts] = await Promise.all([
+          eventService.getPublishedPhotographerEvents(profile.id, 300),
+          productService.getPublishedProductsByPhotographer(profile.id, storefrontProductLimit),
+        ]);
+        if (cancelled) return;
+        setPhotographer(profile);
+        setEvents(profileEvents);
+        setProducts(profileProducts);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    loadPublicPhotographer().catch((error) => {
+      console.error('Erro ao carregar perfil publico do fotografo:', error);
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  React.useEffect(() => {
+    if (!photographer) return;
+    const titleName = getPhotographerPublicName(photographer);
+    const title = `Fotos esportivas de ${titleName} | Funpace Media`;
+    const description = `Eventos, albuns e fotos de ${titleName} na Funpace Media.`;
+    document.title = title;
+    setMetaTag('meta[name="description"]', { name: 'description' }, description);
+    setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
+    setMetaTag('meta[property="og:description"]', { property: 'og:description' }, description);
+    setMetaTag('meta[property="og:url"]', { property: 'og:url' }, window.location.href);
+    setMetaTag('meta[property="og:type"]', { property: 'og:type' }, 'profile');
+    const ogImage = photographer.coverPhoto || photographer.profilePhoto || photographer.avatar;
+    if (ogImage) setMetaTag('meta[property="og:image"]', { property: 'og:image' }, ogImage);
+  }, [photographer]);
+
+  const normalizedQuery = normalizeEventName(query.trim());
+  const cities = React.useMemo(() => Array.from(new Set(events.map((event) => event.location || event.checkpoint || '').filter(Boolean))).sort(), [events]);
+  const productsByEvent = React.useMemo(() => {
+    const map = new Map<string, Product[]>();
+    for (const product of products) {
+      const key = normalizeEventName(product.event || '');
+      const current = map.get(key) ?? [];
+      current.push(product);
+      map.set(key, current);
+    }
+    return map;
+  }, [products]);
+  const filteredEvents = React.useMemo(() => {
+    return events.filter((event) => {
+      const eventProducts = productsByEvent.get(normalizeEventName(event.name || '')) ?? [];
+      const city = event.location || event.checkpoint || '';
+      const matchesQuery = !normalizedQuery ||
+        normalizeEventName(`${event.name} ${event.description || ''} ${city}`).includes(normalizedQuery) ||
+        eventProducts.some((product) => normalizeEventName(`${product.name} ${product.bib} ${product.checkpoint}`).includes(normalizedQuery));
+      const matchesCity = !cityFilter || city === cityFilter;
+      const matchesDate = !dateFilter || event.date === dateFilter;
+      return matchesQuery && matchesCity && matchesDate;
+    });
+  }, [cityFilter, dateFilter, events, normalizedQuery, productsByEvent]);
+  const filteredProducts = React.useMemo(() => products.filter((product) => {
+    const event = events.find((item) => normalizeEventName(item.name) === normalizeEventName(product.event || ''));
+    const city = event?.location || event?.checkpoint || product.checkpoint || '';
+    const matchesQuery = !normalizedQuery || normalizeEventName(`${product.name} ${product.event} ${product.bib} ${product.checkpoint}`).includes(normalizedQuery);
+    const matchesCity = !cityFilter || city === cityFilter;
+    const matchesDate = !dateFilter || event?.date === dateFilter;
+    return matchesQuery && matchesCity && matchesDate;
+  }), [cityFilter, dateFilter, events, normalizedQuery, products]);
+
+  if (isLoading) {
+    return <PublicLoading label="Carregando perfil do fotografo..." />;
+  }
+
+  if (!photographer) {
+    return <PublicEmpty title="Fotografo nao encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
+  }
+
+  const displayName = getPhotographerPublicName(photographer);
+  const profilePhoto = photographer.profilePhoto || photographer.avatar;
+  const coverPhoto = photographer.coverPhoto || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || profilePhoto;
+  const photoCount = products.filter((product) => product.type === 'IMG').length;
+
+  return (
+    <main>
+      <section className="relative min-h-[56vh] overflow-hidden border-b-4 border-brutal-black bg-brutal-black text-white">
+        {coverPhoto && <img src={coverPhoto} alt={displayName} className="absolute inset-0 h-full w-full object-cover opacity-45" />}
+        <div className="absolute inset-0 bg-linear-to-t from-brutal-black via-brutal-black/55 to-transparent" />
+        <div className="relative mx-auto flex min-h-[56vh] max-w-350 flex-col justify-end px-4 py-10 md:px-6 md:py-14">
+          <div className="flex flex-col gap-7 md:flex-row md:items-end">
+            <div className="h-32 w-32 overflow-hidden brutal-border border-white bg-white md:h-44 md:w-44">
+              {profilePhoto ? <img src={profilePhoto} alt={displayName} className="h-full w-full object-cover" /> : <UserCircle className="h-full w-full text-gray-300" />}
+            </div>
+            <div className="max-w-4xl">
+              <div className="mb-3 flex flex-wrap items-center gap-3 font-mono text-xs uppercase tracking-[0.22em] text-white/75">
+                {photographer.verified && <span className="inline-flex items-center gap-2 bg-brutal-accent px-3 py-2 text-white brutal-border"><CheckCircle2 className="h-4 w-4" /> Verificado</span>}
+                {photographer.city && <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4" />{photographer.city}</span>}
+                {photographer.instagram && <span className="inline-flex items-center gap-2"><Instagram className="h-4 w-4" />@{photographer.instagram.replace(/^@/, '')}</span>}
+              </div>
+              <h1 className="font-display text-[clamp(3rem,10vw,7rem)] uppercase leading-[0.88] tracking-normal wrap-break-word">{displayName}</h1>
+              {photographer.displayName && photographer.displayName !== photographer.name && <p className="mt-3 font-mono text-sm uppercase tracking-widest text-white/70">{photographer.name}</p>}
+              {photographer.bio && <p className="mt-5 max-w-3xl font-sans text-base leading-relaxed text-white/85 md:text-lg">{photographer.bio}</p>}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-350 px-4 py-8 md:px-6">
+        <div className="grid gap-3 md:grid-cols-3">
+          <PublicStat icon={<CalendarDays className="h-5 w-5" />} label="Eventos" value={events.length} />
+          <PublicStat icon={<Camera className="h-5 w-5" />} label="Fotos" value={photoCount} />
+          <PublicStat icon={<ImageIcon className="h-5 w-5" />} label="Midias" value={products.length} />
+        </div>
+
+        <div className="mt-8 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px_auto]">
+          <label className="relative block">
+            <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar eventos, fotos ou numero de peito" className="h-13 w-full brutal-border bg-white pl-12 pr-4 font-mono text-xs uppercase tracking-widest outline-none focus:border-brutal-accent" />
+          </label>
+          <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="h-13 brutal-border bg-white px-4 font-mono text-xs uppercase tracking-widest outline-none">
+            <option value="">Todas as cidades</option>
+            {cities.map((city) => <option key={city} value={city}>{city}</option>)}
+          </select>
+          <input type="date" value={dateFilter} onChange={(event) => setDateFilter(event.target.value)} className="h-13 brutal-border bg-white px-4 font-mono text-xs uppercase tracking-widest outline-none" />
+          <div className="flex h-13 brutal-border overflow-hidden bg-white">
+            <button type="button" onClick={() => setActiveView('events')} className={`px-4 font-mono text-xs uppercase ${activeView === 'events' ? 'bg-brutal-black text-white' : 'text-brutal-black'}`}>Eventos</button>
+            <button type="button" onClick={() => setActiveView('photos')} className={`px-4 font-mono text-xs uppercase ${activeView === 'photos' ? 'bg-brutal-black text-white' : 'text-brutal-black'}`}>Fotos</button>
+          </div>
+        </div>
+      </section>
+
+      {activeView === 'events' ? (
+        <section className="mx-auto max-w-350 px-4 pb-16 md:px-6">
+          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredEvents.map((event) => {
+              const eventProducts = productsByEvent.get(normalizeEventName(event.name || '')) ?? [];
+              const cover = event.bannerImage || event.coverImage || eventProducts.find((product) => product.thumbnailUrl)?.thumbnailUrl || null;
+              return (
+                <button key={event.id} type="button" onClick={() => navigate(`/evento/${event.slug || createEventSlug(event.name)}`)} className="group flex h-full flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover">
+                  <div className="aspect-[4/3] border-b-2 border-brutal-black bg-gray-100">
+                    {cover ? <img src={cover} alt={event.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
+                  </div>
+                  <div className="flex flex-1 flex-col p-5">
+                    <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(event.date)}</p>
+                    <h2 className="font-display text-2xl uppercase leading-tight">{event.name}</h2>
+                    <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-gray-500"><MapPin className="h-4 w-4 text-brutal-accent" />{event.location || event.checkpoint || 'Local a confirmar'}</p>
+                    <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest">
+                      <span>{eventProducts.filter((product) => product.type === 'IMG').length} fotos</span>
+                      <span className="font-display text-sm text-brutal-accent">Ver Fotos</span>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+          {filteredEvents.length === 0 && <PublicEmpty title="Nenhum evento encontrado" />}
+        </section>
+      ) : (
+        <PhotoGrid
+          title="Fotos do fotografo"
+          subtitle={`${filteredProducts.length} midias encontradas no perfil de ${displayName}`}
+          photos={filteredProducts.filter((product) => product.type === 'IMG')}
+          onAddToCart={onAddToCart}
+          cartItems={cartItems}
+          favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+          likedIds={likedProductIds}
+          heartCounts={heartCounts}
+          onToggleFavorite={onToggleFavorite}
+        />
+      )}
+    </main>
+  );
+}
+
+function PublicEventPage({
+  slug,
+  cartItems,
+  favoriteProducts,
+  likedProductIds,
+  heartCounts,
+  onAddToCart,
+  onToggleFavorite,
+}: PublicPageCartProps & { slug: string }) {
+  const navigate = useNavigate();
+  const [event, setEvent] = React.useState<Event | null>(null);
+  const [photographer, setPhotographer] = React.useState<Photographer | null>(null);
+  const [products, setProducts] = React.useState<Product[]>([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [activeView, setActiveView] = React.useState<'photos' | 'videos'>('photos');
+
+  React.useEffect(() => {
+    let cancelled = false;
+    async function loadPublicEvent() {
+      setIsLoading(true);
+      try {
+        const eventRow = await eventService.getEventBySlug(slug);
+        if (!eventRow) {
+          if (!cancelled) setEvent(null);
+          return;
+        }
+        const [owner, ownerProducts] = await Promise.all([
+          eventRow.photographerId ? photographerService.getPhotographerById(eventRow.photographerId) : Promise.resolve(null),
+          eventRow.photographerId ? productService.getPublishedProductsByPhotographer(eventRow.photographerId, storefrontProductLimit) : productService.getLatestProducts(storefrontProductLimit),
+        ]);
+        if (cancelled) return;
+        setEvent(eventRow);
+        setPhotographer(owner);
+        setProducts(ownerProducts.filter((product) => normalizeEventName(product.event || '') === normalizeEventName(eventRow.name)));
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+    loadPublicEvent().catch((error) => {
+      console.error('Erro ao carregar evento publico:', error);
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [slug]);
+
+  React.useEffect(() => {
+    if (!event) return;
+    const title = `${event.name} | Fotos Funpace Media`;
+    const description = event.description || `Fotos do evento ${event.name} na Funpace Media.`;
+    document.title = title;
+    setMetaTag('meta[name="description"]', { name: 'description' }, description);
+    setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
+    setMetaTag('meta[property="og:description"]', { property: 'og:description' }, description);
+    setMetaTag('meta[property="og:url"]', { property: 'og:url' }, window.location.href);
+    setMetaTag('meta[property="og:type"]', { property: 'og:type' }, 'article');
+    const ogImage = event.bannerImage || event.coverImage;
+    if (ogImage) setMetaTag('meta[property="og:image"]', { property: 'og:image' }, ogImage);
+  }, [event]);
+
+  if (isLoading) return <PublicLoading label="Carregando evento..." />;
+  if (!event) return <PublicEmpty title="Evento nao encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
+
+  const photos = products.filter((product) => product.type === 'IMG');
+  const videos = products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW');
+  const cover = event.bannerImage || event.coverImage || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || '';
+
+  return (
+    <main>
+      <section className="relative overflow-hidden border-b-4 border-brutal-black bg-brutal-black text-white">
+        {cover && <img src={cover} alt={event.name} className="absolute inset-0 h-full w-full object-cover opacity-40" />}
+        <div className="absolute inset-0 bg-linear-to-t from-brutal-black via-brutal-black/60 to-transparent" />
+        <div className="relative mx-auto max-w-350 px-4 py-16 md:px-6 md:py-24">
+          <button type="button" onClick={() => navigate(photographer?.slug ? `/fotografo/${photographer.slug}` : '/eventos')} className="mb-8 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-white/75 hover:text-brutal-accent">
+            <ArrowLeft className="h-4 w-4" /> Voltar
+          </button>
+          <p className="mb-3 font-mono text-xs uppercase tracking-[0.3em] text-brutal-accent">Evento</p>
+          <h1 className="max-w-5xl font-display text-[clamp(3rem,10vw,7rem)] uppercase leading-[0.88] tracking-normal wrap-break-word">{event.name}</h1>
+          <div className="mt-6 flex flex-wrap gap-4 font-mono text-xs uppercase tracking-widest text-white/75">
+            <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-brutal-accent" />{formatPublicDate(event.date)}</span>
+            <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-brutal-accent" />{event.location || event.checkpoint || 'Local a confirmar'}</span>
+            {photographer && <span className="inline-flex items-center gap-2"><Camera className="h-4 w-4 text-brutal-accent" />{getPhotographerPublicName(photographer)}</span>}
+          </div>
+          {event.description && <p className="mt-6 max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">{event.description}</p>}
+        </div>
+      </section>
+
+      {activeView === 'photos' ? (
+        <PhotoGrid
+          title="Fotos do evento"
+          subtitle={`${photos.length} fotos publicadas neste evento`}
+          photos={photos}
+          onAddToCart={onAddToCart}
+          cartItems={cartItems}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+          likedIds={likedProductIds}
+          heartCounts={heartCounts}
+          onToggleFavorite={onToggleFavorite}
+        />
+      ) : (
+        <VideoGrid
+          videos={videos}
+          onAddToCart={onAddToCart}
+          cartItems={cartItems}
+          activeView={activeView}
+          onViewChange={setActiveView}
+          favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+          likedIds={likedProductIds}
+          heartCounts={heartCounts}
+          onToggleFavorite={onToggleFavorite}
+        />
+      )}
+    </main>
+  );
+}
+
+function PublicStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+  return (
+    <div className="bg-white brutal-border p-5">
+      <div className="mb-3 text-brutal-accent">{icon}</div>
+      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">{label}</p>
+      <p className="font-display text-4xl">{value}</p>
+    </div>
+  );
+}
+
+function PublicLoading({ label }: { label: string }) {
+  return (
+    <div className="flex min-h-[50vh] flex-col items-center justify-center py-20">
+      <Loader2 className="mb-4 h-12 w-12 animate-spin text-brutal-accent" />
+      <p className="font-mono text-sm uppercase tracking-widest text-gray-500">{label}</p>
+    </div>
+  );
+}
+
+function PublicEmpty({ title, actionLabel, onAction }: { title: string; actionLabel?: string; onAction?: () => void }) {
+  return (
+    <div className="mx-auto max-w-350 px-4 py-20 text-center md:px-6">
+      <div className="bg-white brutal-border p-10">
+        <p className="font-display text-3xl uppercase text-gray-400">{title}</p>
+        {actionLabel && onAction && <button type="button" onClick={onAction} className="mt-6 bg-brutal-black px-6 py-3 font-mono text-xs uppercase tracking-widest text-white brutal-border">{actionLabel}</button>}
+      </div>
     </div>
   );
 }
@@ -1591,12 +2011,14 @@ export default function App() {
       <Routes>
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
+        <Route path="/fotografo/:slug" element={<Storefront />} />
         <Route path="/fotografo" element={<PhotographerRoute />} />
         <Route path="/checkout" element={<Storefront />} />
         <Route path="/minha-conta" element={<CustomerAccountRoute />} />
         <Route path="/minhas-compras" element={<CustomerOrdersRoute />} />
         <Route path="/eventos" element={<Storefront />} />
         <Route path="/eventos/:slug" element={<Storefront />} />
+        <Route path="/evento/:slug" element={<Storefront />} />
         <Route path="/para-fotografos" element={<ParaFotografos />} />
         <Route path="/precos" element={<Precos />} />
         <Route path="/faq" element={<Faq />} />

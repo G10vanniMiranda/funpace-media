@@ -82,12 +82,17 @@ grant execute on function public.order_has_vendor(uuid, text) to service_role;
 
 create table if not exists public.photographers (
   id text primary key,
+  slug text unique,
   name text not null check (char_length(name) between 1 and 100),
+  "displayName" text check ("displayName" is null or char_length("displayName") between 1 and 100),
   email text not null unique check (char_length(email) <= 256),
   bio text not null default '' check (char_length(bio) <= 1000),
   avatar text not null default '',
+  "profilePhoto" text,
+  "coverPhoto" text,
   phone text,
   instagram text check (instagram is null or char_length(instagram) <= 30),
+  city text check (city is null or char_length(city) <= 120),
   cpf text,
   verified boolean not null default false,
   role text not null default 'photographer' check (role in ('photographer')),
@@ -111,6 +116,11 @@ alter table public.photographers add column if not exists "commissionPercent" nu
 alter table public.photographers add column if not exists "blockedAt" timestamptz;
 alter table public.photographers add column if not exists "lastLoginAt" timestamptz;
 alter table public.photographers add column if not exists instagram text check (instagram is null or char_length(instagram) <= 30);
+alter table public.photographers add column if not exists slug text unique;
+alter table public.photographers add column if not exists "displayName" text;
+alter table public.photographers add column if not exists "profilePhoto" text;
+alter table public.photographers add column if not exists "coverPhoto" text;
+alter table public.photographers add column if not exists city text;
 
 create table if not exists public.customers (
   id text primary key,
@@ -448,6 +458,7 @@ create index if not exists events_status_idx on public.events (status);
 create index if not exists events_photographer_id_idx on public.events ("photographerId");
 create index if not exists events_slug_idx on public.events (slug);
 create index if not exists photographers_email_idx on public.photographers (email);
+create index if not exists photographers_slug_idx on public.photographers (slug);
 create index if not exists photographers_verified_idx on public.photographers (verified);
 create index if not exists customers_email_idx on public.customers (email);
 create index if not exists orders_user_id_idx on public.orders ("userId");

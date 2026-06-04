@@ -27,7 +27,7 @@ import {
   X
 } from 'lucide-react';
 import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
-import { calculateFileSha256, eventService, photographerDashboardService, productService, withdrawalService } from '../lib/services';
+import { calculateFileSha256, eventService, photographerDashboardService, photographerService, productService, withdrawalService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
 
@@ -67,7 +67,7 @@ type ProductEditForm = {
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
 type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'year' | 'custom';
-type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings';
+type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings' | 'profile';
 
 type PhotographerCatalogEvent = {
   name: string;
@@ -646,6 +646,7 @@ async function generateMediaThumbnail(file: File): Promise<File | null> {
 
 export function PhotographerDashboard({ photographer, onLogout }: PhotographerDashboardProps) {
   const [activeTab, setActiveTab] = useState<PhotographerTab>('overview');
+  const [currentPhotographer, setCurrentPhotographer] = useState(photographer);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [dashboardMetrics, setDashboardMetrics] = useState<PhotographerDashboardMetrics>(() => getInitialDashboardMetrics(photographer));
@@ -697,6 +698,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [showPeriodMenu, setShowPeriodMenu] = useState(false);
   const periodMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileForm, setProfileForm] = useState(() => ({
+    name: photographer.name,
+    displayName: photographer.displayName || photographer.name,
+    bio: photographer.bio || '',
+    instagram: photographer.instagram || '',
+    city: photographer.city || '',
+    avatar: photographer.profilePhoto || photographer.avatar || '',
+    coverPhoto: photographer.coverPhoto || '',
+  }));
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editForm, setEditForm] = useState<ProductEditForm>({
     name: '',
@@ -710,6 +721,34 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const duplicateResolutionRef = React.useRef<((action: DuplicateUploadAction) => void) | null>(null);
   const duplicateBatchActionRef = React.useRef<Exclude<DuplicateUploadAction, 'cancel'> | null>(null);
   const currentPreview = selectedFiles[previewIndex];
+
+  const publicProfileUrl = currentPhotographer.slug
+    ? `/fotografo/${currentPhotographer.slug}`
+    : `/fotografo/${normalizeUploadName(profileForm.displayName || profileForm.name).replace(/[^a-z0-9]+/g, '-')}`;
+
+  const handleSavePublicProfile = async () => {
+    setIsSavingProfile(true);
+    try {
+      const updated = await photographerService.updateOwnPublicProfile(currentPhotographer.id, {
+        name: profileForm.name.trim() || currentPhotographer.name,
+        displayName: profileForm.displayName.trim() || profileForm.name.trim() || currentPhotographer.name,
+        bio: profileForm.bio.trim(),
+        instagram: profileForm.instagram.replace(/^@/, '').trim() || null,
+        city: profileForm.city.trim() || null,
+        avatar: profileForm.avatar.trim(),
+        profilePhoto: profileForm.avatar.trim(),
+        coverPhoto: profileForm.coverPhoto.trim() || null,
+      });
+      setCurrentPhotographer(updated);
+      alert('Perfil publico atualizado.');
+    } catch (error) {
+      console.error('Erro ao salvar perfil publico:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel salvar o perfil publico.');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   const eventCoverCandidates = React.useMemo(() => {
     const normalizedEventName = normalizeCatalogText(eventForm.name.trim());
     if (!normalizedEventName) return [];
@@ -1783,7 +1822,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       <div className="md:hidden flex items-center justify-between p-4 bg-brutal-black text-white border-b-2 border-brutal-black">
         <div className="flex items-center gap-2">
           <div className="w-8 h-8 brutal-border overflow-hidden bg-white">
-            <img src={photographer.avatar} alt="Me" className="w-full h-full object-cover" />
+            <img src={currentPhotographer.profilePhoto || currentPhotographer.avatar} alt="Me" className="w-full h-full object-cover" />
           </div>
           <span className="font-display text-lg tracking-tighter">STUDIO DASH</span>
         </div>
@@ -1824,17 +1863,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             active={activeTab === 'earnings'}
             onClick={() => setActiveTab('earnings')}
           />
+          <SidebarLink
+            icon={<Settings />}
+            label="Perfil Publico"
+            active={activeTab === 'profile'}
+            onClick={() => setActiveTab('profile')}
+          />
         </nav>
 
         <div className="p-5 mt-auto">
           <div className="bg-white/5 p-4 border border-white/10 mb-5">
             <div className="flex items-center gap-3 mb-2">
               <div className="w-11 h-11 rounded-full overflow-hidden bg-white border border-white/15">
-                <img src={photographer.avatar} alt="Me" className="w-full h-full object-cover" />
+                <img src={currentPhotographer.profilePhoto || currentPhotographer.avatar} alt="Me" className="w-full h-full object-cover" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="font-sans text-sm font-black truncate">{photographer.name}</p>
-                <p className="font-mono text-[10px] text-gray-400 truncate tracking-tight">{photographer.email}</p>
+                <p className="font-sans text-sm font-black truncate">{currentPhotographer.displayName || currentPhotographer.name}</p>
+                <p className="font-mono text-[10px] text-gray-400 truncate tracking-tight">{currentPhotographer.email}</p>
               </div>
             </div>
           </div>
@@ -1857,8 +1902,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               {activeTab === 'events' && 'Eventos'}
               {activeTab === 'products' && 'Produtos'}
               {activeTab === 'earnings' && 'Meus Ganhos'}
+              {activeTab === 'profile' && 'Perfil Publico'}
             </h2>
-            <p className="font-sans text-sm text-gray-400">Bem-vindo de volta, {photographer.name.split(' ')[0]}!</p>
+            <p className="font-sans text-sm text-gray-400">Bem-vindo de volta, {currentPhotographer.name.split(' ')[0]}!</p>
           </div>
 
           <div className="flex flex-col sm:flex-row gap-3 w-full xl:w-auto">
@@ -2737,6 +2783,138 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <p className="font-mono text-xs uppercase text-gray-500">Ajuste os filtros ou limpe a busca para ver todo o catalogo.</p>
                 </div>
               )}
+            </motion.div>
+          )}
+
+          {activeTab === 'profile' && (
+            <motion.div
+              key="profile"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-5"
+            >
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10">
+                  <h3 className="font-sans font-black text-base uppercase text-white">Dados publicos</h3>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
+                    Estes dados aparecem na vitrine /fotografo/[slug].
+                  </p>
+                </div>
+                <div className="p-5 grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <label className="space-y-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Nome publico</span>
+                    <input
+                      value={profileForm.displayName}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, displayName: event.target.value }))}
+                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Nome cadastral</span>
+                    <input
+                      value={profileForm.name}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))}
+                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Instagram</span>
+                    <input
+                      value={profileForm.instagram}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, instagram: event.target.value }))}
+                      placeholder="@perfil"
+                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Cidade</span>
+                    <input
+                      value={profileForm.city}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, city: event.target.value }))}
+                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Foto de perfil URL</span>
+                    <input
+                      value={profileForm.avatar}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, avatar: event.target.value }))}
+                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Banner de capa URL</span>
+                    <input
+                      value={profileForm.coverPhoto}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, coverPhoto: event.target.value }))}
+                      className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2 md:col-span-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">Biografia</span>
+                    <textarea
+                      value={profileForm.bio}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, bio: event.target.value }))}
+                      rows={6}
+                      className="w-full resize-none bg-[#080d14] border border-white/15 px-4 py-3 text-sm leading-relaxed text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <div className="md:col-span-2 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-2">
+                    <a
+                      href={publicProfileUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-mono text-[10px] uppercase tracking-widest text-brutal-accent hover:text-white"
+                    >
+                      Abrir perfil publico
+                    </a>
+                    <button
+                      type="button"
+                      disabled={isSavingProfile}
+                      onClick={handleSavePublicProfile}
+                      className="h-12 px-6 bg-brutal-accent text-white border border-brutal-accent font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors disabled:opacity-60"
+                    >
+                      {isSavingProfile ? 'Salvando...' : 'Salvar Perfil'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <aside className="bg-[#0d131c] border border-white/10 overflow-hidden">
+                <div className="h-40 bg-[#05080d]">
+                  {profileForm.coverPhoto ? (
+                    <img src={profileForm.coverPhoto} alt="Banner" className="h-full w-full object-cover opacity-80" />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-gray-600"><ImageIcon className="w-10 h-10" /></div>
+                  )}
+                </div>
+                <div className="p-5 -mt-12">
+                  <div className="w-24 h-24 bg-white border-4 border-[#0d131c] overflow-hidden">
+                    {profileForm.avatar ? (
+                      <img src={profileForm.avatar} alt="Perfil" className="h-full w-full object-cover" />
+                    ) : (
+                      <Users className="h-full w-full p-4 text-gray-300" />
+                    )}
+                  </div>
+                  <h3 className="font-sans font-black text-2xl text-white mt-4">{profileForm.displayName || profileForm.name}</h3>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-2">{profileForm.city || 'Cidade nao informada'}</p>
+                  <div className="grid grid-cols-3 gap-2 mt-5">
+                    <div className="bg-[#080d14] border border-white/10 p-3">
+                      <p className="font-sans font-black text-2xl text-white">{availableEvents.length}</p>
+                      <p className="font-mono text-[9px] uppercase text-gray-500">Eventos</p>
+                    </div>
+                    <div className="bg-[#080d14] border border-white/10 p-3">
+                      <p className="font-sans font-black text-2xl text-white">{visibleProductStats.photos}</p>
+                      <p className="font-mono text-[9px] uppercase text-gray-500">Fotos</p>
+                    </div>
+                    <div className="bg-[#080d14] border border-white/10 p-3">
+                      <p className="font-sans font-black text-2xl text-white">{dashboardMetrics.salesCount}</p>
+                      <p className="font-mono text-[9px] uppercase text-gray-500">Vendas</p>
+                    </div>
+                  </div>
+                </div>
+              </aside>
             </motion.div>
           )}
 

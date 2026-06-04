@@ -78,6 +78,17 @@ function createEventSlug(name: string, date: string) {
   return normalized || `evento-${Date.now()}`;
 }
 
+function createPhotographerSlug(value: string) {
+  const normalized = value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+
+  return normalized || `fotografo-${Date.now()}`;
+}
+
 function isDuplicateSlugError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
   return message.includes('events_slug_key') ||
@@ -410,6 +421,23 @@ export const productService = {
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, 5000, true);
     return signMediaUrls(products);
+  },
+
+  async getPublishedProductsByPhotographer(photographerId: string, count = 5000): Promise<Product[]> {
+    if (isMockMode) {
+      return mockProducts
+        .filter((product) => product.vendedorId === photographerId && (product.status ?? 'published') === 'published')
+        .slice(0, count);
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      vendedorId: `eq.${photographerId}`,
+      status: 'eq.published',
+      order: 'createdAt.desc',
+    });
+    const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
+    return signMediaUrls(products, { protectImageOriginals: true });
   },
 
   async addProduct(product: Omit<Product, 'id'>): Promise<string> {
@@ -849,6 +877,20 @@ export const eventService = {
     }
   },
 
+  async getEventBySlug(slug: string): Promise<Event | null> {
+    if (isMockMode) {
+      return loadLocalEvents().find((event) => event.slug === slug && event.isPublished !== false) ?? null;
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      slug: `eq.${slug}`,
+      limit: '1',
+    });
+    const rows = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`);
+    return rows.find((event) => event.isPublished !== false) ?? null;
+  },
+
   async getPhotographerEvents(photographerId: string, count = 200): Promise<Event[]> {
     if (isMockMode) {
       return loadLocalEvents()
@@ -870,6 +912,31 @@ export const eventService = {
         return loadLocalEvents()
           .filter((event) => !event.photographerId || event.photographerId === photographerId)
           .slice(0, count);
+      }
+      throw error;
+    }
+  },
+
+  async getPublishedPhotographerEvents(photographerId: string, count = 200): Promise<Event[]> {
+    if (isMockMode) {
+      return sortEvents(loadLocalEvents()
+        .filter((event) => (!event.photographerId || event.photographerId === photographerId) && event.isPublished !== false))
+        .slice(0, count);
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      photographerId: `eq.${photographerId}`,
+      isPublished: 'eq.true',
+      order: 'date.desc,createdAt.desc',
+      limit: String(count),
+    });
+    try {
+      const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`);
+      return sortEvents(events).reverse().slice(0, count);
+    } catch (error) {
+      if (isMissingEventsTableError(error)) {
+        return [];
       }
       throw error;
     }
@@ -1651,7 +1718,17 @@ export const photographerService = {
       limit: '1',
     });
     const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
-    return rows[0] ?? null;
+    if (rows[0]) return rows[0];
+
+    const fallbackParams = new URLSearchParams({
+      select: '*',
+      verified: 'eq.true',
+      limit: '1000',
+    });
+    const publicRows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${fallbackParams.toString()}`);
+    return publicRows.find((photographer) =>
+      createPhotographerSlug(photographer.displayName || photographer.name) === slug
+    ) ?? null;
   },
 
   async getPhotographerByEmail(email: string): Promise<Photographer | null> {
@@ -1662,6 +1739,22 @@ export const photographerService = {
     const params = new URLSearchParams({
       select: '*',
       email: `eq.${email}`,
+      limit: '1',
+    });
+    const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
+    return rows[0] ?? null;
+  },
+
+  async getPublicPhotographerBySlug(slug: string): Promise<Photographer | null> {
+    if (isMockMode) {
+      return mockPhotographers.find((photographer) =>
+        createPhotographerSlug(photographer.slug || photographer.displayName || photographer.name) === slug
+      ) ?? null;
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      slug: `eq.${slug}`,
       limit: '1',
     });
     const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
@@ -1709,7 +1802,7 @@ export const photographerService = {
 
   async updatePhotographerAdmin(
     id: string,
-    changes: Partial<Pick<Photographer, 'name' | 'bio' | 'avatar' | 'phone' | 'instagram' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
+    changes: Partial<Pick<Photographer, 'name' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'phone' | 'instagram' | 'city' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
   ): Promise<Photographer> {
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);
@@ -1723,6 +1816,35 @@ export const photographerService = {
     const [updated] = await supabaseRest.patch<SupabaseRow<Photographer>[]>(
       `/rest/v1/photographers?${params.toString()}&${selectAll}`,
       changes,
+      true,
+    );
+
+    if (!updated) throw new Error('Fotografo nao encontrado.');
+    return updated;
+  },
+
+  async updateOwnPublicProfile(
+    id: string,
+    changes: Partial<Pick<Photographer, 'name' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'instagram' | 'city'>>,
+  ): Promise<Photographer> {
+    const nextName = changes.displayName || changes.name;
+    const payload = {
+      ...changes,
+      slug: nextName ? createPhotographerSlug(nextName) : undefined,
+    };
+
+    if (isMockMode) {
+      const existing = mockPhotographers.find((photographer) => photographer.id === id);
+      if (!existing) throw new Error('Fotografo nao encontrado.');
+      const updated = { ...existing, ...payload } as Photographer;
+      mockPhotographers = mockPhotographers.map((photographer) => (photographer.id === id ? updated : photographer));
+      return updated;
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Photographer>[]>(
+      `/rest/v1/photographers?${params.toString()}&${selectAll}`,
+      payload,
       true,
     );
 

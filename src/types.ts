@@ -1,11 +1,16 @@
 export interface Photographer {
   id: string;
+  slug?: string | null;
   name: string;
+  displayName?: string | null;
   email: string;
   bio: string;
   avatar: string;
+  profilePhoto?: string | null;
+  coverPhoto?: string | null;
   phone?: string;
   instagram?: string;
+  city?: string | null;
   cpf?: string;
   verified: boolean;
   role?: 'photographer';

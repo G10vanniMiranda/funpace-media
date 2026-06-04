@@ -4,7 +4,6 @@ import { ArrowLeft, ArrowRight, Copy, CreditCard, ExternalLink, Image as ImageIc
 import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { isValidAuthEmail, normalizeAuthEmail } from '../lib/supabase';
-import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 import { ProtectedMedia } from './ProtectedMedia';
 import { CheckoutPaymentMethod, CreateCheckoutResult } from '../lib/services';
@@ -53,7 +52,6 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const [fullName, setFullName] = useState(user?.displayName || titleCaseFromEmail(user?.email));
   const [email, setEmail] = useState(user?.email ?? '');
   const [phone, setPhone] = useState('');
-  const [cpf, setCpf] = useState('');
   const [submittingMethod, setSubmittingMethod] = useState<CheckoutPaymentMethod | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<CreateCheckoutResult | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
@@ -69,8 +67,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const phoneDigits = onlyWhatsappDigits(phone);
   const contactValid = fullName.trim().length >= 3 &&
     isValidAuthEmail(email) &&
-    phoneDigits.length >= 10 &&
-    isValidCpf(cpf);
+    phoneDigits.length >= 10;
   const isSubmitting = Boolean(submittingMethod);
   const canPay = cartItems.length > 0 && Boolean(user) && contactValid && meetsMinimumTotal && !isSubmitting;
 
@@ -90,7 +87,6 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
         fullName: fullName.trim(),
         email: normalizeAuthEmail(email),
         phone: phoneDigits,
-        cpf,
       }, paymentMethod, normalizedCoupon || undefined);
 
       setCheckoutResult(result);
@@ -169,7 +165,6 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 inputMode="numeric"
                 maxLength={15}
               />
-              <CheckoutInput label="CPF" value={formatCpf(cpf)} onChange={(value) => setCpf(onlyCpfDigits(value))} placeholder="000.000.000-00" inputMode="numeric" maxLength={14} />
             </div>
           </section>
 
@@ -334,7 +329,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             {!isSubmitting && <ArrowRight className="w-6 h-6 mt-1" />}
           </button>
           {user && cartItems.length > 0 && !contactValid && (
-            <p className="font-mono text-[9px] uppercase text-red-500 text-center">Preencha nome, e-mail, WhatsApp e CPF validos.</p>
+            <p className="font-mono text-[9px] uppercase text-red-500 text-center">Preencha nome, e-mail e WhatsApp validos.</p>
           )}
           {cartItems.length > 0 && !meetsMinimumTotal && (
             <p className="font-mono text-[9px] uppercase text-red-500 text-center">

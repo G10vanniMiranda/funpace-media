@@ -1434,10 +1434,6 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(401).json({ error: "Entre novamente para iniciar o pagamento." });
     }
 
-    if (!buyer?.cpf || !isValidCpf(buyer.cpf)) {
-      return res.status(400).json({ error: "CPF valido e obrigatorio para pagamento." });
-    }
-
     if (!buyer?.fullName || !buyer?.email) {
       return res.status(400).json({ error: "Dados do comprador incompletos." });
     }
@@ -1464,7 +1460,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
     }
 
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
-    const buyerCpf = onlyCpfDigits(buyer.cpf);
+    const buyerCpf = onlyCpfDigits(typeof buyer?.cpf === "string" ? buyer.cpf : "");
     const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
     if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
       return res.status(403).json({ error: "Use o mesmo e-mail da conta logada para finalizar a compra." });
@@ -1487,7 +1483,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
         email: buyerEmail,
         name: buyerName,
         phone: buyerPhone,
-        cpf: buyerCpf,
+        cpf: buyerCpf || null,
       }, { onConflict: "id" });
 
     if (customerError) throw customerError;

@@ -399,6 +399,61 @@ function createPublicMediaUrl(rawPathOrUrl: string) {
   return rawPathOrUrl;
 }
 
+function createSupabaseStoragePublicUrl(bucket: string, path: string) {
+  const { supabaseUrl } = getSupabaseApiConfig();
+  return `${supabaseUrl.replace(/\/+$/, "")}/storage/v1/object/public/${bucket}/${encodeURI(path)}`;
+}
+
+async function ensurePublicImageBucket(bucket: string, options: { fileSizeLimit: number }) {
+  const supabase = getSupabaseAdmin();
+  const { data: existing, error: getError } = await supabase.storage.getBucket(bucket);
+
+  if (existing?.id) {
+    if (!existing.public || existing.file_size_limit !== options.fileSizeLimit) {
+      const { error: updateError } = await supabase.storage.updateBucket(bucket, {
+        public: true,
+        fileSizeLimit: options.fileSizeLimit,
+        allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "image/webp"],
+      });
+      if (updateError) throw updateError;
+    }
+    return;
+  }
+
+  if (getError && !/not found|does not exist|404/i.test(String(getError.message || ""))) {
+    throw getError;
+  }
+
+  const { error: createError } = await supabase.storage.createBucket(bucket, {
+    public: true,
+    fileSizeLimit: options.fileSizeLimit,
+    allowedMimeTypes: ["image/jpeg", "image/jpg", "image/png", "image/webp"],
+  });
+
+  if (createError && !/already exists/i.test(String(createError.message || ""))) {
+    throw createError;
+  }
+}
+
+async function uploadSupabaseProfileImage(input: { bucket: string; path: string; contentType: string; fileBuffer: Buffer; fileSizeLimit: number }) {
+  await ensurePublicImageBucket(input.bucket, { fileSizeLimit: input.fileSizeLimit });
+
+  const { error } = await getSupabaseAdmin().storage
+    .from(input.bucket)
+    .upload(input.path, input.fileBuffer, {
+      contentType: input.contentType,
+      upsert: true,
+      cacheControl: "31536000",
+    });
+
+  if (error) throw error;
+
+  return {
+    path: input.path,
+    publicUrl: createSupabaseStoragePublicUrl(input.bucket, input.path),
+  };
+}
+
 function decodeHeaderValue(value: string | undefined) {
   if (!value) return "";
 
@@ -1623,6 +1678,77 @@ app.post("/api/media/upload", express.raw({
   } catch (error: any) {
     console.error("Erro ao enviar midia:", error);
     return res.status(500).json({ error: error?.message || "Nao foi possivel enviar a midia." });
+  }
+});
+
+app.post("/api/photographers/profile-image", express.raw({
+  type: ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/octet-stream"],
+  limit: "10mb",
+}), async (req, res) => {
+  const authUser = await getAuthenticatedRequestUser(req);
+  const imageKind = String(req.header("x-profile-image-kind") || "").trim();
+  const fileName = decodeHeaderValue(req.header("x-file-name")) || "perfil.jpg";
+  const contentType = String(req.header("content-type") || "application/octet-stream").toLowerCase();
+  const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+  const allowedTypes = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
+
+  if (!authUser?.id) {
+    return res.status(401).json({ error: "Entre novamente no painel para atualizar o perfil." });
+  }
+
+  if (!(await isVerifiedPhotographerUser(authUser.id))) {
+    return res.status(403).json({ error: "Apenas fotografos aprovados podem atualizar foto e banner." });
+  }
+
+  if (imageKind !== "avatar" && imageKind !== "cover") {
+    return res.status(400).json({ error: "Tipo de imagem de perfil invalido." });
+  }
+
+  if (!allowedTypes.has(contentType)) {
+    return res.status(400).json({ error: "Formato invalido. Envie JPG, JPEG, PNG ou WEBP." });
+  }
+
+  if (fileBuffer.length === 0) {
+    return res.status(400).json({ error: "Arquivo vazio ou nao enviado." });
+  }
+
+  const fileSizeLimit = imageKind === "avatar" ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (fileBuffer.length > fileSizeLimit) {
+    return res.status(413).json({
+      error: imageKind === "avatar"
+        ? "Foto de perfil maior que 5 MB."
+        : "Banner de capa maior que 10 MB.",
+    });
+  }
+
+  try {
+    const bucket = imageKind === "avatar" ? "photographer-avatars" : "photographer-covers";
+    const folder = imageKind === "avatar" ? "avatars" : "covers";
+    const safeName = fileName
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z0-9._-]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 120) || `${imageKind}.jpg`;
+    const path = `${folder}/${authUser.id}/${Date.now()}-${safeName.replace(/\.[^.]+$/, "")}.jpg`;
+    const uploaded = await uploadSupabaseProfileImage({
+      bucket,
+      path,
+      contentType,
+      fileBuffer,
+      fileSizeLimit,
+    });
+
+    return res.json(uploaded);
+  } catch (error: any) {
+    console.error("Erro ao enviar imagem de perfil:", {
+      photographerId: authUser.id,
+      kind: imageKind,
+      message: error?.message || String(error),
+    });
+    return res.status(500).json({
+      error: "Nao foi possivel enviar a imagem. Verifique se o Supabase Storage esta habilitado e se SUPABASE_SERVICE_ROLE_KEY esta configurada na VPS.",
+    });
   }
 });
 

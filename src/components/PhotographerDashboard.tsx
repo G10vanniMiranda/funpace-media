@@ -967,6 +967,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const periodMenuRef = React.useRef<HTMLDivElement | null>(null);
   const [showNotifications, setShowNotifications] = useState(false);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [profileSaveError, setProfileSaveError] = useState('');
+  const [profileSaveSuccess, setProfileSaveSuccess] = useState('');
   const [profileImageErrors, setProfileImageErrors] = useState<Record<ProfileImageKind, string>>({ avatar: '', cover: '' });
   const [pendingProfileImages, setPendingProfileImages] = useState<Record<ProfileImageKind, PendingProfileImage | null>>({
     avatar: null,
@@ -1022,6 +1024,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
   const handleSavePublicProfile = async () => {
     setIsSavingProfile(true);
+    setProfileSaveError('');
+    setProfileSaveSuccess('');
     try {
       const uploadedAvatar = pendingProfileImages.avatar
         ? await photographerService.uploadProfilePhoto(currentPhotographer.id, await prepareProfileImageForUpload(pendingProfileImages.avatar.file, 'avatar'))
@@ -1053,10 +1057,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         });
         return { avatar: null, cover: null };
       });
-      alert('Perfil publico atualizado.');
+      setProfileSaveSuccess('Perfil publico atualizado.');
     } catch (error) {
       console.error('Erro ao salvar perfil publico:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel salvar o perfil publico.');
+      setProfileSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar o perfil publico.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -1069,6 +1073,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       validateProfileImageFile(file, kind);
       const previewUrl = URL.createObjectURL(file);
       setProfileImageErrors((current) => ({ ...current, [kind]: '' }));
+      setProfileSaveError('');
+      setProfileSaveSuccess('');
       setPendingProfileImages((current) => {
         if (current[kind]?.previewUrl) URL.revokeObjectURL(current[kind]!.previewUrl);
         return { ...current, [kind]: { file, previewUrl } };
@@ -3270,6 +3276,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       className="w-full resize-none bg-[#080d14] border border-white/15 px-4 py-3 text-sm leading-relaxed text-white outline-none focus:border-brutal-accent"
                     />
                   </label>
+                  {(profileSaveError || profileSaveSuccess) && (
+                    <div className={`md:col-span-2 border p-3 font-mono text-[10px] uppercase tracking-widest ${profileSaveError
+                      ? 'border-red-400/30 bg-red-500/10 text-red-200'
+                      : 'border-green-400/30 bg-green-500/10 text-green-200'
+                      }`}>
+                      {profileSaveError || profileSaveSuccess}
+                    </div>
+                  )}
                   <div className="md:col-span-2 flex flex-col sm:flex-row gap-3 sm:items-center sm:justify-between pt-2">
                     <a
                       href={publicProfileUrl}

@@ -378,6 +378,42 @@ async function uploadSupabaseStorageObject(bucket: string, path: string, file: F
   };
 }
 
+async function uploadPhotographerProfileImage(kind: 'avatar' | 'cover', file: File) {
+  const accessToken = await getCurrentAccessToken();
+  if (!accessToken) {
+    throw new Error('Sessao de fotografo ausente. Entre novamente para atualizar o perfil.');
+  }
+
+  const response = await fetch(apiUrl('/api/photographers/profile-image'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': file.type || 'application/octet-stream',
+      'X-Profile-Image-Kind': kind,
+      'X-File-Name': encodeURIComponent(file.name),
+    },
+    body: file,
+  });
+
+  const raw = await response.text();
+  let payload: any = {};
+  try {
+    payload = raw ? JSON.parse(raw) : {};
+  } catch {
+    payload = { error: raw };
+  }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || `Falha no upload da imagem. HTTP ${response.status}`);
+  }
+
+  if (!payload?.publicUrl) {
+    throw new Error('Upload concluido, mas o Storage nao retornou URL publica.');
+  }
+
+  return payload as { path: string; publicUrl: string };
+}
+
 function normalizeFileName(value?: string | null) {
   return String(value || '')
     .trim()
@@ -1925,9 +1961,7 @@ export const photographerService = {
       };
     }
 
-    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, '.jpg'));
-    const path = `avatars/${photographerId}/${Date.now()}-${safeName}`;
-    return uploadSupabaseStorageObject('photographer-avatars', path, file);
+    return uploadPhotographerProfileImage('avatar', file);
   },
 
   async uploadCoverPhoto(photographerId: string, file: File) {
@@ -1938,9 +1972,7 @@ export const photographerService = {
       };
     }
 
-    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, '.jpg'));
-    const path = `covers/${photographerId}/${Date.now()}-${safeName}`;
-    return uploadSupabaseStorageObject('photographer-covers', path, file);
+    return uploadPhotographerProfileImage('cover', file);
   },
 };
 

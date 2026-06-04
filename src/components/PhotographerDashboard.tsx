@@ -27,7 +27,7 @@ import {
   X
 } from 'lucide-react';
 import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
-import { calculateFileSha256, eventService, photographerDashboardService, photographerService, productService, withdrawalService } from '../lib/services';
+import { calculateFileSha256, eventService, normalizePhotographerUsername, photographerDashboardService, photographerService, productService, withdrawalService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
 
@@ -980,6 +980,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   });
   const [profileForm, setProfileForm] = useState(() => ({
     name: photographer.name,
+    username: photographer.username || photographer.slug || normalizePhotographerUsername(photographer.displayName || photographer.name),
+    isPublic: photographer.isPublic !== false,
     displayName: photographer.displayName || photographer.name,
     bio: photographer.bio || '',
     instagram: photographer.instagram || '',
@@ -1018,9 +1020,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     };
   }, []);
 
-  const publicProfileUrl = currentPhotographer.slug
-    ? `/fotografo/${currentPhotographer.slug}`
-    : `/fotografo/${normalizeUploadName(profileForm.displayName || profileForm.name).replace(/[^a-z0-9]+/g, '-')}`;
+  const publicProfileUrl = `/${normalizePhotographerUsername(profileForm.username || profileForm.displayName || profileForm.name)}`;
 
   const handleSavePublicProfile = async () => {
     setIsSavingProfile(true);
@@ -1037,6 +1037,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const nextCover = uploadedCover?.publicUrl || profileForm.coverPhoto.trim();
       const updated = await photographerService.updateOwnPublicProfile(currentPhotographer.id, {
         name: profileForm.name.trim() || currentPhotographer.name,
+        username: profileForm.username,
+        isPublic: profileForm.isPublic,
         displayName: profileForm.displayName.trim() || profileForm.name.trim() || currentPhotographer.name,
         bio: profileForm.bio.trim(),
         instagram: profileForm.instagram.replace(/^@/, '').trim() || null,
@@ -1050,6 +1052,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         ...current,
         avatar: updated.profilePhoto || updated.avatar || '',
         coverPhoto: updated.coverPhoto || '',
+        username: updated.username || updated.slug || current.username,
+        isPublic: updated.isPublic !== false,
       }));
       setPendingProfileImages((current) => {
         Object.values(current).forEach((item) => {
@@ -3226,6 +3230,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       value={profileForm.name}
                       onChange={(event) => setProfileForm((current) => ({ ...current, name: event.target.value }))}
                       className="h-12 w-full bg-[#080d14] border border-white/15 px-4 text-sm text-white outline-none focus:border-brutal-accent"
+                    />
+                  </label>
+                  <label className="space-y-2">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500">URL publica</span>
+                    <div className="flex h-12 overflow-hidden border border-white/15 bg-[#080d14] focus-within:border-brutal-accent">
+                      <span className="inline-flex items-center border-r border-white/10 px-3 font-mono text-[10px] uppercase text-gray-500">funpace.media/</span>
+                      <input
+                        value={profileForm.username}
+                        onChange={(event) => setProfileForm((current) => ({ ...current, username: normalizePhotographerUsername(event.target.value) }))}
+                        className="min-w-0 flex-1 bg-transparent px-3 text-sm text-white outline-none"
+                      />
+                    </div>
+                  </label>
+                  <label className="h-12 self-end px-4 bg-[#080d14] border border-white/15 flex items-center justify-between gap-3 cursor-pointer">
+                    <span className="font-mono text-[10px] uppercase text-gray-300">Perfil publico</span>
+                    <input
+                      type="checkbox"
+                      checked={profileForm.isPublic}
+                      onChange={(event) => setProfileForm((current) => ({ ...current, isPublic: event.target.checked }))}
+                      className="h-5 w-5 accent-brutal-accent"
                     />
                   </label>
                   <label className="space-y-2">

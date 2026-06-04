@@ -32,7 +32,7 @@ if (!process.env.DATABASE_URL && dbConfig.host && /[a-z]/i.test(dbConfig.host)) 
 }
 
 const requiredColumns = {
-  photographers: ["id", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "role", "commissionPercent", "blockedAt", "lastLoginAt", "stats", "createdAt", "updatedAt"],
+  photographers: ["id", "slug", "username", "isPublic", "displayName", "profilePhoto", "coverPhoto", "city", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "role", "commissionPercent", "blockedAt", "lastLoginAt", "stats", "createdAt", "updatedAt"],
   customers: ["id", "email", "name", "phone", "cpf", "avatarUrl", "preferences", "createdAt", "updatedAt"],
   events: ["id", "photographerId", "name", "slug", "description", "date", "location", "checkpoint", "coverImage", "bannerImage", "isPublished", "isFeatured", "moderationStatus", "status", "createdAt", "updatedAt"],
   products: ["id", "name", "price", "url", "type", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "watermarkUrl", "duration", "storagePath", "fileHash", "fileSize", "originalFileName", "thumbnailHash", "uploadBatchId", "status", "viewCount", "salesCount", "createdAt", "updatedAt"],

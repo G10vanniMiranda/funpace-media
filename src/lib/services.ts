@@ -89,6 +89,48 @@ function createPhotographerSlug(value: string) {
   return normalized || `fotografo-${Date.now()}`;
 }
 
+export const reservedPublicSlugs = new Set([
+  'admin',
+  'api',
+  'auth',
+  'busca',
+  'cadastro',
+  'carrinho',
+  'checkout',
+  'contato',
+  'dashboard',
+  'evento',
+  'eventos',
+  'faq',
+  'fotografo',
+  'login',
+  'minha-conta',
+  'minhas-compras',
+  'pagar',
+  'pagamento',
+  'para-fotografos',
+  'perfil',
+  'precos',
+  'privacidade',
+  'termos',
+  'upload',
+]);
+
+export function normalizePhotographerUsername(value: string) {
+  return createPhotographerSlug(value).slice(0, 80);
+}
+
+export function validatePhotographerUsername(value: string) {
+  const username = normalizePhotographerUsername(value);
+  if (!/^[a-z0-9-]{2,80}$/.test(username)) {
+    throw new Error('Use apenas letras, numeros e hifen na URL publica.');
+  }
+  if (reservedPublicSlugs.has(username)) {
+    throw new Error('Esta URL publica e reservada pelo sistema.');
+  }
+  return username;
+}
+
 function isDuplicateSlugError(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
   return message.includes('events_slug_key') ||
@@ -1847,19 +1889,33 @@ export const photographerService = {
   },
 
   async getPublicPhotographerBySlug(slug: string): Promise<Photographer | null> {
+    const normalizedSlug = normalizePhotographerUsername(slug.replace(/^@/, ''));
     if (isMockMode) {
       return mockPhotographers.find((photographer) =>
-        createPhotographerSlug(photographer.slug || photographer.displayName || photographer.name) === slug
+        photographer.isPublic !== false &&
+        createPhotographerSlug(photographer.username || photographer.slug || photographer.displayName || photographer.name) === normalizedSlug
       ) ?? null;
     }
 
     const params = new URLSearchParams({
       select: '*',
-      slug: `eq.${slug}`,
+      or: `(username.eq.${normalizedSlug},slug.eq.${normalizedSlug})`,
+      isPublic: 'eq.true',
       limit: '1',
     });
     const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
-    return rows[0] ?? null;
+    if (rows[0]) return rows[0];
+
+    const fallbackParams = new URLSearchParams({
+      select: '*',
+      verified: 'eq.true',
+      isPublic: 'eq.true',
+      limit: '1000',
+    });
+    const publicRows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${fallbackParams.toString()}`);
+    return publicRows.find((photographer) =>
+      createPhotographerSlug(photographer.displayName || photographer.name) === normalizedSlug
+    ) ?? null;
   },
 
   async addPhotographer(photographer: Omit<Photographer, 'id' | 'verified'>): Promise<string> {
@@ -1903,7 +1959,7 @@ export const photographerService = {
 
   async updatePhotographerAdmin(
     id: string,
-    changes: Partial<Pick<Photographer, 'name' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'phone' | 'instagram' | 'city' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
+    changes: Partial<Pick<Photographer, 'name' | 'username' | 'isPublic' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'phone' | 'instagram' | 'city' | 'cpf' | 'verified' | 'commissionPercent' | 'blockedAt'>>,
   ): Promise<Photographer> {
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);
@@ -1926,12 +1982,14 @@ export const photographerService = {
 
   async updateOwnPublicProfile(
     id: string,
-    changes: Partial<Pick<Photographer, 'name' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'instagram' | 'city'>>,
+    changes: Partial<Pick<Photographer, 'name' | 'username' | 'isPublic' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'instagram' | 'city'>>,
   ): Promise<Photographer> {
-    const nextName = changes.displayName || changes.name;
+    const nextUsername = validatePhotographerUsername(changes.username || changes.displayName || changes.name || '');
     const payload = {
       ...changes,
-      slug: nextName ? createPhotographerSlug(nextName) : undefined,
+      username: nextUsername,
+      slug: nextUsername,
+      isPublic: changes.isPublic ?? true,
     };
 
     if (isMockMode) {

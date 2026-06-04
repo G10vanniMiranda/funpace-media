@@ -1,6 +1,5 @@
--- Preenche username/slug públicos para fotógrafos existentes.
--- Rode uma vez no SQL Editor do Supabase depois de adicionar:
--- username, slug, isPublic e updatedAt.
+-- Preenche username/slug publicos para fotografos existentes.
+-- Rode uma vez no SQL Editor do Supabase depois de adicionar as colunas username, slug e isPublic.
 
 with reserved(slug) as (
   values
@@ -13,16 +12,11 @@ with reserved(slug) as (
 base as (
   select
     p.id,
-    coalesce(nullif(trim(p.username), ''), nullif(trim(p.slug), '')) as existing_slug,
+    coalesce(nullif(p.username, ''), nullif(p.slug, '')) as existing_slug,
     regexp_replace(
       lower(
         translate(
-          coalesce(
-            nullif(trim(p."displayName"), ''),
-            nullif(trim(p.name), ''),
-            nullif(trim(p.email), ''),
-            p.id::text
-          ),
+          coalesce(nullif(p."displayName", ''), nullif(p.name, ''), p.email, p.id),
           'áàâãäåÁÀÂÃÄÅéèêëÉÈÊËíìîïÍÌÎÏóòôõöÓÒÔÕÖúùûüÚÙÛÜçÇñÑ',
           'aaaaaaAAAAAAeeeeEEEEiiiiIIIIoooooOOOOOuuuuUUUUcCnN'
         )
@@ -32,10 +26,6 @@ base as (
       'g'
     ) as raw_slug
   from public.photographers p
-  where p.username is null
-     or trim(p.username) = ''
-     or p.slug is null
-     or trim(p.slug) = ''
 ),
 normalized as (
   select
@@ -61,7 +51,7 @@ ranked as (
     row_number() over (partition by slug_base order by id) as duplicate_index
   from safe_base
 ),
-candidates as (
+resolved as (
   select
     id,
     left(
@@ -69,27 +59,9 @@ candidates as (
         when duplicate_index = 1 then slug_base
         else slug_base || '-' || duplicate_index::text
       end,
-      70
-    ) as candidate_slug
+      80
+    ) as resolved_slug
   from ranked
-),
-resolved as (
-  select
-    c.id,
-    case
-      when exists (
-        select 1
-        from public.photographers p2
-        where p2.id <> c.id
-          and (
-            lower(p2.username) = lower(c.candidate_slug)
-            or lower(p2.slug) = lower(c.candidate_slug)
-          )
-      )
-      then left(c.candidate_slug, 60) || '-' || substr(c.id::text, 1, 8)
-      else c.candidate_slug
-    end as resolved_slug
-  from candidates c
 )
 update public.photographers p
 set
@@ -99,9 +71,4 @@ set
   "updatedAt" = now()
 from resolved r
 where p.id = r.id
-returning
-  p.id,
-  p.username,
-  p.slug,
-  p."isPublic",
-  p."updatedAt";
+  and (p.username is null or p.username = '' or p.slug is null or p.slug = '');

@@ -41,6 +41,13 @@
       ]
     }
   ],
+  "redirects": [
+    {
+      "source": "/fotografo/:slug((?!definir-senha$)[^/]+)",
+      "destination": "/:slug",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/health",

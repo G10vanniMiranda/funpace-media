@@ -1,6 +1,8 @@
 export interface Photographer {
   id: string;
   slug?: string | null;
+  username?: string | null;
+  isPublic?: boolean | null;
   name: string;
   displayName?: string | null;
   email: string;

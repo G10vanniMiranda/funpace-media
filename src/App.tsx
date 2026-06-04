@@ -29,7 +29,7 @@ import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, C
 import type { Event } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService, eventService } from './lib/services';
+import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService, eventService, normalizePhotographerUsername, reservedPublicSlugs } from './lib/services';
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
@@ -91,6 +91,14 @@ function getPublicPhotographerSlugFromPath(pathname: string) {
   return match ? decodeURIComponent(match[1]) : null;
 }
 
+function getRootPublicPhotographerSlugFromPath(pathname: string) {
+  const match = pathname.match(/^\/@?([^/?#]+)\/?$/);
+  if (!match) return null;
+  const slug = normalizePhotographerUsername(decodeURIComponent(match[1]));
+  if (!slug || reservedPublicSlugs.has(slug)) return null;
+  return slug;
+}
+
 function getPublicEventSlugFromPath(pathname: string) {
   const match = pathname.match(/^\/evento\/([^/?#]+)/);
   return match ? decodeURIComponent(match[1]) : null;
@@ -114,6 +122,15 @@ function setMetaTag(selector: string, attributes: Record<string, string>, conten
     document.head.appendChild(meta);
   }
   meta.content = content;
+}
+
+function setLinkTag(selector: string, attributes: Record<string, string>) {
+  let link = document.querySelector<HTMLLinkElement>(selector);
+  if (!link) {
+    link = document.createElement('link');
+    document.head.appendChild(link);
+  }
+  Object.entries(attributes).forEach(([key, value]) => link?.setAttribute(key, value));
 }
 
 function loadStoredCart(): Product[] {
@@ -378,6 +395,8 @@ function Storefront() {
   const isCustomerOrdersRoute = location.pathname === '/minhas-compras';
   const eventSlugFromPath = getEventSlugFromPath(location.pathname);
   const publicPhotographerSlug = getPublicPhotographerSlugFromPath(location.pathname);
+  const rootPublicPhotographerSlug = getRootPublicPhotographerSlugFromPath(location.pathname);
+  const activePublicPhotographerSlug = publicPhotographerSlug || rootPublicPhotographerSlug;
   const publicEventSlug = getPublicEventSlugFromPath(location.pathname);
   const isEventDetailRoute = Boolean(eventSlugFromPath);
 
@@ -714,8 +733,12 @@ function Storefront() {
       ) : (
         <>
           {publicPhotographerSlug && (
+            <Navigate to={`/${publicPhotographerSlug}`} replace />
+          )}
+
+          {activePublicPhotographerSlug && !publicPhotographerSlug && (
             <PublicPhotographerPage
-              slug={publicPhotographerSlug}
+              slug={activePublicPhotographerSlug}
               cartItems={cart}
               favoriteProducts={favoriteProducts}
               likedProductIds={likedProductIds}
@@ -725,7 +748,7 @@ function Storefront() {
             />
           )}
 
-          {publicEventSlug && !publicPhotographerSlug && (
+          {publicEventSlug && !activePublicPhotographerSlug && (
             <PublicEventPage
               slug={publicEventSlug}
               cartItems={cart}
@@ -737,7 +760,7 @@ function Storefront() {
             />
           )}
 
-          {!publicPhotographerSlug && !publicEventSlug && (
+          {!activePublicPhotographerSlug && !publicEventSlug && (
             <>
           {!isEventsRoute && !isEventDetailRoute && !searchBib && !searchType && !selectedEventName && (
             <Hero
@@ -1040,17 +1063,26 @@ function PublicPhotographerPage({
   React.useEffect(() => {
     if (!photographer) return;
     const titleName = getPhotographerPublicName(photographer);
-    const title = `Fotos esportivas de ${titleName} | Funpace Media`;
-    const description = `Eventos, albuns e fotos de ${titleName} na Funpace Media.`;
+    const publicSlug = photographer.username || photographer.slug || slug;
+    const canonicalUrl = `${window.location.origin}/${publicSlug}`;
+    const title = `${titleName} - Fotografo Oficial | Funpace Media`;
+    const description = `Perfil publico de ${titleName}${photographer.city ? ` em ${photographer.city}` : ''}: eventos, albuns e fotos na Funpace Media.`;
     document.title = title;
+    setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
     setMetaTag('meta[name="description"]', { name: 'description' }, description);
     setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
     setMetaTag('meta[property="og:description"]', { property: 'og:description' }, description);
-    setMetaTag('meta[property="og:url"]', { property: 'og:url' }, window.location.href);
+    setMetaTag('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl);
     setMetaTag('meta[property="og:type"]', { property: 'og:type' }, 'profile');
+    setMetaTag('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary_large_image');
+    setMetaTag('meta[name="twitter:title"]', { name: 'twitter:title' }, title);
+    setMetaTag('meta[name="twitter:description"]', { name: 'twitter:description' }, description);
     const ogImage = photographer.coverPhoto || photographer.profilePhoto || photographer.avatar;
-    if (ogImage) setMetaTag('meta[property="og:image"]', { property: 'og:image' }, ogImage);
-  }, [photographer]);
+    if (ogImage) {
+      setMetaTag('meta[property="og:image"]', { property: 'og:image' }, ogImage);
+      setMetaTag('meta[name="twitter:image"]', { name: 'twitter:image' }, ogImage);
+    }
+  }, [photographer, slug]);
 
   const normalizedQuery = normalizeEventName(query.trim());
   const cities = React.useMemo(() => Array.from(new Set(events.map((event) => event.location || event.checkpoint || '').filter(Boolean))).sort(), [events]);
@@ -1263,7 +1295,7 @@ function PublicEventPage({
         {cover && <img src={cover} alt={event.name} className="absolute inset-0 h-full w-full object-cover opacity-40" />}
         <div className="absolute inset-0 bg-linear-to-t from-brutal-black via-brutal-black/60 to-transparent" />
         <div className="relative mx-auto max-w-350 px-4 py-16 md:px-6 md:py-24">
-          <button type="button" onClick={() => navigate(photographer?.slug ? `/fotografo/${photographer.slug}` : '/eventos')} className="mb-8 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-white/75 hover:text-brutal-accent">
+          <button type="button" onClick={() => navigate(photographer?.username || photographer?.slug ? `/${photographer.username || photographer.slug}` : '/eventos')} className="mb-8 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-white/75 hover:text-brutal-accent">
             <ArrowLeft className="h-4 w-4" /> Voltar
           </button>
           <p className="mb-3 font-mono text-xs uppercase tracking-[0.3em] text-brutal-accent">Evento</p>
@@ -2028,6 +2060,8 @@ export default function App() {
         <Route path="/pagar" element={<PagamentoSucesso />} />
         <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
         <Route path="/" element={<Storefront />} />
+        <Route path="/@:slug" element={<Storefront />} />
+        <Route path="/:slug" element={<Storefront />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Router>

@@ -1,6 +1,7 @@
 import express from "express";
 import path from "path";
 import crypto from "crypto";
+import fs from "fs/promises";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import pg from "pg";
@@ -382,6 +383,102 @@ function getPhotographerPasswordSetupUrl(req: express.Request) {
   const configuredFrontend = process.env.FRONTEND_URL || process.env.VITE_FRONTEND_URL || "";
   const origin = configuredFrontend || `${req.protocol}://${req.get("host")}`;
   return `${origin.replace(/\/+$/, "")}/fotografo/definir-senha`;
+}
+
+const reservedRootSlugs = new Set([
+  "admin",
+  "api",
+  "auth",
+  "busca",
+  "cadastro",
+  "carrinho",
+  "checkout",
+  "contato",
+  "dashboard",
+  "evento",
+  "eventos",
+  "faq",
+  "fotografo",
+  "login",
+  "minha-conta",
+  "minhas-compras",
+  "pagar",
+  "pagamento",
+  "para-fotografos",
+  "perfil",
+  "precos",
+  "privacidade",
+  "termos",
+  "upload",
+]);
+
+function normalizePublicSlug(value: string) {
+  return value
+    .replace(/^@/, "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+}
+
+function getRootPublicSlug(pathname: string) {
+  const match = pathname.match(/^\/@?([^/?#]+)\/?$/);
+  if (!match) return "";
+  const slug = normalizePublicSlug(decodeURIComponent(match[1] || ""));
+  return slug && !reservedRootSlugs.has(slug) ? slug : "";
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function getPublicPhotographerMeta(slug: string) {
+  const { data, error } = await getSupabaseAdmin()
+    .from("photographers")
+    .select("username,slug,name,displayName,bio,city,avatar,profilePhoto,coverPhoto,verified,isPublic")
+    .or(`username.eq.${slug},slug.eq.${slug}`)
+    .eq("verified", true)
+    .eq("isPublic", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const displayName = String((data as any).displayName || (data as any).name || "Fotografo Funpace");
+  const publicSlug = String((data as any).username || (data as any).slug || slug);
+  const description = `Perfil publico de ${displayName}${(data as any).city ? ` em ${(data as any).city}` : ""}: eventos, albuns e fotos na Funpace Media.`;
+  return {
+    title: `${displayName} - Fotografo Oficial | Funpace Media`,
+    description,
+    image: String((data as any).coverPhoto || (data as any).profilePhoto || (data as any).avatar || ""),
+    slug: publicSlug,
+  };
+}
+
+function injectSeoMeta(html: string, meta: { title: string; description: string; image: string; url: string }) {
+  const tags = [
+    `<title>${escapeHtml(meta.title)}</title>`,
+    `<link rel="canonical" href="${escapeHtml(meta.url)}">`,
+    `<meta name="description" content="${escapeHtml(meta.description)}">`,
+    `<meta property="og:title" content="${escapeHtml(meta.title)}">`,
+    `<meta property="og:description" content="${escapeHtml(meta.description)}">`,
+    `<meta property="og:type" content="profile">`,
+    `<meta property="og:url" content="${escapeHtml(meta.url)}">`,
+    meta.image ? `<meta property="og:image" content="${escapeHtml(meta.image)}">` : "",
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${escapeHtml(meta.title)}">`,
+    `<meta name="twitter:description" content="${escapeHtml(meta.description)}">`,
+    meta.image ? `<meta name="twitter:image" content="${escapeHtml(meta.image)}">` : "",
+  ].filter(Boolean).join("\n    ");
+
+  return html
+    .replace(/<title>.*?<\/title>/i, "")
+    .replace("</head>", `    ${tags}\n  </head>`);
 }
 
 async function createSignedMediaUrl(rawPathOrUrl: string, _expiresIn = 900) {
@@ -2414,6 +2511,17 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
   res.status(200).send("OK");
 });
 
+app.get("/fotografo/:slug", (req, res, next) => {
+  const slug = String(req.params.slug || "").trim();
+  if (!slug || slug === "definir-senha") {
+    next();
+    return;
+  }
+
+  const query = req.url.includes("?") ? req.url.slice(req.url.indexOf("?")) : "";
+  res.redirect(301, `/${encodeURIComponent(slug)}${query}`);
+});
+
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (res.headersSent) {
     next(error);
@@ -2463,8 +2571,34 @@ async function setupViteAndListen() {
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
+    app.get("*", async (req, res) => {
+      const indexPath = path.join(distPath, "index.html");
+      const publicSlug = getRootPublicSlug(req.path);
+
+      if (publicSlug) {
+        try {
+          const photographerMeta = await getPublicPhotographerMeta(publicSlug);
+          if (photographerMeta) {
+            const html = await fs.readFile(indexPath, "utf8");
+            const canonicalUrl = `${getRequestOrigin(req)}/${photographerMeta.slug}`;
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            res.send(injectSeoMeta(html, {
+              title: photographerMeta.title,
+              description: photographerMeta.description,
+              image: photographerMeta.image,
+              url: canonicalUrl,
+            }));
+            return;
+          }
+        } catch (error) {
+          console.error("Erro ao gerar SEO do fotografo publico:", {
+            slug: publicSlug,
+            message: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
+
+      res.sendFile(indexPath);
     });
   }
 

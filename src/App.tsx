@@ -1128,34 +1128,56 @@ function PublicPhotographerPage({
   const displayName = getPhotographerPublicName(photographer);
   const profilePhoto = photographer.profilePhoto || photographer.avatar;
   const coverPhoto = photographer.coverPhoto || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || profilePhoto;
+  const instagramHandle = photographer.instagram?.replace(/^@/, '').trim();
+  const instagramUrl = instagramHandle ? `https://instagram.com/${encodeURIComponent(instagramHandle)}` : '';
   const photoCount = products.filter((product) => product.type === 'IMG').length;
 
   return (
     <main>
-      <section className="relative min-h-[56vh] overflow-hidden border-b-4 border-brutal-black bg-brutal-black text-white">
-        {coverPhoto && <img src={coverPhoto} alt={displayName} className="absolute inset-0 h-full w-full object-cover opacity-45" />}
-        <div className="absolute inset-0 bg-linear-to-t from-brutal-black via-brutal-black/55 to-transparent" />
-        <div className="relative mx-auto flex min-h-[56vh] max-w-350 flex-col justify-end px-4 py-10 md:px-6 md:py-14">
-          <div className="flex flex-col gap-7 md:flex-row md:items-end">
-            <div className="h-32 w-32 overflow-hidden brutal-border border-white bg-white md:h-44 md:w-44">
-              {profilePhoto ? <img src={profilePhoto} alt={displayName} className="h-full w-full object-cover" /> : <UserCircle className="h-full w-full text-gray-300" />}
+      <section className="relative min-h-[62vh] overflow-hidden border-b-4 border-brutal-black bg-[#111827] text-white">
+        {coverPhoto ? (
+          <img src={coverPhoto} alt={displayName} className="absolute inset-0 h-full w-full object-cover opacity-50" />
+        ) : (
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_18%_20%,rgba(255,77,0,0.30),transparent_30%),radial-gradient(circle_at_78%_15%,rgba(255,255,255,0.18),transparent_22%),linear-gradient(135deg,#111827_0%,#05080d_55%,#1f2937_100%)]" />
+        )}
+        <div className="absolute inset-0 bg-linear-to-t from-brutal-black via-brutal-black/70 to-brutal-black/25" />
+        <div className="relative mx-auto flex min-h-[62vh] max-w-350 flex-col justify-end px-4 py-10 md:px-6 md:py-16">
+          <div className="grid gap-7 md:grid-cols-[minmax(12rem,15rem)_minmax(0,1fr)] md:items-end lg:grid-cols-[18rem_minmax(0,1fr)]">
+            <div className="h-44 w-44 overflow-hidden brutal-border border-white bg-white shadow-2xl md:h-60 md:w-60 lg:h-72 lg:w-72">
+              {profilePhoto ? (
+                <img src={profilePhoto} alt={displayName} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center bg-gray-100">
+                  <UserCircle className="h-28 w-28 text-gray-300 md:h-36 md:w-36" />
+                </div>
+              )}
             </div>
-            <div className="max-w-4xl">
-              <div className="mb-3 flex flex-wrap items-center gap-3 font-mono text-xs uppercase tracking-[0.22em] text-white/75">
-                {photographer.verified && <span className="inline-flex items-center gap-2 bg-brutal-accent px-3 py-2 text-white brutal-border"><CheckCircle2 className="h-4 w-4" /> Verificado</span>}
-                {photographer.city && <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4" />{photographer.city}</span>}
-                {photographer.instagram && <span className="inline-flex items-center gap-2"><Instagram className="h-4 w-4" />@{photographer.instagram.replace(/^@/, '')}</span>}
+            <div className="max-w-5xl">
+              <div className="mb-4 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-white/80 md:text-xs">
+                {photographer.verified && <span className="inline-flex min-h-9 items-center gap-2 bg-brutal-accent px-3 py-2 text-white brutal-border"><CheckCircle2 className="h-4 w-4" /> Verificado</span>}
+                {photographer.city && <span className="inline-flex min-h-9 items-center gap-2 bg-white/10 px-3 py-2 backdrop-blur-sm brutal-border border-white/40"><MapPin className="h-4 w-4 text-brutal-accent" />{photographer.city}</span>}
+                {instagramUrl && (
+                  <a
+                    href={instagramUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-9 items-center gap-2 bg-white/10 px-3 py-2 backdrop-blur-sm transition-colors brutal-border border-white/40 hover:bg-white hover:text-brutal-black"
+                  >
+                    <Instagram className="h-4 w-4 text-brutal-accent" />
+                    @{instagramHandle}
+                  </a>
+                )}
               </div>
-              <h1 className="font-display text-[clamp(3rem,10vw,7rem)] uppercase leading-[0.88] tracking-normal wrap-break-word">{displayName}</h1>
+              <h1 className="font-display text-[clamp(3.25rem,10vw,8rem)] uppercase leading-[0.86] tracking-normal wrap-break-word">{displayName}</h1>
               {photographer.displayName && photographer.displayName !== photographer.name && <p className="mt-3 font-mono text-sm uppercase tracking-widest text-white/70">{photographer.name}</p>}
-              {photographer.bio && <p className="mt-5 max-w-3xl font-sans text-base leading-relaxed text-white/85 md:text-lg">{photographer.bio}</p>}
+              {photographer.bio && <p className="mt-5 max-w-4xl font-sans text-base leading-relaxed text-white/90 md:text-xl">{photographer.bio}</p>}
             </div>
           </div>
         </div>
       </section>
 
       <section className="mx-auto max-w-350 px-4 py-8 md:px-6">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-3">
           <PublicStat icon={<CalendarDays className="h-5 w-5" />} label="Eventos" value={events.length} />
           <PublicStat icon={<Camera className="h-5 w-5" />} label="Fotos" value={photoCount} />
           <PublicStat icon={<ImageIcon className="h-5 w-5" />} label="Midias" value={products.length} />
@@ -1342,10 +1364,16 @@ function PublicEventPage({
 
 function PublicStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
   return (
-    <div className="bg-white brutal-border p-5">
-      <div className="mb-3 text-brutal-accent">{icon}</div>
-      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">{label}</p>
-      <p className="font-display text-4xl">{value}</p>
+    <div className="bg-white brutal-border p-5 md:p-6">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.24em] text-gray-400">{label}</p>
+          <p className="mt-3 font-display text-5xl leading-none text-brutal-black md:text-6xl">{value}</p>
+        </div>
+        <div className="flex h-11 w-11 shrink-0 items-center justify-center border-2 border-brutal-black bg-brutal-accent text-white">
+          {icon}
+        </div>
+      </div>
     </div>
   );
 }

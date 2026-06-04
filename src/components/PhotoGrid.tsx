@@ -3,6 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
 import { ProtectedMedia } from './ProtectedMedia';
+import { ContentProtectionNotice } from './ContentProtectionNotice';
+import { useContentProtection } from '../hooks/useContentProtection';
 
 interface PhotoGridProps {
   title: string;
@@ -39,6 +41,7 @@ export function PhotoGrid({
   const [visibleCount, setVisibleCount] = useState(initialVisiblePhotos);
   const visiblePhotos = useMemo(() => photos.slice(0, visibleCount), [photos, visibleCount]);
   const remainingPhotos = Math.max(0, photos.length - visiblePhotos.length);
+  const contentProtection = useContentProtection({ enabled: true, scope: 'photo-grid' });
 
   useEffect(() => {
     setVisibleCount(initialVisiblePhotos);
@@ -66,7 +69,20 @@ export function PhotoGrid({
   };
 
   return (
-    <section className="py-12 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
+    <section className="protected-gallery py-12 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
+      {contentProtection.notice && (
+        <ContentProtectionNotice message={contentProtection.notice} onClose={contentProtection.clearNotice} />
+      )}
+      {contentProtection.devtoolsOpen && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center bg-brutal-black/90 px-4 text-center text-white">
+          <div className="max-w-md brutal-border border-white/20 bg-brutal-black p-8">
+            <p className="font-display text-3xl uppercase">Conteudo protegido.</p>
+            <p className="mt-3 font-mono text-xs uppercase leading-relaxed tracking-widest text-white/60">
+              Feche as ferramentas de desenvolvedor para visualizar a galeria.
+            </p>
+          </div>
+        </div>
+      )}
       <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
         <div className="max-w-2xl">
           <h2 className="text-4xl md:text-6xl mb-2">{title}</h2>
@@ -112,6 +128,7 @@ export function PhotoGrid({
                 watermark={`FUNPACE ${photo.bib || photo.id.slice(0, 6)}`}
                 mediaId={photo.id}
                 eventName={photo.event}
+                onProtectionAttempt={contentProtection.reportAttempt}
                 loading={index < 8 ? 'eager' : 'lazy'}
                 decoding="async"
                 sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
@@ -119,7 +136,7 @@ export function PhotoGrid({
               />
 
               {/* Badges */}
-              <div className="absolute top-4 left-4 flex gap-2">
+              <div className="absolute top-4 left-4 z-10 flex gap-2">
                 {photo.bib && (
                   <span className="bg-brutal-white text-brutal-black px-2 py-1 font-mono text-xs font-bold brutal-border">
                     PEITO {photo.bib}
@@ -149,7 +166,7 @@ export function PhotoGrid({
                 </button>
               </div>
 
-              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
+              <div className="absolute inset-0 z-20 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center pointer-events-none">
                 <button
                   onClick={() => onAddToCart(photo)}
                   disabled={isInCart(photo.id)}

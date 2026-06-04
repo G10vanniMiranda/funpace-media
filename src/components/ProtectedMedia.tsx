@@ -1,6 +1,7 @@
 import React from 'react';
 import { Image as ImageIcon, Video } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { ContentProtectionAttempt, getContentProtectionMessage } from '../hooks/useContentProtection';
 
 type ProtectedMediaType = 'IMG' | 'VIDEO' | 'VIEW';
 
@@ -18,11 +19,14 @@ interface ProtectedMediaProps {
   decoding?: 'async' | 'auto' | 'sync';
   sizes?: string;
   onError?: React.ReactEventHandler<HTMLImageElement>;
+  onProtectionAttempt?: (input: {
+    type: ContentProtectionAttempt;
+    message?: string;
+    mediaId?: string | null;
+    eventName?: string | null;
+    metadata?: Record<string, unknown>;
+  }) => void;
   children?: React.ReactNode;
-}
-
-function preventDefault(event: React.SyntheticEvent) {
-  event.preventDefault();
 }
 
 function maskEmail(email?: string | null) {
@@ -46,6 +50,7 @@ export function ProtectedMedia({
   decoding,
   sizes,
   onError,
+  onProtectionAttempt,
   children,
 }: ProtectedMediaProps) {
   const { user } = useAuth();
@@ -70,13 +75,24 @@ export function ProtectedMedia({
     `VIEW ${viewedAt}`,
   ].filter(Boolean);
   const watermarkText = watermarkLines.join('  /  ');
+  const handleProtectionEvent = React.useCallback((type: ContentProtectionAttempt, event: React.SyntheticEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onProtectionAttempt?.({
+      type,
+      message: getContentProtectionMessage(type),
+      mediaId,
+      eventName,
+      metadata: { mediaType: type === 'context_menu' ? 'right_click' : type },
+    });
+  }, [eventName, mediaId, onProtectionAttempt]);
 
   return (
     <div
       className={`protected-media relative h-full w-full overflow-hidden select-none ${className}`}
-      onContextMenu={preventDefault}
-      onDragStart={preventDefault}
-      onCopy={preventDefault}
+      onContextMenu={(event) => handleProtectionEvent('context_menu', event)}
+      onDragStart={(event) => handleProtectionEvent('dragstart', event)}
+      onCopy={(event) => handleProtectionEvent('copy', event)}
       style={{ WebkitUserSelect: 'none', WebkitTouchCallout: 'none' } as React.CSSProperties}
     >
       {src ? (
@@ -95,6 +111,13 @@ export function ProtectedMedia({
           {type === 'VIDEO' ? <Video className="w-6 h-6" /> : <ImageIcon className="w-6 h-6" />}
         </div>
       )}
+
+      <div
+        aria-hidden="true"
+        className="protected-media__shield pointer-events-auto absolute inset-0"
+        onContextMenu={(event) => handleProtectionEvent('context_menu', event)}
+        onDragStart={(event) => handleProtectionEvent('dragstart', event)}
+      />
 
       {children}
 

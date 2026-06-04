@@ -238,6 +238,11 @@ app.use(["/api/products"], createRateLimiter({
   windowMs: 60 * 1000,
   max: 120,
 }));
+app.use(["/api/content-protection"], createRateLimiter({
+  keyPrefix: "content-protection",
+  windowMs: 60 * 1000,
+  max: 120,
+}));
 
 function getDbConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || "";
@@ -1920,6 +1925,70 @@ app.post("/api/products/:productId/favorite", async (req, res) => {
   } catch (error: any) {
     console.error("Erro ao atualizar curtida:", error);
     return res.status(500).json({ error: "Nao foi possivel atualizar a curtida." });
+  }
+});
+
+app.post("/api/content-protection/log", async (req, res) => {
+  const allowedTypes = new Set([
+    "context_menu",
+    "dragstart",
+    "copy",
+    "keyboard_devtools",
+    "view_source",
+    "devtools_open",
+  ]);
+  const type = String(req.body?.type || "").trim();
+  const mediaId = String(req.body?.mediaId || "").trim();
+  const pathValue = String(req.body?.path || "").trim().slice(0, 240);
+  const eventName = String(req.body?.eventName || "").trim().slice(0, 160);
+  const scope = String(req.body?.scope || "public-gallery").trim().slice(0, 80);
+  const metadata = req.body?.metadata && typeof req.body.metadata === "object" && !Array.isArray(req.body.metadata)
+    ? req.body.metadata
+    : {};
+
+  if (!allowedTypes.has(type)) {
+    return res.status(400).json({ ok: false, error: "Tipo de tentativa invalido." });
+  }
+
+  const authUser = await getAuthenticatedRequestUser(req).catch(() => null);
+  const ipHash = crypto
+    .createHash("sha256")
+    .update(getClientIp(req))
+    .digest("hex");
+
+  try {
+    const { error } = await getSupabaseAdmin()
+      .from("admin_activity_logs")
+      .insert({
+        actorId: authUser?.id ?? null,
+        actorEmail: authUser?.email ?? null,
+        action: `content_protection_${type}`,
+        targetType: mediaId && isUuid(mediaId) ? "product" : "protected_media",
+        targetId: mediaId && isUuid(mediaId) ? mediaId : null,
+        metadata: {
+          scope,
+          path: pathValue,
+          eventName: eventName || null,
+          ipHash,
+          origin: req.header("origin") || null,
+          referer: req.header("referer") || null,
+          userAgent: req.header("user-agent") || null,
+          occurredAt: req.body?.occurredAt || new Date().toISOString(),
+          ...metadata,
+        },
+        createdAt: new Date().toISOString(),
+      });
+
+    if (error) throw error;
+    return res.json({ ok: true });
+  } catch (error: any) {
+    console.warn("Nao foi possivel registrar tentativa de protecao de conteudo:", {
+      type,
+      mediaId: mediaId || null,
+      path: pathValue || null,
+      error: error?.message || String(error),
+    });
+    return res.json({ ok: false });
   }
 });
 

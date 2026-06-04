@@ -1010,6 +1010,19 @@ type PublicPageCartProps = {
   onToggleFavorite: (product: Product) => void;
 };
 
+type PublicPhotographerAlbum = {
+  id: string;
+  name: string;
+  slug?: string | null;
+  date?: string | null;
+  city: string;
+  description?: string | null;
+  coverUrl: string | null;
+  sortTime: number;
+  products: Product[];
+  event?: Event | null;
+};
+
 function PublicPhotographerPage({
   slug,
   cartItems,
@@ -1044,6 +1057,19 @@ function PublicPhotographerPage({
           productService.getPublishedProductsByPhotographer(profile.id, storefrontProductLimit),
         ]);
         if (cancelled) return;
+        console.info('[public-photographer] fotografo encontrado', {
+          photographerId: profile.id,
+          username: profile.username,
+          slug: profile.slug,
+          displayName: profile.displayName || profile.name,
+        });
+        console.info('[public-photographer] eventos retornados pela query', {
+          count: profileEvents.length,
+          ids: profileEvents.map((event) => event.id),
+        });
+        console.info('[public-photographer] midias retornadas para o fotografo', {
+          count: profileProducts.length,
+        });
         setPhotographer(profile);
         setEvents(profileEvents);
         setProducts(profileProducts);
@@ -1085,35 +1111,109 @@ function PublicPhotographerPage({
   }, [photographer, slug]);
 
   const normalizedQuery = normalizeEventName(query.trim());
-  const cities = React.useMemo(() => Array.from(new Set(events.map((event) => event.location || event.checkpoint || '').filter(Boolean))).sort(), [events]);
   const productsByEvent = React.useMemo(() => {
     const map = new Map<string, Product[]>();
     for (const product of products) {
-      const key = normalizeEventName(product.event || '');
+      const key = normalizeEventName(product.event || 'Evento sem nome');
       const current = map.get(key) ?? [];
       current.push(product);
       map.set(key, current);
     }
     return map;
   }, [products]);
-  const filteredEvents = React.useMemo(() => {
-    return events.filter((event) => {
-      const eventProducts = productsByEvent.get(normalizeEventName(event.name || '')) ?? [];
-      const city = event.location || event.checkpoint || '';
+
+  const publicAlbums = React.useMemo<PublicPhotographerAlbum[]>(() => {
+    const albums = new Map<string, PublicPhotographerAlbum>();
+
+    for (const event of events.filter((item) => item.isPublished !== false)) {
+      const eventName = String(event.name || 'Evento sem nome').trim();
+      const key = normalizeEventName(eventName);
+      const eventProducts = productsByEvent.get(key) ?? [];
+      const coverProduct = eventProducts.find((product) => product.thumbnailUrl) ?? eventProducts[0];
+      const latestProductTime = Math.max(0, ...eventProducts.map((product) => getStorefrontTimestamp(product.createdAt)));
+      albums.set(key, {
+        id: event.id,
+        name: eventName,
+        slug: event.slug,
+        date: event.date,
+        city: event.location || event.checkpoint || '',
+        description: event.description,
+        coverUrl: event.bannerImage || event.coverImage || coverProduct?.thumbnailUrl || null,
+        sortTime: Math.max(getStorefrontTimestamp(event.date), getStorefrontTimestamp(event.createdAt), latestProductTime),
+        products: eventProducts,
+        event,
+      });
+    }
+
+    for (const [key, eventProducts] of productsByEvent.entries()) {
+      const eventName = String(eventProducts[0]?.event || 'Evento sem nome').trim();
+      const coverProduct = eventProducts.find((product) => product.thumbnailUrl) ?? eventProducts[0];
+      const latestProductTime = Math.max(0, ...eventProducts.map((product) => getStorefrontTimestamp(product.createdAt)));
+      const existing = albums.get(key);
+
+      if (existing) {
+        albums.set(key, {
+          ...existing,
+          city: existing.city || eventProducts[0]?.checkpoint || '',
+          coverUrl: existing.coverUrl || coverProduct?.thumbnailUrl || null,
+          sortTime: Math.max(existing.sortTime, latestProductTime),
+          products: eventProducts,
+        });
+        continue;
+      }
+
+      albums.set(key, {
+        id: `products-${key}`,
+        name: eventName,
+        slug: null,
+        date: eventProducts[0]?.createdAt || null,
+        city: eventProducts[0]?.checkpoint || '',
+        description: null,
+        coverUrl: coverProduct?.thumbnailUrl || null,
+        sortTime: latestProductTime,
+        products: eventProducts,
+        event: null,
+      });
+    }
+
+    return Array.from(albums.values()).sort((left, right) => {
+      const byDate = right.sortTime - left.sortTime;
+      if (byDate !== 0) return byDate;
+      return left.name.localeCompare(right.name);
+    });
+  }, [events, productsByEvent]);
+
+  const cities = React.useMemo(() => (
+    Array.from(new Set(publicAlbums.map((album) => album.city).filter(Boolean))).sort()
+  ), [publicAlbums]);
+
+  const filteredAlbums = React.useMemo(() => {
+    return publicAlbums.filter((album) => {
       const matchesQuery = !normalizedQuery ||
-        normalizeEventName(`${event.name} ${event.description || ''} ${city}`).includes(normalizedQuery) ||
-        eventProducts.some((product) => normalizeEventName(`${product.name} ${product.bib} ${product.checkpoint}`).includes(normalizedQuery));
-      const matchesCity = !cityFilter || city === cityFilter;
-      const matchesDate = !dateFilter || event.date === dateFilter;
+        normalizeEventName(`${album.name} ${album.description || ''} ${album.city}`).includes(normalizedQuery) ||
+        album.products.some((product) => normalizeEventName(`${product.name} ${product.bib} ${product.checkpoint}`).includes(normalizedQuery));
+      const matchesCity = !cityFilter || album.city === cityFilter;
+      const matchesDate = !dateFilter || String(album.date || '').startsWith(dateFilter);
       return matchesQuery && matchesCity && matchesDate;
     });
-  }, [cityFilter, dateFilter, events, normalizedQuery, productsByEvent]);
+  }, [cityFilter, dateFilter, normalizedQuery, publicAlbums]);
+
+  React.useEffect(() => {
+    if (!photographer) return;
+    console.info('[public-photographer] albuns renderizados', {
+      photographerId: photographer.id,
+      totalAlbums: publicAlbums.length,
+      filteredAlbums: filteredAlbums.length,
+      ids: publicAlbums.map((album) => album.id),
+    });
+  }, [filteredAlbums.length, photographer, publicAlbums]);
+
   const filteredProducts = React.useMemo(() => products.filter((product) => {
     const event = events.find((item) => normalizeEventName(item.name) === normalizeEventName(product.event || ''));
     const city = event?.location || event?.checkpoint || product.checkpoint || '';
     const matchesQuery = !normalizedQuery || normalizeEventName(`${product.name} ${product.event} ${product.bib} ${product.checkpoint}`).includes(normalizedQuery);
     const matchesCity = !cityFilter || city === cityFilter;
-    const matchesDate = !dateFilter || event?.date === dateFilter;
+    const matchesDate = !dateFilter || String(event?.date || product.createdAt || '').startsWith(dateFilter);
     return matchesQuery && matchesCity && matchesDate;
   }), [cityFilter, dateFilter, events, normalizedQuery, products]);
 
@@ -1178,7 +1278,7 @@ function PublicPhotographerPage({
 
       <section className="mx-auto max-w-350 px-4 py-8 md:px-6">
         <div className="grid gap-4 md:grid-cols-3">
-          <PublicStat icon={<CalendarDays className="h-5 w-5" />} label="Eventos" value={events.length} />
+          <PublicStat icon={<CalendarDays className="h-5 w-5" />} label="Eventos" value={publicAlbums.length} />
           <PublicStat icon={<Camera className="h-5 w-5" />} label="Fotos" value={photoCount} />
           <PublicStat icon={<ImageIcon className="h-5 w-5" />} label="Midias" value={products.length} />
         </div>
@@ -1203,20 +1303,20 @@ function PublicPhotographerPage({
       {activeView === 'events' ? (
         <section className="mx-auto max-w-350 px-4 pb-16 md:px-6">
           <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredEvents.map((event) => {
-              const eventProducts = productsByEvent.get(normalizeEventName(event.name || '')) ?? [];
-              const cover = event.bannerImage || event.coverImage || eventProducts.find((product) => product.thumbnailUrl)?.thumbnailUrl || null;
+            {filteredAlbums.map((album) => {
+              const photoTotal = album.products.filter((product) => product.type === 'IMG').length;
+              const destination = album.slug ? `/evento/${album.slug}` : `/eventos/${createEventSlug(album.name)}`;
               return (
-                <button key={event.id} type="button" onClick={() => navigate(`/evento/${event.slug || createEventSlug(event.name)}`)} className="group flex h-full flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover">
+                <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-full flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover">
                   <div className="aspect-[4/3] border-b-2 border-brutal-black bg-gray-100">
-                    {cover ? <img src={cover} alt={event.name} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
+                    {album.coverUrl ? <img src={album.coverUrl} alt={album.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
                   </div>
                   <div className="flex flex-1 flex-col p-5">
-                    <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(event.date)}</p>
-                    <h2 className="font-display text-2xl uppercase leading-tight">{event.name}</h2>
-                    <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-gray-500"><MapPin className="h-4 w-4 text-brutal-accent" />{event.location || event.checkpoint || 'Local a confirmar'}</p>
+                    <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(album.date)}</p>
+                    <h2 className="font-display text-2xl uppercase leading-tight">{album.name}</h2>
+                    <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-gray-500"><MapPin className="h-4 w-4 text-brutal-accent" />{album.city || 'Local a confirmar'}</p>
                     <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest">
-                      <span>{eventProducts.filter((product) => product.type === 'IMG').length} fotos</span>
+                      <span>{photoTotal} fotos</span>
                       <span className="font-display text-sm text-brutal-accent">Ver Fotos</span>
                     </div>
                   </div>
@@ -1224,7 +1324,9 @@ function PublicPhotographerPage({
               );
             })}
           </div>
-          {filteredEvents.length === 0 && <PublicEmpty title="Nenhum evento encontrado" />}
+          {filteredAlbums.length === 0 && (
+            <PublicEmpty title={publicAlbums.length === 0 ? 'Este fotografo ainda nao publicou nenhum evento.' : 'Nenhum evento encontrado para estes filtros.'} />
+          )}
         </section>
       ) : (
         <PhotoGrid

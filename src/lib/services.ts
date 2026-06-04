@@ -67,6 +67,14 @@ function sortEvents(events: Event[]) {
   });
 }
 
+function sortEventsNewestFirst(events: Event[]) {
+  return [...events].sort((left, right) => {
+    const byDate = String(right.date || '').localeCompare(String(left.date || ''));
+    if (byDate !== 0) return byDate;
+    return String(right.createdAt || '').localeCompare(String(left.createdAt || ''));
+  });
+}
+
 function createEventSlug(name: string, date: string) {
   const normalized = `${name}-${date || Date.now()}`
     .normalize('NFD')
@@ -1049,7 +1057,7 @@ export const eventService = {
 
   async getPublishedPhotographerEvents(photographerId: string, count = 200): Promise<Event[]> {
     if (isMockMode) {
-      return sortEvents(loadLocalEvents()
+      return sortEventsNewestFirst(loadLocalEvents()
         .filter((event) => (!event.photographerId || event.photographerId === photographerId) && event.isPublished !== false))
         .slice(0, count);
     }
@@ -1063,7 +1071,7 @@ export const eventService = {
     });
     try {
       const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`);
-      return sortEvents(events).reverse().slice(0, count);
+      return sortEventsNewestFirst(events.filter((event) => event.isPublished !== false)).slice(0, count);
     } catch (error) {
       if (isMissingEventsTableError(error)) {
         return [];

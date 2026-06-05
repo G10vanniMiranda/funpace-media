@@ -1301,20 +1301,20 @@ function PublicPhotographerPage({
       </section>
 
       {activeView === 'events' ? (
-        <section className="mx-auto max-w-350 px-4 pb-16 md:px-6">
-          <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <section className="mx-auto max-w-300 px-4 pb-16 md:px-6">
+          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredAlbums.map((album) => {
               const photoTotal = album.products.filter((product) => product.type === 'IMG').length;
               const destination = album.slug ? `/evento/${album.slug}` : `/eventos/${createEventSlug(album.name)}`;
               return (
-                <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-full flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover">
-                  <div className="aspect-[4/3] border-b-2 border-brutal-black bg-gray-100">
+                <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-[29rem] flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-[30rem]">
+                  <div className="h-48 shrink-0 border-b-2 border-brutal-black bg-gray-100 lg:h-52">
                     {album.coverUrl ? <img src={album.coverUrl} alt={album.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
                   </div>
-                  <div className="flex flex-1 flex-col p-5">
+                  <div className="flex flex-1 flex-col p-4">
                     <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(album.date)}</p>
-                    <h2 className="font-display text-2xl uppercase leading-tight">{album.name}</h2>
-                    <p className="mt-3 flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-gray-500"><MapPin className="h-4 w-4 text-brutal-accent" />{album.city || 'Local a confirmar'}</p>
+                    <h2 className="min-h-[4.5rem] font-display text-xl uppercase leading-tight">{album.name}</h2>
+                    <p className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-gray-500"><MapPin className="h-3.5 w-3.5 text-brutal-accent" />{album.city || 'Local a confirmar'}</p>
                     <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest">
                       <span>{photoTotal} fotos</span>
                       <span className="font-display text-sm text-brutal-accent">Ver Fotos</span>
@@ -2170,6 +2170,7 @@ export default function App() {
   return (
     <Router>
       <AuthRouteSync />
+      <ScrollToTop />
       <Routes>
         <Route path="/admin" element={<AdminRoute />} />
         <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
@@ -2203,6 +2204,22 @@ function AuthRouteSync() {
 
   React.useEffect(() => {
     window.dispatchEvent(new Event('supabase-auth-changed'));
+  }, [location.pathname]);
+
+  return null;
+}
+
+function ScrollToTop() {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  React.useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [location.pathname]);
 
   return null;

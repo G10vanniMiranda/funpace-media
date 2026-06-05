@@ -145,6 +145,13 @@ function isDuplicateSlugError(error: unknown) {
     message.toLowerCase().includes('duplicate key value') && message.toLowerCase().includes('slug');
 }
 
+function isMissingEventCoverMediaColumnError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  const normalized = message.toLowerCase();
+  return normalized.includes('covermediaid') &&
+    (normalized.includes('schema cache') || normalized.includes('could not find') || normalized.includes('pgrst204'));
+}
+
 async function createAvailableEventSlug(name: string, date: string, ignoredEventId?: string) {
   const baseSlug = createEventSlug(name, date);
   const params = new URLSearchParams({
@@ -413,10 +420,16 @@ async function uploadSupabaseStorageObject(bucket: string, path: string, file: F
     }
 
     if (/bucket not found/i.test(message)) {
-      throw new Error(`Bucket ${bucket} nao encontrado. Crie os buckets photographer-avatars e photographer-covers no Supabase Storage.`);
+      const bucketHint = bucket === 'event-covers'
+        ? 'Crie o bucket event-covers no Supabase Storage e aplique scripts/fix-event-cover-schema.sql.'
+        : 'Crie os buckets photographer-avatars e photographer-covers no Supabase Storage.';
+      throw new Error(`Bucket ${bucket} nao encontrado. ${bucketHint}`);
     }
     if (/row-level security|violates row-level security/i.test(message)) {
-      throw new Error('Upload bloqueado pela politica do Storage. Aplique as policies dos buckets photographer-avatars e photographer-covers.');
+      const policyHint = bucket === 'event-covers'
+        ? 'Aplique as policies do bucket event-covers em scripts/fix-event-cover-schema.sql.'
+        : 'Aplique as policies dos buckets photographer-avatars e photographer-covers.';
+      throw new Error(`Upload bloqueado pela politica do Storage. ${policyHint}`);
     }
 
     throw new Error(message || `Falha no upload para ${bucket}.`);
@@ -1102,11 +1115,24 @@ export const eventService = {
     };
 
     try {
-      const [created] = await supabaseRest.post<SupabaseRow<Event>[]>(
-        `/rest/v1/events?${selectAll}`,
-        payload,
-        true,
-      );
+      let createdRows: SupabaseRow<Event>[];
+      try {
+        createdRows = await supabaseRest.post<SupabaseRow<Event>[]>(
+          `/rest/v1/events?${selectAll}`,
+          payload,
+          true,
+        );
+      } catch (error) {
+        if (!isMissingEventCoverMediaColumnError(error)) throw error;
+        console.warn('Coluna events.coverMediaId ausente no cache do Supabase; salvando evento sem vinculo de midia da capa.');
+        const { coverMediaId: _coverMediaId, ...fallbackPayload } = payload;
+        createdRows = await supabaseRest.post<SupabaseRow<Event>[]>(
+          `/rest/v1/events?${selectAll}`,
+          fallbackPayload,
+          true,
+        );
+      }
+      const [created] = createdRows;
 
       return created;
     } catch (error) {
@@ -1126,6 +1152,14 @@ export const eventService = {
   },
 
   async uploadEventCover(photographerId: string, file: File) {
+    const allowedTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+    if (!allowedTypes.has(String(file.type || '').toLowerCase())) {
+      throw new Error('Formato invalido para capa do evento. Envie JPG, PNG ou WEBP.');
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      throw new Error('Capa do evento muito grande. O limite e 10 MB.');
+    }
+
     if (isMockMode) {
       return {
         path: `mock/event-covers/${photographerId}/${file.name}`,
@@ -1171,11 +1205,24 @@ export const eventService = {
         : existing.slug,
     };
     const params = new URLSearchParams({ id: `eq.${id}` });
-    const [updated] = await supabaseRest.patch<SupabaseRow<Event>[]>(
-      `/rest/v1/events?${params.toString()}&${selectAll}`,
-      payload,
-      true,
-    );
+    let updatedRows: SupabaseRow<Event>[];
+    try {
+      updatedRows = await supabaseRest.patch<SupabaseRow<Event>[]>(
+        `/rest/v1/events?${params.toString()}&${selectAll}`,
+        payload,
+        true,
+      );
+    } catch (error) {
+      if (!isMissingEventCoverMediaColumnError(error)) throw error;
+      console.warn('Coluna events.coverMediaId ausente no cache do Supabase; salvando evento sem alterar vinculo de midia da capa.');
+      const { coverMediaId: _coverMediaId, ...fallbackPayload } = payload;
+      updatedRows = await supabaseRest.patch<SupabaseRow<Event>[]>(
+        `/rest/v1/events?${params.toString()}&${selectAll}`,
+        fallbackPayload,
+        true,
+      );
+    }
+    const [updated] = updatedRows;
 
     if (!updated) throw new Error('Evento nao encontrado.');
     return updated;
@@ -1871,6 +1918,7 @@ export const photographerService = {
     const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
     if (rows[0]) return rows[0];
 
+    const normalizedId = normalizePhotographerUsername(id);
     const fallbackParams = new URLSearchParams({
       select: '*',
       verified: 'eq.true',
@@ -1878,7 +1926,7 @@ export const photographerService = {
     });
     const publicRows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${fallbackParams.toString()}`);
     return publicRows.find((photographer) =>
-      createPhotographerSlug(photographer.displayName || photographer.name) === slug
+      createPhotographerSlug(photographer.username || photographer.slug || photographer.displayName || photographer.name) === normalizedId
     ) ?? null;
   },
 

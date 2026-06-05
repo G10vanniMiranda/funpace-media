@@ -234,7 +234,15 @@ function formatEventSaveError(error: unknown) {
     return 'Ja existe um evento com este nome e data. Salve novamente para criar uma variacao automatica ou altere o nome.';
   }
 
-  return message || 'Nao foi possivel salvar o evento.';
+  if (normalized.includes('bucket event-covers')) {
+    return 'Nao foi possivel enviar a capa do evento. Tente novamente ou salve o evento sem capa.';
+  }
+
+  if (normalized.includes('covermediaid') || normalized.includes('schema cache')) {
+    return 'Nao foi possivel salvar a capa selecionada. Tente novamente em alguns instantes.';
+  }
+
+  return 'Nao foi possivel salvar o evento. Verifique os dados e tente novamente.';
 }
 
 function formatFileSize(bytes: number) {

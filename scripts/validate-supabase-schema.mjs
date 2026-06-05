@@ -34,7 +34,7 @@ if (!process.env.DATABASE_URL && dbConfig.host && /[a-z]/i.test(dbConfig.host)) 
 const requiredColumns = {
   photographers: ["id", "slug", "username", "isPublic", "displayName", "profilePhoto", "coverPhoto", "city", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "role", "commissionPercent", "blockedAt", "lastLoginAt", "stats", "createdAt", "updatedAt"],
   customers: ["id", "email", "name", "phone", "cpf", "avatarUrl", "preferences", "createdAt", "updatedAt"],
-  events: ["id", "photographerId", "name", "slug", "description", "date", "location", "checkpoint", "coverImage", "bannerImage", "isPublished", "isFeatured", "moderationStatus", "status", "createdAt", "updatedAt"],
+  events: ["id", "photographerId", "name", "slug", "description", "date", "location", "checkpoint", "coverImage", "coverMediaId", "bannerImage", "isPublished", "isFeatured", "moderationStatus", "status", "createdAt", "updatedAt"],
   products: ["id", "name", "price", "url", "type", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "watermarkUrl", "duration", "storagePath", "fileHash", "fileSize", "originalFileName", "thumbnailHash", "uploadBatchId", "status", "viewCount", "salesCount", "createdAt", "updatedAt"],
   orders: ["id", "userId", "buyerName", "buyerEmail", "buyerPhone", "buyerCpf", "total", "subtotal", "discountTotal", "status", "paymentMethod", "paymentProvider", "paymentExternalId", "checkoutUrl", "paidEmailSentAt", "createdAt", "updatedAt"],
   order_items: ["id", "orderId", "productId", "name", "type", "price", "url", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "createdAt"],
@@ -88,6 +88,20 @@ const requiredPolicies = [
   "admin_activity_logs_admin_select_insert",
   "platform_settings_select_admin_only",
   "platform_settings_update_admin_only",
+];
+
+const requiredStorageBuckets = [
+  "photographer-avatars",
+  "photographer-covers",
+  "event-covers",
+];
+
+const requiredStoragePolicies = [
+  "photographer_profile_images_public_select",
+  "event_covers_public_select",
+  "event_covers_insert_own_folder",
+  "event_covers_update_own_folder",
+  "event_covers_delete_own_folder",
 ];
 
 const pool = new pg.Pool(dbConfig);
@@ -145,15 +159,41 @@ try {
   const presentPolicies = new Set(policyRows.rows.map((row) => row.policyname));
   const missingPolicies = requiredPolicies.filter((policy) => !presentPolicies.has(policy));
 
+  const bucketRows = await pool.query(
+    `
+      select id
+      from storage.buckets
+      where id = any($1::text[])
+    `,
+    [requiredStorageBuckets],
+  );
+  const presentBuckets = new Set(bucketRows.rows.map((row) => row.id));
+  const missingBuckets = requiredStorageBuckets.filter((bucket) => !presentBuckets.has(bucket));
+
+  const storagePolicyRows = await pool.query(
+    `
+      select policyname
+      from pg_policies
+      where schemaname = 'storage'
+        and tablename = 'objects'
+    `,
+  );
+  const presentStoragePolicies = new Set(storagePolicyRows.rows.map((row) => row.policyname));
+  const missingStoragePolicies = requiredStoragePolicies.filter((policy) => !presentStoragePolicies.has(policy));
+
   const ok = missingColumns.length === 0 &&
     rlsDisabled.length === 0 &&
-    missingPolicies.length === 0;
+    missingPolicies.length === 0 &&
+    missingBuckets.length === 0 &&
+    missingStoragePolicies.length === 0;
 
   console.log("validation:", {
     ok,
     missingColumns,
     rlsDisabled,
     missingPolicies,
+    missingBuckets,
+    missingStoragePolicies,
   });
 
   if (!ok) process.exitCode = 1;

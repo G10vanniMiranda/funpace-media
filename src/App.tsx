@@ -1214,7 +1214,12 @@ function PublicPhotographerPage({
         });
         console.info('[public-photographer] eventos retornados pela query', {
           count: profileEvents.length,
-          ids: profileEvents.map((event) => event.id),
+          events: profileEvents.map((event) => ({
+            eventId: event.id,
+            name: event.name,
+            coverImage: event.coverImage || null,
+            coverMediaId: event.coverMediaId || null,
+          })),
         });
         console.info('[public-photographer] midias retornadas para o fotografo', {
           count: profileProducts.length,
@@ -1353,7 +1358,12 @@ function PublicPhotographerPage({
       photographerId: photographer.id,
       totalAlbums: publicAlbums.length,
       filteredAlbums: filteredAlbums.length,
-      ids: publicAlbums.map((album) => album.id),
+      covers: publicAlbums.map((album) => ({
+        id: album.id,
+        name: album.name,
+        coverUrl: album.coverUrl || null,
+        source: album.event?.bannerImage ? 'event.bannerImage' : album.event?.coverImage ? 'event.coverImage' : 'product.thumbnailUrl',
+      })),
     });
   }, [filteredAlbums.length, photographer, publicAlbums]);
 

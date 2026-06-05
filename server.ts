@@ -1760,11 +1760,25 @@ app.post("/api/media/upload", express.raw({
       }
     }
 
+    console.info("[media-upload] start", {
+      bucket: mediaBucket,
+      storagePath,
+      fileName,
+      contentType,
+      size: fileBuffer.length,
+    });
+
     const uploaded = usesExternalBucket()
       ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
       : (() => {
         throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.");
       })();
+
+    console.info("[media-upload] done", {
+      bucket: mediaBucket,
+      storagePath,
+      publicUrl: uploaded.publicUrl || uploaded.path,
+    });
 
     return res.json({
       path: uploaded.publicUrl || uploaded.path,

@@ -387,6 +387,21 @@ function getSupabaseStoragePublicUrl(bucket: string, path: string) {
   return `${supabaseConfig.url.replace(/\/+$/, '')}/storage/v1/object/public/${bucket}/${encodeURI(path)}`;
 }
 
+function withMediaCacheVersion(url: string, version = Date.now()) {
+  const trimmed = String(url || '').trim();
+  if (!trimmed || /^(blob|data):/i.test(trimmed)) return trimmed;
+
+  try {
+    const baseUrl = typeof window !== 'undefined' ? window.location.origin : 'https://funpace.media';
+    const parsed = new URL(trimmed, baseUrl);
+    parsed.searchParams.set('updatedAt', String(version));
+    return /^[./]/.test(trimmed) ? `${parsed.pathname}${parsed.search}${parsed.hash}` : parsed.toString();
+  } catch {
+    const separator = trimmed.includes('?') ? '&' : '?';
+    return `${trimmed}${separator}updatedAt=${encodeURIComponent(String(version))}`;
+  }
+}
+
 async function uploadSupabaseStorageObject(bucket: string, path: string, file: File) {
   if (!supabaseConfig.url || !supabaseConfig.anonKey) {
     throw new Error('Supabase Storage nao configurado.');
@@ -1169,8 +1184,26 @@ export const eventService = {
 
     const extension = file.type === 'image/webp' ? 'webp' : 'jpg';
     const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, `.${extension}`));
-    const path = `covers/${photographerId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
-    return uploadSupabaseStorageObject('event-covers', path, file);
+    const version = Date.now();
+    const path = `${photographerId}/event-covers/${version}-${crypto.randomUUID()}-${safeName}`;
+    console.info('[event-cover] upload:start', {
+      fileName: file.name,
+      size: file.size,
+      contentType: file.type,
+      bucket: 'MEDIA_BUCKET via /api/media/upload',
+      path,
+    });
+    const uploaded = await uploadMediaFile(path, file);
+    const publicUrl = withMediaCacheVersion(uploaded.publicUrl, version);
+    console.info('[event-cover] upload:done', {
+      path: uploaded.path,
+      publicUrl,
+      reused: uploaded.reused,
+    });
+    return {
+      ...uploaded,
+      publicUrl,
+    };
   },
 
   async updateEvent(id: string, input: Partial<Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'isPublished' | 'isFeatured' | 'moderationStatus'>>): Promise<Event> {

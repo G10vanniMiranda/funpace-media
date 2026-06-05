@@ -1267,6 +1267,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     () => productEventCards.find((eventItem) => eventItem.name === selectedProductEventName) || null,
     [productEventCards, selectedProductEventName],
   );
+  const selectedProductEventDetail = React.useMemo(
+    () => availableEvents.find((eventItem) => normalizeCatalogText(eventItem.name) === normalizeCatalogText(selectedProductEventName)) || null,
+    [availableEvents, selectedProductEventName],
+  );
   const scopedFilteredProducts = React.useMemo(
     () => visibleGroupedProducts.flatMap(({ products: groupProducts }) => groupProducts),
     [visibleGroupedProducts],
@@ -1456,6 +1460,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
       const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
       const events = await eventService.getPhotographerEvents(photographer.id);
+      console.info('[event-cover] dashboard:events-loaded', {
+        photographerId: photographer.id,
+        count: events.length,
+        covers: events.map((eventItem) => ({
+          eventId: eventItem.id,
+          name: eventItem.name,
+          coverImage: eventItem.coverImage || null,
+          coverMediaId: eventItem.coverMediaId || null,
+        })),
+      });
       setDashboardMetrics(dashboard.metrics);
       setRecentSales(dashboard.recentSales);
       setProductPerformance(dashboard.productPerformance);
@@ -1584,7 +1598,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setShowEventModal(true);
   };
 
-  const handleEditEvent = (eventItem: Event) => {
+  const handleEditEvent = (eventItem: Event, options: { keepActiveTab?: boolean } = {}) => {
     setPendingEventCover((current) => {
       if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
       return null;
@@ -1604,7 +1618,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     });
     setEventError('');
     setEventCoverError('');
-    setActiveTab('events');
+    if (!options.keepActiveTab) setActiveTab('events');
     setShowEventModal(true);
   };
 
@@ -1620,6 +1634,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     setIsSavingEvent(true);
     try {
+      if (pendingEventCover) {
+        console.info('[event-cover] selected', {
+          eventId: eventForm.id || null,
+          fileName: pendingEventCover.file.name,
+          size: pendingEventCover.file.size,
+          contentType: pendingEventCover.file.type,
+          bucket: 'MEDIA_BUCKET via /api/media/upload',
+        });
+      }
       const uploadedCover = pendingEventCover
         ? await eventService.uploadEventCover(photographer.id, await prepareEventCoverForUpload(pendingEventCover.file))
         : null;
@@ -1639,9 +1662,19 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         coverMediaId: uploadedCover ? null : eventForm.coverMediaId || null,
         bannerImage: eventForm.bannerImage.trim() || null,
       };
+      console.info('[event-cover] event:update:start', {
+        eventId: eventForm.id || null,
+        coverImage: payload.coverImage,
+        coverMediaId: payload.coverMediaId,
+      });
       const saved = eventForm.id
         ? await eventService.updateEvent(eventForm.id, payload)
         : await eventService.createEvent(payload);
+      console.info('[event-cover] event:update:done', {
+        eventId: saved.id,
+        coverImage: saved.coverImage || null,
+        coverMediaId: saved.coverMediaId || null,
+      });
 
       if (previousEventName && normalizeCatalogText(previousEventName) !== normalizeCatalogText(saved.name)) {
         const updatedProducts = await productService.renameEventProducts(photographer.id, previousEventName, saved.name);
@@ -3085,14 +3118,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             </div>
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => openUploadForEvent(selectedProductEventName)}
-                            className="h-12 w-full sm:w-fit px-5 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-xs uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
-                          >
-                            <Plus className="w-4 h-4" />
-                            Adicionar fotos
-                          </button>
+                          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3">
+                            <button
+                              type="button"
+                              onClick={() => openUploadForEvent(selectedProductEventName)}
+                              className="h-12 w-full sm:w-fit px-5 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-xs uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
+                            >
+                              <Plus className="w-4 h-4" />
+                              Adicionar fotos
+                            </button>
+                            {selectedProductEventDetail && (
+                              <button
+                                type="button"
+                                onClick={() => handleEditEvent(selectedProductEventDetail, { keepActiveTab: true })}
+                                className="h-12 w-full sm:w-fit px-5 border border-white/15 text-white font-sans font-black text-xs uppercase tracking-widest hover:border-brutal-accent hover:text-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
+                              >
+                                <Settings className="w-4 h-4" />
+                                Editar evento
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     </div>

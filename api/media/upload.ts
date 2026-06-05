@@ -296,11 +296,25 @@ export default async function handler(req: any, res: any) {
       return res.status(400).json({ error: 'Arquivo vazio ou nao enviado.' });
     }
 
+    console.info('[media-upload] start', {
+      bucket: mediaBucket,
+      storagePath,
+      fileName,
+      contentType,
+      size: fileBuffer.length,
+    });
+
     const uploaded = usesExternalBucket()
       ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
       : (() => {
           throw new Error('MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.');
         })();
+
+    console.info('[media-upload] done', {
+      bucket: mediaBucket,
+      storagePath,
+      publicUrl: uploaded.publicUrl || uploaded.path,
+    });
 
     return res.status(200).json({
       path: uploaded.publicUrl || uploaded.path,

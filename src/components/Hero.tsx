@@ -1,18 +1,49 @@
-import { Search } from 'lucide-react';
+import { CalendarDays, Camera, Image as ImageIcon, MapPin, Search, UserCircle } from 'lucide-react';
 import React, { FormEvent } from 'react';
+import type { Photographer, Product } from '../types';
+
+export interface HeroPhotographerResult {
+  photographer: Photographer;
+  eventCount: number;
+  photoCount: number;
+}
+
+export interface HeroEventResult {
+  name: string;
+  city: string;
+  photoCount: number;
+}
+
+export interface HeroSearchResults {
+  photographers: HeroPhotographerResult[];
+  events: HeroEventResult[];
+  photos: Product[];
+}
 
 interface HeroProps {
   eventQuery: string;
   onEventQueryChange: (query: string) => void;
+  searchResults: HeroSearchResults;
+  isSearching?: boolean;
+  onSelectPhotographer: (photographer: Photographer) => void;
+  onSelectEvent: (eventName: string) => void;
+  onSelectPhoto: (product: Product) => void;
 }
 
 export function Hero({
   eventQuery,
   onEventQueryChange,
+  searchResults,
+  isSearching,
+  onSelectPhotographer,
+  onSelectEvent,
+  onSelectPhoto,
 }: HeroProps) {
   const handleEventSubmit = (event: FormEvent) => {
     event.preventDefault();
   };
+  const hasQuery = eventQuery.trim().length > 0;
+  const hasResults = searchResults.photographers.length > 0 || searchResults.events.length > 0 || searchResults.photos.length > 0;
 
   return (
     <section className="relative overflow-hidden bg-brutal-white border-b-4 border-brutal-black">
@@ -53,7 +84,7 @@ export function Hero({
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="BUSCAR EVENTO..."
+                placeholder="Buscar fotografo, evento, cidade ou numero de peito"
                 value={eventQuery}
                 onChange={(event) => onEventQueryChange(event.target.value)}
                 className="w-full h-14 pl-12 pr-4 bg-gray-100 brutal-border font-mono text-base md:text-lg focus:outline-none focus:ring-0 focus:bg-white transition-colors uppercase placeholder:text-gray-400 placeholder:normal-case placeholder:font-mono"
@@ -66,8 +97,114 @@ export function Hero({
               BUSCAR
             </button>
           </form>
+          {hasQuery && (
+            <div className="bg-white brutal-border text-left">
+              {isSearching ? (
+                <p className="p-4 font-mono text-xs uppercase tracking-widest text-gray-400">Buscando...</p>
+              ) : hasResults ? (
+                <div className="grid gap-4 p-3 sm:p-4">
+                  {searchResults.photographers.length > 0 && (
+                    <SearchGroup title="Fotografos">
+                      {searchResults.photographers.map(({ photographer, eventCount, photoCount }) => {
+                        const displayName = photographer.displayName || photographer.name;
+                        const profilePhoto = photographer.profilePhoto || photographer.avatar;
+                        return (
+                          <button
+                            key={photographer.id}
+                            type="button"
+                            onClick={() => onSelectPhotographer(photographer)}
+                            className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
+                          >
+                            <div className="h-12 w-12 shrink-0 overflow-hidden brutal-border bg-gray-100">
+                              {profilePhoto ? (
+                                <img src={profilePhoto} alt={displayName} className="h-full w-full object-cover" />
+                              ) : (
+                                <div className="flex h-full w-full items-center justify-center">
+                                  <UserCircle className="h-7 w-7 text-gray-300" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-display text-lg uppercase leading-none">{displayName}</p>
+                              <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-widest text-gray-500">
+                                @{photographer.username || photographer.slug || displayName} - {eventCount} eventos - {photoCount} fotos
+                              </p>
+                            </div>
+                            <span className="hidden font-display text-xs uppercase text-brutal-accent sm:block">Perfil</span>
+                          </button>
+                        );
+                      })}
+                    </SearchGroup>
+                  )}
+
+                  {searchResults.events.length > 0 && (
+                    <SearchGroup title="Eventos">
+                      {searchResults.events.map((event) => (
+                        <button
+                          key={event.name}
+                          type="button"
+                          onClick={() => onSelectEvent(event.name)}
+                          className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
+                        >
+                          <CalendarDays className="h-5 w-5 shrink-0 text-brutal-accent" />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-display text-lg uppercase leading-none">{event.name}</p>
+                            <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-widest text-gray-500">{event.city || 'Local a confirmar'} - {event.photoCount} fotos</p>
+                          </div>
+                        </button>
+                      ))}
+                    </SearchGroup>
+                  )}
+
+                  {searchResults.photos.length > 0 && (
+                    <SearchGroup title="Fotos">
+                      {searchResults.photos.map((photo) => (
+                        <button
+                          key={photo.id}
+                          type="button"
+                          onClick={() => onSelectPhoto(photo)}
+                          className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
+                        >
+                          <div className="h-12 w-12 shrink-0 overflow-hidden brutal-border bg-gray-100">
+                            {photo.thumbnailUrl || photo.url ? (
+                              <img src={photo.thumbnailUrl || photo.url} alt={photo.name} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center">
+                                <ImageIcon className="h-6 w-6 text-gray-300" />
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-display text-base uppercase leading-none">{photo.name}</p>
+                            <p className="mt-1 truncate font-mono text-[10px] uppercase tracking-widest text-gray-500">
+                              {photo.bib ? `Peito ${photo.bib} - ` : ''}{photo.event}
+                            </p>
+                          </div>
+                          <Camera className="hidden h-4 w-4 text-brutal-accent sm:block" />
+                        </button>
+                      ))}
+                    </SearchGroup>
+                  )}
+                </div>
+              ) : (
+                <p className="p-4 font-mono text-xs uppercase tracking-widest text-gray-400">Nenhum resultado encontrado.</p>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>
+  );
+}
+
+function SearchGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-2 flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.28em] text-gray-500">
+        <MapPin className="h-3 w-3 text-brutal-accent" />
+        {title}
+      </p>
+      <div className="divide-y divide-gray-100">{children}</div>
+    </div>
   );
 }

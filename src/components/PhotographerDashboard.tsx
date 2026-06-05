@@ -145,7 +145,7 @@ function getInitialDashboardMetrics(photographer: Photographer): PhotographerDas
     videoCount: 0,
     rating: Number(photographer.stats.rating) || 5,
     downloads: Number(photographer.stats.salesCount) || 0,
-    platformFeePercent: 30,
+    platformFeePercent: Number(photographer.commissionPercent) || 30,
     monthlyEarnings: 0,
     availableBalance: Number(photographer.stats.pendingEarnings) || 0,
     monthlyGoal: 5000,

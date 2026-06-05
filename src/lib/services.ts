@@ -1810,8 +1810,15 @@ export const platformSettingsService = {
     }
 
     try {
-      const settings = await this.getSettings();
-      return { platformFeePercent: settings.platformFeePercent };
+      const params = new URLSearchParams({
+        select: 'platformFeePercent',
+        id: 'eq.default',
+        limit: '1',
+      });
+      const [settings] = await supabaseRest.get<Pick<PlatformSettings, 'platformFeePercent'>[]>(
+        `/rest/v1/platform_settings?${params.toString()}`,
+      );
+      return { platformFeePercent: Number(settings?.platformFeePercent ?? 30) };
     } catch {
       return { platformFeePercent: 30 };
     }
@@ -1898,6 +1905,22 @@ export const withdrawalService = {
 };
 
 export const photographerService = {
+  async getPublicPhotographers(count = 1000): Promise<Photographer[]> {
+    if (isMockMode) {
+      return mockPhotographers
+        .filter((photographer) => photographer.verified && photographer.isPublic !== false)
+        .slice(0, count);
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      verified: 'eq.true',
+      isPublic: 'eq.true',
+      order: 'createdAt.desc',
+    });
+    return getPagedRows<SupabaseRow<Photographer>>(`/rest/v1/photographers?${params.toString()}`, count);
+  },
+
   async getAllPhotographers(): Promise<Photographer[]> {
     if (isMockMode) {
       return mockPhotographers;

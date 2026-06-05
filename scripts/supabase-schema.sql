@@ -1,4 +1,5 @@
 create extension if not exists pgcrypto;
+create extension if not exists pg_trgm;
 
 create or replace function public.is_admin()
 returns boolean
@@ -623,22 +624,28 @@ alter table public.platform_settings add column if not exists "supportEmail" tex
 alter table public.platform_settings add column if not exists "maxUploadBytes" bigint not null default 314572800;
 
 create index if not exists products_bib_idx on public.products (bib);
+create index if not exists products_published_bib_idx on public.products (bib) where status = 'published';
 create index if not exists products_vendedor_id_idx on public.products ("vendedorId");
 create index if not exists products_created_at_idx on public.products ("createdAt" desc);
 create index if not exists products_status_idx on public.products (status);
 create index if not exists products_event_idx on public.products (event);
+create index if not exists products_search_text_trgm_idx on public.products using gin ((coalesce(name, '') || ' ' || coalesce(event, '') || ' ' || coalesce(checkpoint, '') || ' ' || coalesce(bib, '') || ' ' || coalesce("originalFileName", '')) gin_trgm_ops) where status = 'published';
 create index if not exists products_file_hash_vendedor_idx on public.products ("vendedorId", "fileHash") where "fileHash" is not null and coalesce(status, 'published') <> 'removed';
 create index if not exists products_upload_batch_idx on public.products ("uploadBatchId") where "uploadBatchId" is not null;
 create index if not exists events_date_idx on public.events (date);
 create index if not exists events_status_idx on public.events (status);
+create index if not exists events_public_created_at_idx on public.events ("createdAt" desc) where "isPublished" is not false;
 create index if not exists events_photographer_id_idx on public.events ("photographerId");
 create index if not exists events_slug_idx on public.events (slug);
+create index if not exists events_search_text_trgm_idx on public.events using gin ((coalesce(name, '') || ' ' || coalesce(location, '') || ' ' || coalesce(checkpoint, '') || ' ' || coalesce(description, '')) gin_trgm_ops) where "isPublished" is not false;
 create index if not exists events_cover_media_id_idx on public.events ("coverMediaId");
 create index if not exists photographers_email_idx on public.photographers (email);
 create index if not exists photographers_slug_idx on public.photographers (slug);
 create index if not exists photographers_username_idx on public.photographers (username);
 create index if not exists photographers_is_public_idx on public.photographers ("isPublic");
 create index if not exists photographers_verified_idx on public.photographers (verified);
+create index if not exists photographers_public_verified_created_at_idx on public.photographers ("createdAt" desc) where verified = true and "isPublic" = true;
+create index if not exists photographers_search_text_trgm_idx on public.photographers using gin ((coalesce(name, '') || ' ' || coalesce("displayName", '') || ' ' || coalesce(username, '') || ' ' || coalesce(slug, '') || ' ' || coalesce(city, '') || ' ' || coalesce(instagram, '')) gin_trgm_ops) where verified = true and "isPublic" = true;
 create index if not exists customers_email_idx on public.customers (email);
 create index if not exists orders_user_id_idx on public.orders ("userId");
 create index if not exists orders_buyer_email_idx on public.orders ("buyerEmail");
@@ -1065,10 +1072,11 @@ using (public.is_admin())
 with check (public.is_admin());
 
 drop policy if exists "platform_settings_select_admin_only" on public.platform_settings;
-create policy "platform_settings_select_admin_only"
+drop policy if exists "platform_settings_select_public" on public.platform_settings;
+create policy "platform_settings_select_public"
 on public.platform_settings
 for select
-using (public.is_admin());
+using (true);
 
 drop policy if exists "platform_settings_update_admin_only" on public.platform_settings;
 create policy "platform_settings_update_admin_only"

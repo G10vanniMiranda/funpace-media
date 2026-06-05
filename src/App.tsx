@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
+import type { HeroSearchResults } from './components/Hero';
 import { PhotoGrid } from './components/PhotoGrid';
 import { VideoGrid } from './components/VideoGrid';
 import { EventGrid } from './components/EventGrid';
@@ -178,8 +179,10 @@ function Storefront() {
   const [photos, setPhotos] = useState<Product[]>([]);
   const [videos, setVideos] = useState<Product[]>([]);
   const [registeredEvents, setRegisteredEvents] = useState<Event[]>([]);
+  const [publicPhotographers, setPublicPhotographers] = useState<Photographer[]>([]);
   const [selectedEventName, setSelectedEventName] = useState<string | null>(null);
   const [eventQuery, setEventQuery] = useState('');
+  const [debouncedEventQuery, setDebouncedEventQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [paymentNotice, setPaymentNotice] = useState<{
     status: 'paid' | 'pending' | 'cancelled' | 'canceled';
@@ -201,16 +204,21 @@ function Storefront() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const [products, eventRows] = await Promise.all([
+        const [products, eventRows, photographerRows] = await Promise.all([
           productService.getLatestProducts(storefrontProductLimit),
           eventService.getPublishedEvents(300).catch((error) => {
             console.warn('Eventos cadastrados indisponiveis na vitrine; usando apenas midias publicadas.', error);
             return [] as Event[];
           }),
+          photographerService.getPublicPhotographers(1000).catch((error) => {
+            console.warn('Fotografos publicos indisponiveis na busca global.', error);
+            return [] as Photographer[];
+          }),
         ]);
         setPhotos(products.filter(p => p.type === 'IMG'));
         setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
         setRegisteredEvents(eventRows);
+        setPublicPhotographers(photographerRows);
       } catch (error) {
         console.error("Error loading initial data:", error);
       } finally {
@@ -219,6 +227,14 @@ function Storefront() {
     }
     loadData();
   }, []);
+
+  React.useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      setDebouncedEventQuery(eventQuery);
+    }, 300);
+
+    return () => window.clearTimeout(timeout);
+  }, [eventQuery]);
 
   React.useEffect(() => {
     const ids = [...photos, ...videos].map((item) => item.id);
@@ -350,6 +366,111 @@ function Storefront() {
       ],
     ).values())
   ), [allDisplayProducts, registeredEvents]);
+  const globalSearchResults = React.useMemo<HeroSearchResults>(() => {
+    const normalizedQuery = normalizeEventName(debouncedEventQuery.trim());
+    if (!normalizedQuery) return { photographers: [], events: [], photos: [] };
+
+    const queryTokens = normalizedQuery.split(/\s+/).filter(Boolean);
+    const matches = (value: string) => {
+      const normalizedValue = normalizeEventName(value);
+      return queryTokens.every((token) => normalizedValue.includes(token));
+    };
+
+    const productsByPhotographer = new Map<string, Product[]>();
+    const productsByEvent = new Map<string, Product[]>();
+    for (const product of allDisplayProducts) {
+      if (product.vendedorId) {
+        const photographerProducts = productsByPhotographer.get(product.vendedorId) ?? [];
+        photographerProducts.push(product);
+        productsByPhotographer.set(product.vendedorId, photographerProducts);
+      }
+
+      const eventName = String(product.event || 'Evento sem nome').trim();
+      const eventKey = normalizeEventName(eventName);
+      const eventProducts = productsByEvent.get(eventKey) ?? [];
+      eventProducts.push(product);
+      productsByEvent.set(eventKey, eventProducts);
+    }
+
+    const photographerResults = publicPhotographers
+      .filter((photographer) => matches([
+        photographer.name,
+        photographer.displayName || '',
+        photographer.username || '',
+        photographer.slug || '',
+        photographer.city || '',
+        photographer.instagram || '',
+      ].join(' ')))
+      .slice(0, 5)
+      .map((photographer) => {
+        const photographerProducts = productsByPhotographer.get(photographer.id) ?? [];
+        const photographerEventKeys = new Set([
+          ...registeredEvents
+            .filter((eventItem) => eventItem.photographerId === photographer.id && eventItem.isPublished !== false)
+            .map((eventItem) => normalizeEventName(eventItem.name || '')),
+          ...photographerProducts.map((product) => normalizeEventName(product.event || '')),
+        ].filter(Boolean));
+
+        return {
+          photographer,
+          eventCount: photographerEventKeys.size || photographer.stats?.events || 0,
+          photoCount: photographerProducts.filter((product) => product.type === 'IMG').length || photographer.stats?.photos || 0,
+        };
+      });
+
+    const eventMap = new Map<string, { name: string; city: string; photoCount: number; text: string; sortTime: number }>();
+    for (const eventItem of registeredEvents) {
+      if (eventItem.isPublished === false) continue;
+      const name = String(eventItem.name || 'Evento sem nome').trim();
+      const key = normalizeEventName(name);
+      const eventProducts = productsByEvent.get(key) ?? [];
+      eventMap.set(key, {
+        name,
+        city: eventItem.location || eventItem.checkpoint || '',
+        photoCount: eventProducts.filter((product) => product.type === 'IMG').length,
+        text: [name, eventItem.location || '', eventItem.checkpoint || '', eventItem.description || ''].join(' '),
+        sortTime: getStorefrontTimestamp(eventItem.createdAt) || getStorefrontTimestamp(eventItem.date),
+      });
+    }
+    for (const [key, eventProducts] of productsByEvent.entries()) {
+      if (eventMap.has(key)) continue;
+      const first = eventProducts[0];
+      const name = String(first?.event || 'Evento sem nome').trim();
+      eventMap.set(key, {
+        name,
+        city: first?.checkpoint || '',
+        photoCount: eventProducts.filter((product) => product.type === 'IMG').length,
+        text: [name, first?.checkpoint || ''].join(' '),
+        sortTime: eventProducts.reduce((latest, product) => Math.max(latest, getStorefrontTimestamp(product.createdAt)), 0),
+      });
+    }
+
+    const matchedPhotographerIds = new Set(photographerResults.map((result) => result.photographer.id));
+    const eventResults = Array.from(eventMap.values())
+      .filter((eventItem) => {
+        if (matches(eventItem.text)) return true;
+        const eventProducts = productsByEvent.get(normalizeEventName(eventItem.name)) ?? [];
+        return eventProducts.some((product) => matchedPhotographerIds.has(product.vendedorId));
+      })
+      .sort((left, right) => right.sortTime - left.sortTime || left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base' }))
+      .slice(0, 6)
+      .map(({ name, city, photoCount }) => ({ name, city, photoCount }));
+
+    const photoResults = allDisplayProducts
+      .filter((product) =>
+        matches([
+          product.name,
+          product.event,
+          product.checkpoint,
+          product.bib,
+          product.originalFileName || '',
+        ].join(' ')) ||
+        matchedPhotographerIds.has(product.vendedorId)
+      )
+      .slice(0, 6);
+
+    return { photographers: photographerResults, events: eventResults, photos: photoResults };
+  }, [allDisplayProducts, debouncedEventQuery, publicPhotographers, registeredEvents]);
   const selectedRegisteredEvent = React.useMemo(() => (
     selectedEventName
       ? (() => {
@@ -498,6 +619,35 @@ function Storefront() {
     } finally {
       setIsLoading(false);
     }
+  };
+
+  const openPublicPhotographer = (photographer: Photographer) => {
+    const slug = normalizePhotographerUsername(photographer.username || photographer.slug || photographer.displayName || photographer.name);
+    if (!slug || reservedPublicSlugs.has(slug)) return;
+    setEventQuery('');
+    setSelectedEventName(null);
+    setSearchBib(null);
+    setSearchType(null);
+    navigate(`/${slug}`);
+  };
+
+  const openGlobalEventResult = (eventName: string) => {
+    setSelectedEventName(eventName);
+    setEventQuery('');
+    setSearchBib(null);
+    setSearchType(null);
+    setActiveView('photos');
+    navigate(`/eventos/${createEventSlug(eventName)}`);
+  };
+
+  const openGlobalPhotoResult = (product: Product) => {
+    setEventQuery('');
+    if (product.bib) {
+      handleSearch(product.bib);
+      return;
+    }
+
+    openGlobalEventResult(product.event || 'Evento sem nome');
   };
 
   const handleSelfieSearch = (file: File) => {
@@ -766,6 +916,11 @@ function Storefront() {
             <Hero
               eventQuery={eventQuery}
               onEventQueryChange={setEventQuery}
+              searchResults={globalSearchResults}
+              isSearching={eventQuery.trim() !== debouncedEventQuery.trim()}
+              onSelectPhotographer={openPublicPhotographer}
+              onSelectEvent={openGlobalEventResult}
+              onSelectPhoto={openGlobalPhotoResult}
             />
           )}
 
@@ -798,14 +953,8 @@ function Storefront() {
             <EventGrid
               products={allDisplayProducts}
               registeredEvents={registeredEvents}
-              query={eventQuery}
-              onSelectEvent={(eventName) => {
-                setSelectedEventName(eventName);
-                setEventQuery('');
-                setActiveView('photos');
-                window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
-                navigate(`/eventos/${createEventSlug(eventName)}`);
-              }}
+              query={debouncedEventQuery}
+              onSelectEvent={openGlobalEventResult}
             />
           )}
 
@@ -1286,7 +1435,7 @@ function PublicPhotographerPage({
         <div className="mt-8 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px_auto]">
           <label className="relative block">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar eventos, fotos ou numero de peito" className="h-13 w-full brutal-border bg-white pl-12 pr-4 font-mono text-xs uppercase tracking-widest outline-none focus:border-brutal-accent" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar fotografo, evento, cidade ou numero de peito" className="h-13 w-full brutal-border bg-white pl-12 pr-4 font-mono text-xs uppercase tracking-widest outline-none focus:border-brutal-accent" />
           </label>
           <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="h-13 brutal-border bg-white px-4 font-mono text-xs uppercase tracking-widest outline-none">
             <option value="">Todas as cidades</option>

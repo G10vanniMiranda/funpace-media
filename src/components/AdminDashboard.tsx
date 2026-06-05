@@ -30,10 +30,14 @@ import {
   FileText,
   Activity,
   EyeOff,
+  Eye,
   ReceiptText,
   Pencil,
   RefreshCw,
   AlertTriangle,
+  PauseCircle,
+  FolderOpen,
+  Trash2,
 } from 'lucide-react';
 import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, PaymentRecoveryIssue, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
 import { adminService, eventService, photographerService, platformSettingsService, productService, withdrawalService, orderService } from '../lib/services';
@@ -68,6 +72,8 @@ type StorageStats = {
 };
 
 type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'coupons' | 'logs' | 'settings';
+type PhotographerStatusFilter = 'all' | 'active' | 'pending' | 'disabled';
+type PhotographerAdminAction = 'disable' | 'reactivate' | 'delete';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -459,7 +465,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [isBackfillingThumbnails, setIsBackfillingThumbnails] = useState(false);
   const [thumbnailBackfillProgress, setThumbnailBackfillProgress] = useState('');
   const [photographerSearch, setPhotographerSearch] = useState('');
-  const [photographerStatusFilter, setPhotographerStatusFilter] = useState<'all' | 'active' | 'pending'>('all');
+  const [photographerStatusFilter, setPhotographerStatusFilter] = useState<PhotographerStatusFilter>('all');
+  const [photographerActionDialog, setPhotographerActionDialog] = useState<{ type: PhotographerAdminAction; photographer: Photographer } | null>(null);
+  const [actingPhotographerId, setActingPhotographerId] = useState<string | null>(null);
+  const [photographerFeedback, setPhotographerFeedback] = useState<{ type: 'success' | 'error'; message: string } | null>(null);
   const [userSearch, setUserSearch] = useState('');
   const [mediaSearch, setMediaSearch] = useState('');
   const [mediaStatusFilter, setMediaStatusFilter] = useState<'all' | NonNullable<Product['status']>>('all');
@@ -519,15 +528,19 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     maximumFractionDigits: 2,
   }).format(Number(settingsForm.platformFeePercent) || 0);
 
-  const pendingPhotographers = photographers.filter(p => !p.verified);
-  const activePhotographers = photographers.filter(p => p.verified);
+  const getPhotographerStatus = React.useCallback((photographer: Photographer): 'active' | 'pending' | 'disabled' => {
+    if (photographer.blockedAt) return 'disabled';
+    return photographer.verified ? 'active' : 'pending';
+  }, []);
+  const pendingPhotographers = photographers.filter((p) => getPhotographerStatus(p) === 'pending');
+  const activePhotographers = photographers.filter((p) => getPhotographerStatus(p) === 'active');
+  const disabledPhotographers = photographers.filter((p) => getPhotographerStatus(p) === 'disabled');
   const filteredPhotographers = React.useMemo(() => {
     const normalizedSearch = photographerSearch.trim().toLowerCase();
 
     return photographers.filter((photographer) => {
-      const matchesStatus = photographerStatusFilter === 'all'
-        || (photographerStatusFilter === 'active' && photographer.verified)
-        || (photographerStatusFilter === 'pending' && !photographer.verified);
+      const status = getPhotographerStatus(photographer);
+      const matchesStatus = photographerStatusFilter === 'all' || photographerStatusFilter === status;
 
       const matchesSearch = !normalizedSearch || [
         photographer.name,
@@ -540,7 +553,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
       return matchesStatus && matchesSearch;
     });
-  }, [photographers, photographerSearch, photographerStatusFilter]);
+  }, [getPhotographerStatus, photographers, photographerSearch, photographerStatusFilter]);
   const photographerById = React.useMemo(
     () => new Map(photographers.map((photographer) => [photographer.id, photographer])),
     [photographers],
@@ -1423,22 +1436,55 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
   };
 
-  const handleDisablePhotographer = async (photographer: Photographer) => {
-    const confirmed = window.confirm(
-      `Excluir/desativar o fotografo "${photographer.name}"? Isso remove o acesso ao painel e mantem historico de pedidos.`,
-    );
-    if (!confirmed) return;
+  const openPhotographerPublicProfile = (photographer: Photographer) => {
+    const slug = photographer.username || photographer.slug;
+    setOpenMenuPhotographerId(null);
+    if (!slug) {
+      setPhotographerFeedback({ type: 'error', message: 'Este fotografo ainda nao possui URL publica configurada.' });
+      return;
+    }
+    window.open(`/${slug}`, '_blank', 'noopener,noreferrer');
+  };
 
+  const openPhotographerEvents = () => {
+    setOpenMenuPhotographerId(null);
+    setActiveTab('events');
+  };
+
+  const openPhotographerActionDialog = (type: PhotographerAdminAction, photographer: Photographer) => {
+    setOpenMenuPhotographerId(null);
+    setPhotographerFeedback(null);
+    setPhotographerActionDialog({ type, photographer });
+  };
+
+  const handleConfirmPhotographerAction = async () => {
+    if (!photographerActionDialog) return;
+
+    const { type, photographer } = photographerActionDialog;
+    setActingPhotographerId(photographer.id);
     setIsUpdatingPhotographer(true);
+    setPhotographerFeedback(null);
     try {
-      await photographerService.updatePhotographerAdmin(photographer.id, { verified: false });
+      if (type === 'delete') {
+        await photographerService.deletePhotographerAdmin(photographer.id);
+        setPhotographerFeedback({ type: 'success', message: 'Fotografo excluido com sucesso.' });
+      } else {
+        await photographerService.setPhotographerAdminStatus(photographer.id, type);
+        setPhotographerFeedback({
+          type: 'success',
+          message: type === 'disable' ? 'Fotografo desativado com sucesso.' : 'Fotografo reativado com sucesso.',
+        });
+      }
+      setPhotographerActionDialog(null);
       await onRefresh();
-      setOpenMenuPhotographerId(null);
-      alert('Fotografo desativado.');
     } catch (error) {
       console.error(error);
-      alert('Erro ao desativar fotografo.');
+      setPhotographerFeedback({
+        type: 'error',
+        message: error instanceof Error ? error.message : 'Nao foi possivel concluir a operacao.',
+      });
     } finally {
+      setActingPhotographerId(null);
       setIsUpdatingPhotographer(false);
     }
   };
@@ -2315,9 +2361,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Aguardando aprovacao</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Midias publicadas</p>
-                  <p className="font-sans font-black text-3xl text-brutal-accent">{metrics.photoCount + metrics.videoCount}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{metrics.photoCount} fotos / {metrics.videoCount} videos</p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Desativados</p>
+                  <p className="font-sans font-black text-3xl text-red-300">{disabledPhotographers.length}</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Sem acesso ao painel</p>
                 </div>
               </div>
 
@@ -2338,11 +2384,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       ['all', 'Todos'],
                       ['active', 'Ativos'],
                       ['pending', 'Pendentes'],
+                      ['disabled', 'Desativados'],
                     ].map(([value, label]) => (
                       <button
                         key={value}
                         type="button"
-                        onClick={() => setPhotographerStatusFilter(value as 'all' | 'active' | 'pending')}
+                        onClick={() => setPhotographerStatusFilter(value as PhotographerStatusFilter)}
                         className={`h-full px-4 font-mono text-[10px] uppercase tracking-widest border-r border-white/10 last:border-r-0 transition-colors ${photographerStatusFilter === value
                           ? 'bg-brutal-accent text-white'
                           : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -2361,6 +2408,26 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </button>
                 </div>
               </div>
+
+              {photographerFeedback && (
+                <div className={`border px-4 py-3 flex items-center justify-between gap-3 ${photographerFeedback.type === 'success'
+                  ? 'bg-green-500/10 border-green-500/25 text-green-200'
+                  : 'bg-red-500/10 border-red-500/25 text-red-200'
+                  }`}>
+                  <div className="flex items-center gap-3">
+                    {photographerFeedback.type === 'success' ? <CheckCircle2 className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                    <p className="font-mono text-[10px] uppercase tracking-widest">{photographerFeedback.message}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setPhotographerFeedback(null)}
+                    className="p-1 text-current opacity-70 hover:opacity-100"
+                    aria-label="Fechar aviso"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
 
               <div className="bg-[#0d131c] border border-white/10 overflow-visible relative">
                 <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-4">
@@ -2394,7 +2461,31 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {filteredPhotographers.map((p) => (
+                      {filteredPhotographers.map((p) => {
+                        const photographerStatus = getPhotographerStatus(p);
+                        const statusBadge = photographerStatus === 'disabled'
+                          ? {
+                              label: 'Desativado',
+                              className: 'bg-red-500/10 text-red-300 border-red-500/25',
+                              dotClassName: 'bg-red-300',
+                              icon: <XCircle className="w-3.5 h-3.5" />,
+                            }
+                          : photographerStatus === 'pending'
+                            ? {
+                                label: 'Pendente',
+                                className: 'bg-yellow-500/10 text-yellow-300 border-yellow-500/25',
+                                dotClassName: 'bg-yellow-300',
+                                icon: <Clock className="w-3.5 h-3.5" />,
+                              }
+                            : {
+                                label: 'Ativo',
+                                className: 'bg-green-500/10 text-green-300 border-green-500/25',
+                                dotClassName: 'bg-green-300',
+                                icon: <CheckCircle2 className="w-3.5 h-3.5" />,
+                              };
+                        const isActing = actingPhotographerId === p.id;
+
+                        return (
                         <tr key={p.id} className="hover:bg-white/3 transition-colors">
                           <td className="p-6">
                             <div className="flex items-center gap-4">
@@ -2416,17 +2507,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             </div>
                           </td>
                           <td className="p-6">
-                            {p.verified ? (
-                              <span className="inline-flex items-center gap-2 bg-green-500/10 text-green-400 border border-green-500/20 px-3 py-1 text-[10px] font-bold uppercase">
-                                <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
-                                Ativo
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-2 bg-yellow-500/10 text-yellow-300 border border-yellow-500/20 px-3 py-1 text-[10px] font-bold uppercase">
-                                <span className="w-1.5 h-1.5 rounded-full bg-yellow-300" />
-                                Pendente
-                              </span>
-                            )}
+                            <span className={`inline-flex items-center gap-2 border px-3 py-1 text-[10px] font-bold uppercase ${statusBadge.className}`}>
+                              {statusBadge.icon}
+                              <span className={`w-1.5 h-1.5 rounded-full ${statusBadge.dotClassName}`} />
+                              {statusBadge.label}
+                            </span>
                           </td>
                           <td className="p-6 text-center text-white font-sans font-black">{p.stats?.photos || 0}</td>
                           <td className="p-6 text-center text-white font-sans font-black">{formatCurrency(Number(p.stats?.totalEarnings || 0))}</td>
@@ -2438,7 +2523,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                           </td>
                           <td className="p-6 text-right">
                             <div className="flex items-center justify-end gap-2">
-                              {!p.verified && (
+                              {photographerStatus === 'pending' && (
                                 <button
                                   onClick={() => handleVerifyPhotographer(p.id)}
                                   className="h-9 px-3 bg-green-500 text-white border border-green-500 text-[10px] font-bold uppercase hover:bg-green-400 transition-colors cursor-pointer"
@@ -2467,17 +2552,57 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                       <button
                                         type="button"
                                         onClick={() => openEditPhotographer(p)}
-                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-200 hover:bg-white/10 cursor-pointer"
+                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-200 hover:bg-white/10 hover:text-white cursor-pointer flex items-center gap-3"
                                       >
-                                        Editar
+                                        <Pencil className="w-4 h-4 text-gray-400" />
+                                        Editar Perfil
                                       </button>
                                       <button
                                         type="button"
-                                        disabled={isUpdatingPhotographer}
-                                        onClick={() => handleDisablePhotographer(p)}
-                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-400 hover:bg-red-500/10 disabled:text-gray-500 cursor-pointer"
+                                        onClick={() => openPhotographerPublicProfile(p)}
+                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-300 hover:bg-white/10 hover:text-white cursor-pointer flex items-center gap-3"
                                       >
-                                        Excluir / Desativar
+                                        <Eye className="w-4 h-4 text-gray-400" />
+                                        Ver Perfil Publico
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={openPhotographerEvents}
+                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-gray-300 hover:bg-white/10 hover:text-white cursor-pointer flex items-center gap-3"
+                                      >
+                                        <FolderOpen className="w-4 h-4 text-gray-400" />
+                                        Ver Eventos
+                                      </button>
+                                      <div className="my-1 border-t border-white/10" />
+                                      {photographerStatus === 'disabled' ? (
+                                        <button
+                                          type="button"
+                                          disabled={isUpdatingPhotographer || isActing}
+                                          onClick={() => openPhotographerActionDialog('reactivate', p)}
+                                          className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-green-300 hover:bg-green-500/10 disabled:text-gray-500 cursor-pointer flex items-center gap-3"
+                                        >
+                                          <RefreshCw className="w-4 h-4" />
+                                          Reativar Fotografo
+                                        </button>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          disabled={isUpdatingPhotographer || isActing}
+                                          onClick={() => openPhotographerActionDialog('disable', p)}
+                                          className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-yellow-200 hover:bg-yellow-500/10 disabled:text-gray-500 cursor-pointer flex items-center gap-3"
+                                        >
+                                          <PauseCircle className="w-4 h-4" />
+                                          Desativar Fotografo
+                                        </button>
+                                      )}
+                                      <button
+                                        type="button"
+                                        disabled={isUpdatingPhotographer || isActing}
+                                        onClick={() => openPhotographerActionDialog('delete', p)}
+                                        className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-300 hover:bg-red-500/10 disabled:text-gray-500 cursor-pointer flex items-center gap-3"
+                                      >
+                                        <Trash2 className="w-4 h-4" />
+                                        Excluir Fotografo
                                       </button>
                                     </motion.div>
                                   )}
@@ -2486,7 +2611,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             </div>
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                       {filteredPhotographers.length === 0 && (
                         <tr>
                           <td colSpan={6} className="px-5 py-14 text-center">
@@ -3348,6 +3474,115 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Photographer Action Confirmation */}
+      <AnimatePresence>
+        {photographerActionDialog && (
+          <div className="fixed inset-0 z-170 flex items-center justify-center p-4 md:p-6">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => !isUpdatingPhotographer && setPhotographerActionDialog(null)}
+              className="absolute inset-0 bg-black/85 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ scale: 0.96, y: 18 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.96, y: 18 }}
+              className="relative w-full max-w-xl bg-[#0d131c] border border-white/15 shadow-[0_30px_90px_rgba(0,0,0,0.65)] text-white overflow-hidden"
+            >
+              <div className={`h-1.5 ${photographerActionDialog.type === 'delete' ? 'bg-red-500' : photographerActionDialog.type === 'disable' ? 'bg-yellow-400' : 'bg-green-500'}`} />
+              <div className="p-7 md:p-8 space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className={`w-12 h-12 border flex items-center justify-center shrink-0 ${photographerActionDialog.type === 'delete'
+                    ? 'bg-red-500/10 border-red-500/25 text-red-300'
+                    : photographerActionDialog.type === 'disable'
+                      ? 'bg-yellow-500/10 border-yellow-500/25 text-yellow-200'
+                      : 'bg-green-500/10 border-green-500/25 text-green-300'
+                    }`}>
+                    {photographerActionDialog.type === 'delete'
+                      ? <Trash2 className="w-6 h-6" />
+                      : photographerActionDialog.type === 'disable'
+                        ? <PauseCircle className="w-6 h-6" />
+                        : <RefreshCw className="w-6 h-6" />}
+                  </div>
+                  <div>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-2">
+                      {photographerActionDialog.type === 'delete' ? 'Atencao' : photographerActionDialog.type === 'disable' ? 'Desativar fotografo' : 'Reativar fotografo'}
+                    </p>
+                    <h3 className="font-sans font-black text-2xl md:text-3xl uppercase leading-tight">
+                      {photographerActionDialog.type === 'delete'
+                        ? 'Excluir fotografo'
+                        : photographerActionDialog.type === 'disable'
+                          ? 'Bloquear acesso'
+                          : 'Restaurar acesso'}
+                    </h3>
+                  </div>
+                </div>
+
+                <div className="bg-[#080d14] border border-white/10 p-4">
+                  <p className="font-sans font-black text-base uppercase text-white">{photographerActionDialog.photographer.name || 'Fotografo sem nome'}</p>
+                  <p className="font-mono text-[10px] text-gray-500 lowercase mt-1">{photographerActionDialog.photographer.email}</p>
+                </div>
+
+                {photographerActionDialog.type === 'delete' ? (
+                  <div className="space-y-3 text-gray-300">
+                    <p className="font-sans text-sm leading-relaxed">Voce realmente deseja excluir este fotografo?</p>
+                    <div className="border border-red-500/25 bg-red-500/10 p-4">
+                      <p className="font-mono text-[10px] uppercase tracking-widest text-red-200 mb-3">Esta acao podera remover:</p>
+                      <ul className="space-y-2 font-mono text-[10px] uppercase text-red-100/80">
+                        <li>Perfil publico</li>
+                        <li>Eventos vinculados</li>
+                        <li>Fotos vinculadas</li>
+                        <li>Historico da conta</li>
+                      </ul>
+                    </div>
+                  </div>
+                ) : photographerActionDialog.type === 'disable' ? (
+                  <p className="font-sans text-sm leading-relaxed text-gray-300">
+                    O fotografo perdera acesso a plataforma ate ser reativado por um administrador.
+                  </p>
+                ) : (
+                  <p className="font-sans text-sm leading-relaxed text-gray-300">
+                    O fotografo voltara a ter acesso ao painel e podera publicar eventos e midias novamente.
+                  </p>
+                )}
+
+                <div className="flex flex-col-reverse sm:flex-row gap-3 pt-2">
+                  <button
+                    type="button"
+                    disabled={isUpdatingPhotographer}
+                    onClick={() => setPhotographerActionDialog(null)}
+                    className="h-12 flex-1 border border-white/15 text-gray-300 font-mono text-xs uppercase tracking-widest hover:bg-white/5 hover:text-white transition-colors disabled:opacity-50"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={isUpdatingPhotographer}
+                    onClick={handleConfirmPhotographerAction}
+                    className={`h-12 flex-1 border font-sans font-black text-xs uppercase tracking-widest transition-colors disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 ${photographerActionDialog.type === 'delete'
+                      ? 'bg-red-500 border-red-500 text-white hover:bg-white hover:text-red-500'
+                      : photographerActionDialog.type === 'disable'
+                        ? 'bg-yellow-400 border-yellow-400 text-black hover:bg-white hover:text-black'
+                        : 'bg-green-500 border-green-500 text-white hover:bg-white hover:text-green-600'
+                      }`}
+                  >
+                    {isUpdatingPhotographer
+                      ? 'Processando...'
+                      : photographerActionDialog.type === 'delete'
+                        ? 'Excluir definitivamente'
+                        : photographerActionDialog.type === 'disable'
+                          ? 'Desativar'
+                          : 'Reativar'}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

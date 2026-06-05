@@ -2093,6 +2093,59 @@ export const photographerService = {
     return updated;
   },
 
+  async setPhotographerAdminStatus(id: string, action: 'disable' | 'reactivate'): Promise<Photographer> {
+    if (isMockMode) {
+      const existing = mockPhotographers.find((photographer) => photographer.id === id);
+      if (!existing) throw new Error('Fotografo nao encontrado.');
+      const updated = {
+        ...existing,
+        verified: action === 'reactivate',
+        blockedAt: action === 'disable' ? new Date().toISOString() : null,
+      } as Photographer;
+      mockPhotographers = mockPhotographers.map((photographer) => (photographer.id === id ? updated : photographer));
+      return updated;
+    }
+
+    const token = await getCurrentAccessToken();
+    if (!token) throw new Error('Sessao admin expirada. Entre novamente.');
+
+    const response = await fetch(apiUrl(`/api/admin/photographers/${encodeURIComponent(id)}/${action}`), {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || payload?.message || 'Nao foi possivel atualizar o fotografo.');
+    }
+
+    if (!payload?.photographer) throw new Error('Fotografo nao encontrado.');
+    return payload.photographer as Photographer;
+  },
+
+  async deletePhotographerAdmin(id: string): Promise<void> {
+    if (isMockMode) {
+      mockPhotographers = mockPhotographers.filter((photographer) => photographer.id !== id);
+      return;
+    }
+
+    const token = await getCurrentAccessToken();
+    if (!token) throw new Error('Sessao admin expirada. Entre novamente.');
+
+    const response = await fetch(apiUrl(`/api/admin/photographers/${encodeURIComponent(id)}`), {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(payload?.error || payload?.message || 'Nao foi possivel excluir o fotografo.');
+    }
+  },
+
   async updateOwnPublicProfile(
     id: string,
     changes: Partial<Pick<Photographer, 'name' | 'username' | 'isPublic' | 'displayName' | 'bio' | 'avatar' | 'profilePhoto' | 'coverPhoto' | 'instagram' | 'city'>>,

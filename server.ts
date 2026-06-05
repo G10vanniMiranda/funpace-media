@@ -1420,6 +1420,93 @@ app.post("/api/admin/photographers/invite", async (req, res) => {
   }
 });
 
+async function handleAdminPhotographerStatus(req: express.Request, res: express.Response, action: "disable" | "reactivate") {
+  try {
+    const adminUser = await getAuthenticatedAdminUser(req);
+    if (!adminUser) {
+      return res.status(403).json({ error: "Apenas administradores podem alterar fotografos." });
+    }
+
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "ID do fotografo e obrigatorio." });
+
+    const supabase = getSupabaseAdmin();
+    const existing = await supabase
+      .from("photographers")
+      .select("id,name,email,verified,blockedAt")
+      .eq("id", id)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data?.id) return res.status(404).json({ error: "Fotografo nao encontrado." });
+
+    const patch = action === "disable"
+      ? { verified: false, blockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      : { verified: true, blockedAt: null, updatedAt: new Date().toISOString() };
+
+    const { data, error } = await supabase
+      .from("photographers")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data?.id) return res.status(404).json({ error: "Fotografo nao encontrado." });
+
+    return res.json({
+      ok: true,
+      photographer: data,
+      message: action === "disable" ? "Fotografo desativado com sucesso." : "Fotografo reativado com sucesso.",
+    });
+  } catch (error: any) {
+    console.error("Erro ao alterar fotografo pelo admin:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel concluir a operacao." });
+  }
+}
+
+app.patch("/api/admin/photographers/:id/disable", (req, res) => {
+  return handleAdminPhotographerStatus(req, res, "disable");
+});
+
+app.patch("/api/admin/photographers/:id/reactivate", (req, res) => {
+  return handleAdminPhotographerStatus(req, res, "reactivate");
+});
+
+app.delete("/api/admin/photographers/:id", async (req, res) => {
+  try {
+    const adminUser = await getAuthenticatedAdminUser(req);
+    if (!adminUser) {
+      return res.status(403).json({ error: "Apenas administradores podem excluir fotografos." });
+    }
+
+    const id = String(req.params.id || "").trim();
+    if (!id) return res.status(400).json({ error: "ID do fotografo e obrigatorio." });
+
+    const supabase = getSupabaseAdmin();
+    const existing = await supabase
+      .from("photographers")
+      .select("id,name,email")
+      .eq("id", id)
+      .maybeSingle();
+    if (existing.error) throw existing.error;
+    if (!existing.data?.id) return res.status(404).json({ error: "Fotografo nao encontrado." });
+
+    const { error } = await supabase
+      .from("photographers")
+      .delete()
+      .eq("id", id);
+    if (error) throw error;
+
+    return res.json({
+      ok: true,
+      deletedId: id,
+      message: "Fotografo excluido com sucesso.",
+    });
+  } catch (error: any) {
+    console.error("Erro ao excluir fotografo pelo admin:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel excluir o fotografo." });
+  }
+});
+
 app.post("/api/checkout/create-session", async (req, res) => {
   let orderId = "";
 

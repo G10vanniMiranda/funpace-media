@@ -1156,8 +1156,8 @@ export const eventService = {
     if (!allowedTypes.has(String(file.type || '').toLowerCase())) {
       throw new Error('Formato invalido para capa do evento. Envie JPG, PNG ou WEBP.');
     }
-    if (file.size > 10 * 1024 * 1024) {
-      throw new Error('Capa do evento muito grande. O limite e 10 MB.');
+    if (file.size > 15 * 1024 * 1024) {
+      throw new Error('Capa do evento muito grande. O limite e 15 MB.');
     }
 
     if (isMockMode) {
@@ -1167,7 +1167,8 @@ export const eventService = {
       };
     }
 
-    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, '.jpg'));
+    const extension = file.type === 'image/webp' ? 'webp' : 'jpg';
+    const safeName = sanitizeStorageFileName(file.name.replace(/\.[^.]+$/, `.${extension}`));
     const path = `covers/${photographerId}/${Date.now()}-${crypto.randomUUID()}-${safeName}`;
     return uploadSupabaseStorageObject('event-covers', path, file);
   },

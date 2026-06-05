@@ -139,8 +139,8 @@ end $$;
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values
   ('photographer-avatars', 'photographer-avatars', true, 5242880, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp']),
-  ('photographer-covers', 'photographer-covers', true, 10485760, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp']),
-  ('event-covers', 'event-covers', true, 10485760, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
+  ('photographer-covers', 'photographer-covers', true, 15728640, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp']),
+  ('event-covers', 'event-covers', true, 15728640, array['image/jpeg', 'image/jpg', 'image/png', 'image/webp'])
 on conflict (id) do update
 set
   public = excluded.public,

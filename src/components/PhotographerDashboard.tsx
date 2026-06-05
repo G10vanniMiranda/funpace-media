@@ -122,7 +122,8 @@ const imagePreviewQuality = 0.84;
 const videoPreviewMaxSide = 960;
 const videoPreviewQuality = 0.82;
 const profileAvatarMaxBytes = 5 * 1024 * 1024;
-const profileCoverMaxBytes = 10 * 1024 * 1024;
+const profileCoverMaxBytes = 15 * 1024 * 1024;
+const eventCoverOptimizeThresholdBytes = 5 * 1024 * 1024;
 const profileImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
@@ -813,8 +814,9 @@ async function prepareEventCoverForUpload(file: File): Promise<File> {
 
     image.onload = () => {
       URL.revokeObjectURL(objectUrl);
-      const targetWidth = 1600;
-      const targetHeight = 900;
+      const shouldOptimizeLargeCover = file.size > eventCoverOptimizeThresholdBytes;
+      const targetWidth = shouldOptimizeLargeCover ? 1920 : 1600;
+      const targetHeight = shouldOptimizeLargeCover ? 1080 : 900;
       const canvas = document.createElement('canvas');
       canvas.width = targetWidth;
       canvas.height = targetHeight;
@@ -850,8 +852,10 @@ async function prepareEventCoverForUpload(file: File): Promise<File> {
         }
 
         const baseName = (file.name.replace(/\.[^.]+$/, '') || 'capa-evento').slice(0, 80);
-        resolve(new File([blob], `${baseName}.jpg`, { type: 'image/jpeg' }));
-      }, 'image/jpeg', 0.84);
+        const extension = shouldOptimizeLargeCover ? 'webp' : 'jpg';
+        const type = shouldOptimizeLargeCover ? 'image/webp' : 'image/jpeg';
+        resolve(new File([blob], `${baseName}.${extension}`, { type }));
+      }, shouldOptimizeLargeCover ? 'image/webp' : 'image/jpeg', shouldOptimizeLargeCover ? 0.86 : 0.84);
     };
 
     image.onerror = () => {
@@ -3291,7 +3295,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <ProfileImageUploader
                     kind="cover"
                     label="Banner de capa"
-                    description="JPG, PNG ou WEBP ate 10 MB. A imagem sera otimizada em formato panoramico."
+                    description="JPG, PNG ou WEBP ate 15 MB. A imagem sera otimizada em formato panoramico."
                     actionLabel="Selecionar Banner"
                     previewUrl={pendingProfileImages.cover?.previewUrl || profileForm.coverPhoto}
                     error={profileImageErrors.cover}
@@ -3815,7 +3819,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <ProfileImageUploader
                         kind="cover"
                         label="Enviar nova capa"
-                        description="JPG, PNG ou WEBP ate 10 MB. A capa sera otimizada em 1600x900."
+                        description="JPG, PNG ou WEBP ate 15 MB. Capas acima de 5 MB serao otimizadas em WebP ate 1920px."
                         actionLabel="Enviar Nova Capa"
                         previewUrl={pendingEventCover?.previewUrl || ''}
                         error={eventCoverError}

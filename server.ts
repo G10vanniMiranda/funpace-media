@@ -1781,7 +1781,7 @@ app.post("/api/media/upload", express.raw({
 
 app.post("/api/photographers/profile-image", express.raw({
   type: ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/octet-stream"],
-  limit: "10mb",
+  limit: "15mb",
 }), async (req, res) => {
   const authUser = await getAuthenticatedRequestUser(req);
   const imageKind = String(req.header("x-profile-image-kind") || "").trim();
@@ -1810,12 +1810,12 @@ app.post("/api/photographers/profile-image", express.raw({
     return res.status(400).json({ error: "Arquivo vazio ou nao enviado." });
   }
 
-  const fileSizeLimit = imageKind === "avatar" ? 5 * 1024 * 1024 : 10 * 1024 * 1024;
+  const fileSizeLimit = imageKind === "avatar" ? 5 * 1024 * 1024 : 15 * 1024 * 1024;
   if (fileBuffer.length > fileSizeLimit) {
     return res.status(413).json({
       error: imageKind === "avatar"
         ? "Foto de perfil maior que 5 MB."
-        : "Banner de capa maior que 10 MB.",
+        : "Banner de capa maior que 15 MB.",
     });
   }
 

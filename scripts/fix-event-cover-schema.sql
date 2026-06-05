@@ -38,7 +38,7 @@ values (
   'event-covers',
   'event-covers',
   true,
-  10485760,
+  15728640,
   array['image/jpeg', 'image/jpg', 'image/png', 'image/webp']
 )
 on conflict (id) do update

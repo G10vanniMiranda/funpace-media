@@ -59,6 +59,22 @@ function saveStoredConsent(input: { sessionId: string; acceptedAt?: string; expi
   return stored;
 }
 
+function wait(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function canvasToJpegBlob(canvas: HTMLCanvasElement) {
+  const blob = await Promise.race([
+    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9)),
+    wait(1800).then(() => null),
+  ]);
+  if (blob) return blob;
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
+  const response = await fetch(dataUrl);
+  return response.blob();
+}
+
 export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSearchModalProps) {
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
@@ -69,6 +85,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   const [isSearching, setIsSearching] = React.useState(false);
   const [isCameraLoading, setIsCameraLoading] = React.useState(false);
   const [isCameraReady, setIsCameraReady] = React.useState(false);
+  const [isCapturing, setIsCapturing] = React.useState(false);
   const [consent, setConsent] = React.useState<StoredConsent | null>(null);
   const [showConsent, setShowConsent] = React.useState(true);
 
@@ -89,6 +106,36 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     if (galleryInputRef.current) galleryInputRef.current.value = '';
   }, []);
 
+  const attachCameraStream = React.useCallback(async () => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+    if (!video || !stream) return false;
+
+    if (video.srcObject !== stream) {
+      video.srcObject = stream;
+    }
+    video.muted = true;
+    video.playsInline = true;
+    video.setAttribute('playsinline', 'true');
+    video.setAttribute('webkit-playsinline', 'true');
+
+    await video.play().catch(() => undefined);
+
+    for (let attempt = 0; attempt < 20; attempt += 1) {
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        setIsCameraReady(true);
+        return true;
+      }
+      if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+        setIsCameraReady(true);
+        return true;
+      }
+      await wait(100);
+    }
+
+    return false;
+  }, []);
+
   const openCamera = React.useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
       setError('Seu navegador nao oferece suporte a camera. Use a opcao de carregar foto.');
@@ -101,21 +148,18 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.muted = true;
-        videoRef.current.playsInline = true;
-        await videoRef.current.play().catch(() => undefined);
-        if (videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
-          setIsCameraReady(true);
-        }
-      }
+      await attachCameraStream();
     } catch {
       setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
     } finally {
       setIsCameraLoading(false);
     }
-  }, [clearFile, stopCamera]);
+  }, [attachCameraStream, clearFile, stopCamera]);
+
+  React.useEffect(() => {
+    if (!isOpen || showConsent || previewUrl || !streamRef.current) return;
+    attachCameraStream().catch(() => undefined);
+  }, [attachCameraStream, isOpen, previewUrl, showConsent]);
 
   React.useEffect(() => {
     if (!isOpen) {
@@ -175,43 +219,64 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   };
 
   const captureSelfie = async () => {
-    const video = videoRef.current;
-    if (!video || !streamRef.current) {
-      setError('Camera nao esta aberta. Toque em tirar novamente e permita o acesso.');
-      return;
-    }
+    setError('');
+    setIsCapturing(true);
+    try {
+      const video = videoRef.current;
+      if (!video || !streamRef.current) {
+        setError('Camera nao esta aberta. Toque em tirar novamente e permita o acesso.');
+        return;
+      }
 
-    if (video.paused) {
-      await video.play().catch(() => undefined);
-    }
+      if (video.paused) {
+        await video.play().catch(() => undefined);
+      }
 
-    const width = video.videoWidth || Math.round(video.getBoundingClientRect().width);
-    const height = video.videoHeight || Math.round(video.getBoundingClientRect().height);
-    if (!width || !height) {
-      setError('Camera ainda nao esta pronta. Tente novamente em alguns instantes.');
-      return;
-    }
+      if (!isCameraReady) {
+        const attached = await attachCameraStream();
+        if (!attached) {
+          setError('Camera ainda nao esta pronta. Aguarde alguns segundos e tente novamente.');
+          return;
+        }
+      }
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext('2d');
-    if (!context) {
-      setError('Nao foi possivel capturar a selfie neste navegador.');
-      return;
+      await wait(120);
+      const rect = video.getBoundingClientRect();
+      const width = video.videoWidth || Math.round(rect.width);
+      const height = video.videoHeight || Math.round(rect.height);
+      if (!width || !height) {
+        setError('Camera ainda nao esta pronta. Tente novamente em alguns instantes.');
+        return;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+      if (!context) {
+        setError('Nao foi possivel capturar a selfie neste navegador.');
+        return;
+      }
+
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const blob = await canvasToJpegBlob(canvas);
+      if (!blob || blob.size === 0) {
+        setError('Nao foi possivel gerar a selfie. Tente novamente.');
+        return;
+      }
+
+      selectFile(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+    } catch (captureError) {
+      console.error('[face-search] selfie:capture-error', captureError);
+      setError('Nao foi possivel capturar a selfie neste navegador. Tente carregar uma foto da galeria.');
+    } finally {
+      setIsCapturing(false);
     }
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
-    if (!blob) {
-      setError('Nao foi possivel gerar a selfie. Tente novamente.');
-      return;
-    }
-    selectFile(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
   };
 
   const submit = async () => {
     if (!file) {
-      setError('Selecione uma selfie antes de iniciar a busca.');
+      setError('Tire uma selfie ou carregue uma foto antes de iniciar a busca.');
       return;
     }
     const activeConsent = consent || readStoredConsent();
@@ -371,18 +436,18 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                         onLoadedMetadata={() => setIsCameraReady(true)}
                         onCanPlay={() => setIsCameraReady(true)}
                       />
-                      {(isCameraLoading || !isCameraReady) && (
+                      {(isCameraLoading || isCapturing || !isCameraReady) && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-brutal-black/80 text-white">
                           <Loader2 className="h-10 w-10 animate-spin text-brutal-accent" />
-                          <span className="font-mono text-[10px] uppercase tracking-widest">{isCameraLoading ? 'Abrindo camera...' : 'Preparando camera...'}</span>
+                          <span className="font-mono text-[10px] uppercase tracking-widest">{isCapturing ? 'Capturando selfie...' : isCameraLoading ? 'Abrindo camera...' : 'Preparando camera...'}</span>
                         </div>
                       )}
                     </div>
                     <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">Camera frontal quando disponivel</span>
                     <div className="mt-2 grid w-full max-w-sm gap-3 sm:grid-cols-2">
-                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading || !isCameraReady} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
-                        <Camera className="h-5 w-5" />
-                        Tirar selfie
+                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading || isCapturing} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
+                        {isCapturing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
+                        {isCapturing ? 'Capturando...' : 'Tirar selfie'}
                       </button>
                       <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={isSearching} className="inline-flex min-h-13 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border brutal-shadow-hover disabled:opacity-50">
                         <ImagePlus className="h-5 w-5" />
@@ -420,7 +485,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                 <button
                   type="button"
                   onClick={submit}
-                  disabled={isSearching}
+                  disabled={isSearching || isCapturing}
                   className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-3 bg-brutal-black px-5 font-display text-base uppercase tracking-widest text-white brutal-border brutal-shadow-hover hover:bg-brutal-accent disabled:cursor-wait disabled:opacity-70 md:mt-auto"
                 >
                   {isSearching ? (

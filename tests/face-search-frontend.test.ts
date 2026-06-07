@@ -24,6 +24,9 @@ test('face search modal validates selfie and provides professional search states
   assert.match(source, /Permissao para Uso de Imagem/);
   assert.match(source, /navigator\.mediaDevices\.getUserMedia/);
   assert.match(source, /facingMode: 'user'/);
+  assert.match(source, /canvasToJpegBlob/);
+  assert.match(source, /toDataURL\('image\/jpeg'/);
+  assert.match(source, /Capturando selfie/);
   assert.match(source, /Precisamos de acesso a camera/);
   assert.match(source, /Estou ciente/);
   assert.match(source, /Procurando suas fotos/);

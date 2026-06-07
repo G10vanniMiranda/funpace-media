@@ -122,7 +122,7 @@ export async function testFaceHandler(req: any, res: any) {
 
 export async function backfillFaceHandler(req: any, res: any) {
   const bearer = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
-  const operationsSecret = process.env.OPERATIONS_SECRET || process.env.CRON_SECRET || '';
+  const operationsSecret = process.env.OPERATIONS_SECRET || '';
   const hasOperationsAccess = Boolean(operationsSecret && bearer === operationsSecret);
   const authUser = hasOperationsAccess ? null : await getAuthenticatedUser(req);
   const role = String(authUser?.app_metadata?.role || '');

@@ -14,6 +14,7 @@ import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfill
 import adminApiHandler from "./api/admin";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
+import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -154,8 +155,12 @@ function rejectUntrustedBrowserOrigin(req: express.Request, res: express.Respons
   next();
 }
 
-function createRateLimiter(options: { windowMs: number; max: number; keyPrefix: string }) {
+function createRateLimiter(options: { windowMs: number; max: number; keyPrefix: string; skip?: (req: express.Request) => boolean }) {
   return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (options.skip?.(req)) {
+      next();
+      return;
+    }
     const now = Date.now();
     const key = `${options.keyPrefix}:${getClientIp(req)}`;
     const bucket = rateLimitBuckets.get(key);
@@ -216,7 +221,12 @@ app.use(express.json({
 }));
 
 app.use(rejectUntrustedBrowserOrigin);
-app.use("/api", createRateLimiter({ keyPrefix: "api", windowMs: 15 * 60 * 1000, max: 900 }));
+app.use("/api", createRateLimiter({
+  keyPrefix: "api",
+  windowMs: 15 * 60 * 1000,
+  max: 900,
+  skip: shouldBypassFaceBackfillRateLimit,
+}));
 app.use(["/api/checkout", "/api/downloads", "/api/photographers"], createRateLimiter({
   keyPrefix: "sensitive",
   windowMs: 60 * 1000,
@@ -236,6 +246,7 @@ app.use(["/api/face/backfill"], createRateLimiter({
   keyPrefix: "face-backfill",
   windowMs: 60 * 1000,
   max: 4,
+  skip: shouldBypassFaceBackfillRateLimit,
 }));
 app.use(["/api/products"], createRateLimiter({
   keyPrefix: "product-engagement",

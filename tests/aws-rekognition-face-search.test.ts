@@ -81,3 +81,16 @@ test('face backfill records indexed, no-face and failed outcomes', () => {
   assert.match(handlers, /hasOperationsAccess/);
   assert.match(handlers, /role === 'admin' \|\| role === 'super_admin'/);
 });
+
+test('only valid operations backfill requests bypass all face rate limits', () => {
+  const express = readFileSync('server.ts', 'utf8');
+  const vercel = readFileSync('api/face.ts', 'utf8');
+  const helper = readFileSync('server/face/face-rate-limit.ts', 'utf8');
+
+  assert.match(express, /skip: shouldBypassFaceBackfillRateLimit/);
+  assert.match(vercel, /!bypassBackfillRateLimit && rateLimit/);
+  assert.match(helper, /process\.env\.OPERATIONS_SECRET/);
+  assert.match(helper, /method !== 'POST'/);
+  assert.match(helper, /\/api\/face\/backfill/);
+  assert.doesNotMatch(helper, /console\./);
+});

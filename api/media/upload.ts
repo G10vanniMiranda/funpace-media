@@ -269,12 +269,18 @@ export default async function handler(req: any, res: any) {
     return res.status(405).json({ error: 'Metodo nao permitido.' });
   }
 
+  let storagePath = '';
+  let fileName = '';
+  let contentType = '';
+  let fileSize = 0;
+
   try {
     const authUser = await getAuthenticatedRequestUser(req);
-    const storagePath = decodeHeaderValue(req.headers['x-storage-path']);
-    const fileName = decodeHeaderValue(req.headers['x-file-name']) || storagePath.split('/').pop() || 'arquivo';
-    const contentType = String(req.headers['content-type'] || 'application/octet-stream');
+    storagePath = decodeHeaderValue(req.headers['x-storage-path']);
+    fileName = decodeHeaderValue(req.headers['x-file-name']) || storagePath.split('/').pop() || 'arquivo';
+    contentType = String(req.headers['content-type'] || 'application/octet-stream');
     const fileBuffer = await readRequestBuffer(req);
+    fileSize = fileBuffer.length;
 
     if (!authUser?.id) {
       return res.status(401).json({ error: 'Entre novamente no painel para enviar arquivos.' });
@@ -322,6 +328,15 @@ export default async function handler(req: any, res: any) {
     });
   } catch (error: any) {
     const message = error?.message || 'Nao foi possivel enviar a midia.';
+    console.error('[media-upload] error', {
+      bucket: mediaBucket,
+      storagePath,
+      fileName,
+      contentType,
+      size: fileSize,
+      provider: usesExternalBucket() ? 'external_bucket' : mediaStorageProvider,
+      message,
+    });
     const status = /excede o limite|too large|payload/i.test(message) ? 413 : 500;
     return res.status(status).json({ error: message });
   }

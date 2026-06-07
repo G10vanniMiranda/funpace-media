@@ -64,7 +64,7 @@ const requiredPolicies = [
   "products_insert_own_verified_photographer",
   "products_update_owner_or_admin",
   "products_delete_owner_or_admin",
-  "events_select_authenticated",
+  "events_select_published_owner_or_admin",
   "events_insert_admin_or_owner_photographer",
   "events_update_admin_or_owner_photographer",
   "events_delete_admin_or_owner_photographer",
@@ -86,8 +86,17 @@ const requiredPolicies = [
   "media_processing_jobs_insert_owner_or_admin",
   "coupons_admin_all",
   "admin_activity_logs_admin_select_insert",
-  "platform_settings_select_admin_only",
+  "platform_settings_select_public",
   "platform_settings_update_admin_only",
+];
+
+const requiredIndexes = [
+  "products_public_event_created_at_idx",
+  "products_public_vendor_event_created_at_idx",
+  "products_face_backfill_pending_idx",
+  "orders_pending_provider_created_at_idx",
+  "payment_events_order_provider_created_at_idx",
+  "payments_order_provider_updated_at_idx",
 ];
 
 const requiredStorageBuckets = [
@@ -159,6 +168,18 @@ try {
   const presentPolicies = new Set(policyRows.rows.map((row) => row.policyname));
   const missingPolicies = requiredPolicies.filter((policy) => !presentPolicies.has(policy));
 
+  const indexRows = await pool.query(
+    `
+      select indexname
+      from pg_indexes
+      where schemaname = 'public'
+        and indexname = any($1::text[])
+    `,
+    [requiredIndexes],
+  );
+  const presentIndexes = new Set(indexRows.rows.map((row) => row.indexname));
+  const missingIndexes = requiredIndexes.filter((index) => !presentIndexes.has(index));
+
   const bucketRows = await pool.query(
     `
       select id
@@ -184,6 +205,7 @@ try {
   const ok = missingColumns.length === 0 &&
     rlsDisabled.length === 0 &&
     missingPolicies.length === 0 &&
+    missingIndexes.length === 0 &&
     missingBuckets.length === 0 &&
     missingStoragePolicies.length === 0;
 
@@ -192,6 +214,7 @@ try {
     missingColumns,
     rlsDisabled,
     missingPolicies,
+    missingIndexes,
     missingBuckets,
     missingStoragePolicies,
   });

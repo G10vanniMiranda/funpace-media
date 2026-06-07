@@ -55,6 +55,19 @@ type DuplicateUploadConflict = {
   remainingCount: number;
 };
 
+type UploadPublishStage =
+  | 'validacao'
+  | 'duplicidade-nome'
+  | 'preparo-arquivo'
+  | 'hash-original'
+  | 'duplicidade-conteudo'
+  | 'upload-original'
+  | 'preview'
+  | 'hash-preview'
+  | 'upload-preview'
+  | 'banco'
+  | 'indexacao-facial';
+
 type ProductEditForm = {
   name: string;
   price: string;
@@ -703,6 +716,10 @@ function getSelectionBlockReason(file: File) {
 }
 
 function formatUploadErrorMessage(message: string, file?: File) {
+  if (isMissingLocalUploadFileError(message)) {
+    return getMissingLocalUploadFileMessage(file);
+  }
+
   if (/FUNCTION_PAYLOAD_TOO_LARGE|Request Entity Too Large|payload too large|entity too large/i.test(message)) {
     if (file?.type.startsWith('video')) {
       return `Video muito grande para envio neste deploy. O limite atual e ${formatFileSize(clientUploadMaxBytes)}. Comprima o MP4 ou publique um video menor.`;
@@ -720,6 +737,42 @@ function formatUploadErrorMessage(message: string, file?: File) {
   }
 
   return message;
+}
+
+function isMissingLocalUploadFileError(message: string) {
+  return /requested file or directory could not be found|could not be found at the time|notfounderror|file.*not.*found|arquivo.*n[aã]o.*encontrado/i.test(message);
+}
+
+function getMissingLocalUploadFileMessage(file?: File) {
+  const fileName = file?.name ? ` (${file.name})` : '';
+  return `Nao foi possivel localizar o arquivo local${fileName} durante a publicacao. Verifique se a foto ainda existe no dispositivo ou armazenamento em nuvem, deixe o arquivo disponivel offline, selecione a foto novamente e tente publicar.`;
+}
+
+function getUploadStageLabel(stage: UploadPublishStage) {
+  const labels: Record<UploadPublishStage, string> = {
+    validacao: 'validacao inicial',
+    'duplicidade-nome': 'verificacao de nome duplicado',
+    'preparo-arquivo': 'leitura e preparo do arquivo',
+    'hash-original': 'calculo de hash do arquivo original',
+    'duplicidade-conteudo': 'verificacao de conteudo duplicado',
+    'upload-original': 'upload da midia original',
+    preview: 'geracao de preview',
+    'hash-preview': 'calculo de hash do preview',
+    'upload-preview': 'upload do preview',
+    banco: 'gravacao no banco de dados',
+    'indexacao-facial': 'indexacao facial',
+  };
+
+  return labels[stage] || stage;
+}
+
+async function assertUploadFileReadable(file: File) {
+  try {
+    await file.slice(0, Math.min(file.size || 1, 1024 * 1024)).arrayBuffer();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error || '');
+    throw new Error(isMissingLocalUploadFileError(detail) ? getMissingLocalUploadFileMessage(file) : detail || 'Nao foi possivel ler o arquivo selecionado.');
+  }
 }
 
 function validateProfileImageFile(file: File, kind: ProfileImageKind) {
@@ -2071,7 +2124,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       let skippedDuplicateCount = 0;
       const uploadBatchId = crypto.randomUUID();
       const currentBatchHashes = new Set<string>();
-      const failedUploads: Array<{ index: number; name: string; message: string }> = [];
+      const failedUploads: Array<{ index: number; name: string; message: string; stage: UploadPublishStage }> = [];
       const previewWarnings: Array<{ name: string; message: string }> = [];
       const usedFileNames = new Set(
         products
@@ -2086,7 +2139,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       duplicateBatchActionRef.current = null;
 
       for (const [index, item] of selectedFiles.entries()) {
+        let uploadStage: UploadPublishStage = 'validacao';
         try {
+          console.info('[photographer-upload] file:start', {
+            uploadBatchId,
+            index: index + 1,
+            total: selectedFiles.length,
+            eventId: selectedEvent?.id || null,
+            event: normalizedEvent,
+            checkpoint: normalizedCheckpoint,
+            photographerId: photographer.id,
+            fileName: item.file.name,
+            fileSize: item.file.size,
+            fileType: item.file.type,
+          });
+          await assertUploadFileReadable(item.file);
+
+          uploadStage = 'duplicidade-nome';
           let duplicateAction: DuplicateUploadAction | null = null;
           let existingNameProduct = await productService.findExistingProductByOriginalFileName(photographer.id, item.file.name, normalizedEvent);
           let resolvedOriginalFileName = item.file.name;
@@ -2117,12 +2186,29 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             usedFileNames.add(normalizeUploadName(item.file.name));
           }
 
+          uploadStage = 'preparo-arquivo';
           const uploadFile = await prepareImageForUpload(item.file);
           assertFileFitsUploadLimit(uploadFile);
+          console.info('[photographer-upload] file:prepared', {
+            uploadBatchId,
+            originalName: item.file.name,
+            uploadName: uploadFile.name,
+            originalSize: item.file.size,
+            uploadSize: uploadFile.size,
+            uploadType: uploadFile.type,
+          });
+
+          uploadStage = 'hash-original';
           const fileHash = await calculateFileSha256(uploadFile);
 
+          uploadStage = 'duplicidade-conteudo';
           if (duplicateAction !== 'replace' && currentBatchHashes.has(fileHash)) {
             skippedDuplicateCount += 1;
+            console.info('[photographer-upload] file:skipped-duplicate-batch', {
+              uploadBatchId,
+              fileName: item.file.name,
+              fileHash,
+            });
             setPublishProgress({ done: index + 1, total: selectedFiles.length });
             continue;
           }
@@ -2133,13 +2219,36 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             : await productService.findExistingProductByFileHash(photographer.id, fileHash, normalizedEvent);
           if (existingProduct) {
             skippedDuplicateCount += 1;
+            console.info('[photographer-upload] file:skipped-duplicate-existing', {
+              uploadBatchId,
+              fileName: item.file.name,
+              fileHash,
+              productId: existingProduct.id,
+            });
             setPublishProgress({ done: index + 1, total: selectedFiles.length });
             continue;
           }
 
+          uploadStage = 'upload-original';
+          console.info('[photographer-upload] storage:upload:start', {
+            uploadBatchId,
+            fileName: uploadFile.name,
+            originalFileName: item.file.name,
+            eventId: selectedEvent?.id || null,
+            photographerId: photographer.id,
+            size: uploadFile.size,
+            contentType: uploadFile.type,
+          });
           const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile, { fileHash, uploadBatchId });
+          console.info('[photographer-upload] storage:upload:done', {
+            uploadBatchId,
+            fileName: uploadFile.name,
+            storagePath: uploadedFile.path,
+            reused: uploadedFile.reused,
+          });
           let thumbnailFile: File | null = null;
           try {
+            uploadStage = 'preview';
             thumbnailFile = await generateMediaThumbnail(uploadFile);
           } catch (thumbnailError) {
             console.warn(`Preview nao gerado para ${item.name}:`, thumbnailError);
@@ -2152,10 +2261,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 : 'Preview da foto nao foi gerado; o card usara a midia original protegida como fallback.',
             });
           }
+          uploadStage = 'hash-preview';
           const thumbnailHash = thumbnailFile ? await calculateFileSha256(thumbnailFile) : null;
+          uploadStage = 'upload-preview';
           const uploadedThumbnail = thumbnailFile
             ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
             : null;
+          if (uploadedThumbnail) {
+            console.info('[photographer-upload] thumbnail:upload:done', {
+              uploadBatchId,
+              fileName: thumbnailFile?.name,
+              storagePath: uploadedThumbnail.path,
+              reused: uploadedThumbnail.reused,
+            });
+          }
 
           const productPayload = {
             name: resolvedDescription,
@@ -2179,6 +2298,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           } satisfies Omit<Product, 'id'>;
 
           let indexedPhotoId: string | null = null;
+          uploadStage = 'banco';
           if (duplicateAction === 'replace' && existingNameProduct) {
             await productService.replaceProductMedia(existingNameProduct.id, productPayload);
             indexedPhotoId = existingNameProduct.id;
@@ -2213,7 +2333,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             }
             publishedCount += 1;
           }
+          console.info('[photographer-upload] db:published', {
+            uploadBatchId,
+            photoId: indexedPhotoId,
+            eventId: selectedEvent?.id || null,
+            storagePath: uploadedFile.path,
+            originalFileName: resolvedOriginalFileName,
+            action: duplicateAction === 'replace' ? 'replace' : duplicateAction === 'copy' ? 'copy' : 'create',
+          });
           if (indexedPhotoId && selectedEvent?.id && uploadFile.type.startsWith('image/')) {
+            uploadStage = 'indexacao-facial';
             await productService.indexProductFace(indexedPhotoId, selectedEvent.id, uploadFile).catch((faceError) => {
               console.error('[face-index] automatic:index-error', {
                 photoId: indexedPhotoId,
@@ -2231,17 +2360,35 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           const friendlyMessage = /sess[aã]o expirada/i.test(message)
             ? 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.'
             : message;
+          const formattedMessage = formatUploadErrorMessage(friendlyMessage, item.file);
+          console.error('[photographer-upload] file:failed', {
+            uploadBatchId,
+            index: index + 1,
+            total: selectedFiles.length,
+            stage: uploadStage,
+            stageLabel: getUploadStageLabel(uploadStage),
+            eventId: selectedEvent?.id || null,
+            event: normalizedEvent,
+            checkpoint: normalizedCheckpoint,
+            photographerId: photographer.id,
+            fileName: item.name,
+            fileSize: item.file.size,
+            fileType: item.file.type,
+            message: formattedMessage,
+          });
           failedUploads.push({
             index,
             name: item.name,
-            message: formatUploadErrorMessage(friendlyMessage, item.file),
+            message: formattedMessage,
+            stage: uploadStage,
           });
           setPublishProgress({ done: index + 1, total: selectedFiles.length });
         }
       }
 
       if (publishedCount === 0 && failedUploads.length > 0) {
-        throw new Error(`Nenhum arquivo foi publicado. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
+        const firstFailure = failedUploads[0];
+        throw new Error(`Nao foi possivel localizar alguns arquivos durante a publicacao. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
       }
 
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
@@ -2258,7 +2405,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) dos arquivos publicados ficaram com fallback visual.`
           : '';
-        alert(`Upload parcial: ${publishedCount} publicado(s), ${skippedDuplicateCount} duplicado(s) ignorado(s), ${failedUploads.length} falharam.${previewWarningText} Os arquivos com falha ficaram selecionados para tentar novamente. Primeiro erro: ${failedUploads[0].name} - ${failedUploads[0].message}`);
+        alert(`Upload parcial concluido.\n\nPublicadas: ${publishedCount} fotos\nFalharam: ${failedUploads.length} fotos\nDuplicadas ignoradas: ${skippedDuplicateCount}\n${previewWarningText ? `${previewWarningText}\n` : ''}\nOs arquivos com falha ficaram selecionados para tentar novamente.\nPrimeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);

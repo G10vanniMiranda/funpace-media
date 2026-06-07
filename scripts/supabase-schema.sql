@@ -360,6 +360,17 @@ exception
     null;
 end $$;
 
+update public.products
+set
+  "faceIndexStatus" = 'disabled',
+  "faceIndexError" = case
+    when status = 'removed' then 'Produto removido; backfill facial desabilitado.'
+    else 'Midia nao suportada pelo backfill facial.'
+  end,
+  "faceIndexedAt" = null
+where (status = 'removed' or type <> 'IMG')
+  and "faceIndexStatus" in ('pending', 'processing');
+
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   "photographerId" text references public.photographers(id) on delete cascade,
@@ -945,8 +956,12 @@ as $$
     from public.products p
     where p.status = 'published'
       and p.type = 'IMG'
+      and p."eventId" is not null
       and (
-        p."faceIndexStatus" = 'pending'
+        (
+          p."faceIndexStatus" = 'pending'
+          and p."faceIndexedAt" is null
+        )
         or (
           p."faceIndexStatus" = 'processing'
           and (
@@ -983,8 +998,12 @@ as $$
   from public.products p
   where p.status = 'published'
     and p.type = 'IMG'
+    and p."eventId" is not null
     and (
-      p."faceIndexStatus" = 'pending'
+      (
+        p."faceIndexStatus" = 'pending'
+        and p."faceIndexedAt" is null
+      )
       or (
         p."faceIndexStatus" = 'processing'
         and (

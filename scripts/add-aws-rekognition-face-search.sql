@@ -13,6 +13,17 @@ begin
     check ("faceIndexStatus" in ('pending', 'processing', 'indexed', 'no_face', 'failed', 'disabled'));
 end $$;
 
+update public.products
+set
+  "faceIndexStatus" = 'disabled',
+  "faceIndexError" = case
+    when status = 'removed' then 'Produto removido; backfill facial desabilitado.'
+    else 'Midia nao suportada pelo backfill facial.'
+  end,
+  "faceIndexedAt" = null
+where (status = 'removed' or type <> 'IMG')
+  and "faceIndexStatus" in ('pending', 'processing');
+
 create index if not exists products_event_id_idx on public.products ("eventId");
 create index if not exists products_face_index_status_idx on public.products ("faceIndexStatus");
 
@@ -57,8 +68,12 @@ as $$
     from public.products p
     where p.status = 'published'
       and p.type = 'IMG'
+      and p."eventId" is not null
       and (
-        p."faceIndexStatus" = 'pending'
+        (
+          p."faceIndexStatus" = 'pending'
+          and p."faceIndexedAt" is null
+        )
         or (
           p."faceIndexStatus" = 'processing'
           and (
@@ -95,8 +110,12 @@ as $$
   from public.products p
   where p.status = 'published'
     and p.type = 'IMG'
+    and p."eventId" is not null
     and (
-      p."faceIndexStatus" = 'pending'
+      (
+        p."faceIndexStatus" = 'pending'
+        and p."faceIndexedAt" is null
+      )
       or (
         p."faceIndexStatus" = 'processing'
         and (

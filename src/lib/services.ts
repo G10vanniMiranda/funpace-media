@@ -651,6 +651,9 @@ export const productService = {
       {
         ...product,
         status: product.status ?? 'published',
+        faceIndexStatus: product.type === 'IMG' ? product.faceIndexStatus ?? 'pending' : 'disabled',
+        faceIndexError: product.type === 'IMG' ? product.faceIndexError ?? null : 'Midia nao suportada pelo backfill facial.',
+        faceIndexedAt: product.type === 'IMG' ? product.faceIndexedAt ?? null : null,
         createdAt: new Date().toISOString(),
       },
       true,
@@ -755,6 +758,11 @@ export const productService = {
       `/rest/v1/products?${params.toString()}&${selectAll}`,
       {
         ...changes,
+        ...(changes.type ? {
+          faceIndexStatus: changes.type === 'IMG' ? 'pending' : 'disabled',
+          faceIndexError: changes.type === 'IMG' ? null : 'Midia nao suportada pelo backfill facial.',
+          faceIndexedAt: null,
+        } : {}),
         updatedAt: new Date().toISOString(),
       },
       true,

@@ -54,7 +54,7 @@ test('Vercel and Express expose face search, index, backfill and diagnostics rou
   }
 });
 
-test('face backfill claims resumable batches of at most 50 without duplicate workers', () => {
+test('face backfill claims resumable image batches of at most 50 without duplicate workers', () => {
   const job = readFileSync('server/face/face-backfill.ts', 'utf8');
   const repository = readFileSync('server/face/face-repository.ts', 'utf8');
   const sql = readFileSync('scripts/add-aws-rekognition-face-search.sql', 'utf8');
@@ -65,9 +65,20 @@ test('face backfill claims resumable batches of at most 50 without duplicate wor
   assert.match(repository, /rpc\/count_face_backfill_pending/);
   assert.match(sql, /for update skip locked/i);
   assert.match(sql, /limit least\(greatest\(batch_size, 1\), 50\)/i);
+  assert.match(sql, /p\.status = 'published'/);
+  assert.match(sql, /p\.type = 'IMG'/);
+  assert.match(sql, /p\."eventId" is not null/);
+  assert.match(sql, /p\."faceIndexStatus" = 'pending'\s+and p\."faceIndexedAt" is null/);
   assert.match(sql, /"faceIndexStatus" = 'processing'/);
   assert.match(sql, /stale_after_minutes/);
+  assert.match(sql, /where \(status = 'removed' or type <> 'IMG'\)\s+and "faceIndexStatus" in \('pending', 'processing'\)/);
   assert.match(sql, /grant execute on function public\.claim_face_backfill_batch\(integer, integer\) to service_role/);
+});
+
+test('non-image products never enter the facial backfill queue', () => {
+  const services = readFileSync('src/lib/services.ts', 'utf8');
+  assert.match(services, /product\.type === 'IMG' \? product\.faceIndexStatus \?\? 'pending' : 'disabled'/);
+  assert.match(services, /changes\.type === 'IMG' \? 'pending' : 'disabled'/);
 });
 
 test('face backfill records indexed, no-face and failed outcomes', () => {

@@ -78,6 +78,8 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
   const videoRef = React.useRef<HTMLVideoElement>(null);
   const streamRef = React.useRef<MediaStream | null>(null);
+  const fileRef = React.useRef<File | null>(null);
+  const previewObjectUrlRef = React.useRef('');
   const [file, setFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState('');
   const [error, setError] = React.useState('');
@@ -95,15 +97,32 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     setIsCameraReady(false);
   }, []);
 
-  const clearFile = React.useCallback(() => {
-    setFile(null);
-    setError('');
-    setPreviewUrl((current) => {
-      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-      return '';
-    });
-    if (galleryInputRef.current) galleryInputRef.current.value = '';
+  const updateSelfieFile = React.useCallback((nextFile: File | null) => {
+    fileRef.current = nextFile;
+    setFile(nextFile);
+    console.log('State selfie atualizado', nextFile ? {
+      name: nextFile.name,
+      size: nextFile.size,
+      type: nextFile.type,
+    } : null);
   }, []);
+
+  const updatePreviewUrl = React.useCallback((nextUrl: string) => {
+    if (previewObjectUrlRef.current) {
+      URL.revokeObjectURL(previewObjectUrlRef.current);
+      previewObjectUrlRef.current = '';
+    }
+    previewObjectUrlRef.current = nextUrl.startsWith('blob:') ? nextUrl : '';
+    setPreviewUrl(nextUrl);
+    console.log('Preview atualizado', { hasPreview: Boolean(nextUrl) });
+  }, []);
+
+  const clearFile = React.useCallback(() => {
+    updateSelfieFile(null);
+    setError('');
+    updatePreviewUrl('');
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+  }, [updatePreviewUrl, updateSelfieFile]);
 
   const attachCameraStream = React.useCallback(async () => {
     const video = videoRef.current;
@@ -148,17 +167,13 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
       streamRef.current = stream;
       await attachCameraStream();
+      console.log('Camera aberta');
     } catch {
       setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
     } finally {
       setIsCameraLoading(false);
     }
   }, [attachCameraStream, clearFile, stopCamera]);
-
-  React.useEffect(() => {
-    if (!isOpen || showConsent || previewUrl || !streamRef.current) return;
-    attachCameraStream().catch(() => undefined);
-  }, [attachCameraStream, isOpen, previewUrl, showConsent]);
 
   React.useEffect(() => {
     if (!isOpen) {
@@ -177,9 +192,12 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       }, 80);
     }
     return () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      if (previewObjectUrlRef.current) {
+        URL.revokeObjectURL(previewObjectUrlRef.current);
+        previewObjectUrlRef.current = '';
+      }
     };
-  }, [clearFile, isOpen, openCamera, previewUrl, stopCamera]);
+  }, [clearFile, isOpen, openCamera, stopCamera]);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -190,11 +208,8 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       return;
     }
     setError('');
-    setFile(nextFile);
-    setPreviewUrl((current) => {
-      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-      return URL.createObjectURL(nextFile);
-    });
+    updateSelfieFile(nextFile);
+    updatePreviewUrl(URL.createObjectURL(nextFile));
     stopCamera();
   };
 
@@ -207,11 +222,9 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       return;
     }
     setError('');
-    setFile(capturedFile);
-    setPreviewUrl((current) => {
-      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
-      return URL.createObjectURL(capturedFile);
-    });
+    console.log('File criado', capturedFile);
+    updateSelfieFile(capturedFile);
+    updatePreviewUrl(URL.createObjectURL(capturedFile));
     stopCamera();
   };
 
@@ -273,11 +286,13 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
       const blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9));
+      console.log('Blob criado', blob);
       if (!blob || blob.size === 0) {
         setError('Nao foi possivel gerar a selfie. Tente novamente.');
         return;
       }
 
+      console.log('Foto capturada');
       setCapturedSelfie(blob);
     } catch (captureError) {
       console.error('[face-search] selfie:capture-error', captureError);
@@ -288,7 +303,13 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   };
 
   const submit = async () => {
-    if (!file) {
+    const selectedFile = fileRef.current || file;
+    console.log('Iniciando busca facial', selectedFile ? {
+      name: selectedFile.name,
+      size: selectedFile.size,
+      type: selectedFile.type,
+    } : null);
+    if (!selectedFile) {
       setError('Tire uma selfie ou carregue uma foto antes de iniciar a busca.');
       return;
     }
@@ -301,7 +322,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     setError('');
     setIsSearching(true);
     try {
-      await onSearch(file, activeConsent.sessionId);
+      await onSearch(selectedFile, activeConsent.sessionId);
       onClose();
     } catch (searchError) {
       const message = searchError instanceof Error ? searchError.message : 'Nao foi possivel buscar suas fotos.';

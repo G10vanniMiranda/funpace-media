@@ -684,12 +684,13 @@ function Storefront() {
     setShowDashboard(false);
 
     const matches = await productService.searchByFace(file, selectedEvent.id, sessionId);
+    if (matches.length === 0) {
+      showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
+      return matches;
+    }
     setFaceSearchMatches(matches);
     setSearchType('selfie');
     setActiveView('photos');
-    if (matches.length === 0) {
-      showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
-    }
     return matches;
   };
 
@@ -953,7 +954,7 @@ function Storefront() {
               )}
 
               {!isLoading && (searchBib || searchType) && (
-                <div className="max-w-350 mx-auto px-6 pt-12 pb-4">
+                <div className="mx-auto w-full max-w-350 overflow-hidden px-4 pt-8 pb-4 sm:px-6 md:pt-12">
                   <button
                     onClick={searchType === 'selfie' ? clearFaceSearch : clearSearch}
                     className="font-mono text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-4 flex items-center gap-2 cursor-pointer"
@@ -961,9 +962,9 @@ function Storefront() {
                     <ArrowLeft className="w-4 h-4" />
                     {searchType === 'selfie' ? 'Limpar Busca' : 'Voltar'}
                   </button>
-                  <div className="bg-brutal-black text-white p-6 brutal-border brutal-shadow inline-block">
+                  <div className="w-full max-w-full bg-brutal-black p-5 text-white brutal-border brutal-shadow sm:inline-block sm:w-auto sm:p-6">
                     <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
-                    <p className="font-display text-5xl">
+                    <p className="max-w-full break-words font-display text-[clamp(2.4rem,11vw,3rem)] leading-[0.95] sm:text-5xl">
                       {searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : `PEITO ${searchBib}`}
                     </p>
                     {searchType === 'selfie' && (
@@ -1732,11 +1733,12 @@ function PublicEventPage({
         onClose={() => setIsFaceSearchOpen(false)}
         onSearch={async (file, sessionId) => {
           const matches = await productService.searchByFace(file, event.id, sessionId);
-          setFaceMatches(matches);
-          setActiveView('photos');
           if (matches.length === 0) {
             showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
+            return matches;
           }
+          setFaceMatches(matches);
+          setActiveView('photos');
           return matches;
         }}
       />
@@ -2473,4 +2475,3 @@ function ScrollToTop() {
 
   return null;
 }
-

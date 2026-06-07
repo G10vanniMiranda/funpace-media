@@ -322,7 +322,11 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     setError('');
     setIsSearching(true);
     try {
-      await onSearch(selectedFile, activeConsent.sessionId);
+      const matches = await onSearch(selectedFile, activeConsent.sessionId);
+      if (matches.length === 0) {
+        setError('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.');
+        return;
+      }
       onClose();
     } catch (searchError) {
       const message = searchError instanceof Error ? searchError.message : 'Nao foi possivel buscar suas fotos.';

@@ -964,7 +964,7 @@ function Storefront() {
                   </button>
                   <div className="w-full max-w-full bg-brutal-black p-5 text-white brutal-border brutal-shadow sm:inline-block sm:w-auto sm:p-6">
                     <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
-                    <p className="max-w-full break-words font-display text-[clamp(2.4rem,11vw,3rem)] leading-[0.95] sm:text-5xl">
+                    <p className="max-w-full break-words font-display text-[clamp(1.8rem,8.5vw,2.45rem)] leading-[0.98] sm:text-5xl">
                       {searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : `PEITO ${searchBib}`}
                     </p>
                     {searchType === 'selfie' && (

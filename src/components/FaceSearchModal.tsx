@@ -63,16 +63,15 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
 }
 
-async function canvasToJpegBlob(canvas: HTMLCanvasElement) {
-  const blob = await Promise.race([
-    new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9)),
-    wait(1800).then(() => null),
-  ]);
-  if (blob) return blob;
-
-  const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-  const response = await fetch(dataUrl);
-  return response.blob();
+function dataUrlToBlob(dataUrl: string) {
+  const [header, payload] = dataUrl.split(',');
+  const mime = header.match(/data:(.*?);base64/)?.[1] || 'image/jpeg';
+  const binary = window.atob(payload || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+  return new Blob([bytes], { type: mime });
 }
 
 export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSearchModalProps) {
@@ -100,7 +99,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     setFile(null);
     setError('');
     setPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
       return '';
     });
     if (galleryInputRef.current) galleryInputRef.current.value = '';
@@ -193,8 +192,25 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     setError('');
     setFile(nextFile);
     setPreviewUrl((current) => {
-      if (current) URL.revokeObjectURL(current);
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
       return URL.createObjectURL(nextFile);
+    });
+    stopCamera();
+  };
+
+  const setCapturedSelfie = (blob: Blob) => {
+    const capturedFile = new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' });
+    const validationError = validateSelfie(capturedFile);
+    if (validationError) {
+      clearFile();
+      setError(validationError);
+      return;
+    }
+    setError('');
+    setFile(capturedFile);
+    setPreviewUrl((current) => {
+      if (current.startsWith('blob:')) URL.revokeObjectURL(current);
+      return URL.createObjectURL(capturedFile);
     });
     stopCamera();
   };
@@ -233,17 +249,14 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       }
 
       if (!isCameraReady) {
-        const attached = await attachCameraStream();
-        if (!attached) {
-          setError('Camera ainda nao esta pronta. Aguarde alguns segundos e tente novamente.');
-          return;
-        }
+        await attachCameraStream();
       }
 
       await wait(120);
       const rect = video.getBoundingClientRect();
-      const width = video.videoWidth || Math.round(rect.width);
-      const height = video.videoHeight || Math.round(rect.height);
+      const trackSettings = streamRef.current.getVideoTracks()[0]?.getSettings?.() || {};
+      const width = video.videoWidth || trackSettings.width || Math.round(rect.width);
+      const height = video.videoHeight || trackSettings.height || Math.round(rect.height);
       if (!width || !height) {
         setError('Camera ainda nao esta pronta. Tente novamente em alguns instantes.');
         return;
@@ -259,13 +272,13 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       }
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const blob = await canvasToJpegBlob(canvas);
+      const blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9));
       if (!blob || blob.size === 0) {
         setError('Nao foi possivel gerar a selfie. Tente novamente.');
         return;
       }
 
-      selectFile(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
+      setCapturedSelfie(blob);
     } catch (captureError) {
       console.error('[face-search] selfie:capture-error', captureError);
       setError('Nao foi possivel capturar a selfie neste navegador. Tente carregar uma foto da galeria.');

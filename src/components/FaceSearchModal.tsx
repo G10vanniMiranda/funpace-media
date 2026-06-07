@@ -68,6 +68,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   const [error, setError] = React.useState('');
   const [isSearching, setIsSearching] = React.useState(false);
   const [isCameraLoading, setIsCameraLoading] = React.useState(false);
+  const [isCameraReady, setIsCameraReady] = React.useState(false);
   const [consent, setConsent] = React.useState<StoredConsent | null>(null);
   const [showConsent, setShowConsent] = React.useState(true);
 
@@ -75,6 +76,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     streamRef.current?.getTracks().forEach((track) => track.stop());
     streamRef.current = null;
     if (videoRef.current) videoRef.current.srcObject = null;
+    setIsCameraReady(false);
   }, []);
 
   const clearFile = React.useCallback(() => {
@@ -101,7 +103,12 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        videoRef.current.muted = true;
+        videoRef.current.playsInline = true;
         await videoRef.current.play().catch(() => undefined);
+        if (videoRef.current.videoWidth > 0 && videoRef.current.videoHeight > 0) {
+          setIsCameraReady(true);
+        }
       }
     } catch {
       setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
@@ -169,14 +176,25 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
 
   const captureSelfie = async () => {
     const video = videoRef.current;
-    if (!video?.videoWidth || !video.videoHeight) {
+    if (!video || !streamRef.current) {
+      setError('Camera nao esta aberta. Toque em tirar novamente e permita o acesso.');
+      return;
+    }
+
+    if (video.paused) {
+      await video.play().catch(() => undefined);
+    }
+
+    const width = video.videoWidth || Math.round(video.getBoundingClientRect().width);
+    const height = video.videoHeight || Math.round(video.getBoundingClientRect().height);
+    if (!width || !height) {
       setError('Camera ainda nao esta pronta. Tente novamente em alguns instantes.');
       return;
     }
 
     const canvas = document.createElement('canvas');
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width = width;
+    canvas.height = height;
     const context = canvas.getContext('2d');
     if (!context) {
       setError('Nao foi possivel capturar a selfie neste navegador.');
@@ -344,17 +362,25 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                 ) : (
                   <div className="flex aspect-square max-h-105 w-full flex-col items-center justify-center gap-4 bg-gray-50 p-6 text-center brutal-border sm:p-8">
                     <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-2xl bg-brutal-black">
-                      <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
-                      {isCameraLoading && (
+                      <video
+                        ref={videoRef}
+                        className="h-full w-full object-cover"
+                        playsInline
+                        muted
+                        autoPlay
+                        onLoadedMetadata={() => setIsCameraReady(true)}
+                        onCanPlay={() => setIsCameraReady(true)}
+                      />
+                      {(isCameraLoading || !isCameraReady) && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-brutal-black/80 text-white">
                           <Loader2 className="h-10 w-10 animate-spin text-brutal-accent" />
-                          <span className="font-mono text-[10px] uppercase tracking-widest">Abrindo camera...</span>
+                          <span className="font-mono text-[10px] uppercase tracking-widest">{isCameraLoading ? 'Abrindo camera...' : 'Preparando camera...'}</span>
                         </div>
                       )}
                     </div>
                     <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">Camera frontal quando disponivel</span>
                     <div className="mt-2 grid w-full max-w-sm gap-3 sm:grid-cols-2">
-                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
+                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading || !isCameraReady} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
                         <Camera className="h-5 w-5" />
                         Tirar selfie
                       </button>

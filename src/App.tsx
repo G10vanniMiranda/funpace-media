@@ -997,7 +997,7 @@ function Storefront() {
                 Voltar para eventos
               </button>
 
-              <div className="rounded-[1.75rem] border border-black/10 bg-white p-4 shadow-[0_18px_55px_rgba(5,5,5,0.08)] md:p-5">
+              <div className="space-y-5">
                 <div className="grid gap-5 lg:grid-cols-[minmax(280px,0.48fr)_minmax(0,1fr)] lg:items-stretch">
                   <div className="relative min-h-52 overflow-hidden rounded-[1.35rem] bg-brutal-black shadow-[0_14px_34px_rgba(5,5,5,0.16)] sm:min-h-72 lg:min-h-0">
                     {selectedEventCover ? (
@@ -1025,7 +1025,7 @@ function Storefront() {
                         <p className="font-mono text-[9px] font-bold uppercase tracking-[0.26em] text-brutal-accent">
                           Evento selecionado
                         </p>
-                        <h1 className="mt-2 max-w-4xl font-display text-[clamp(2.15rem,5vw,4.75rem)] uppercase leading-[0.9] tracking-normal text-brutal-black wrap-break-word">
+                        <h1 className="mt-2 max-w-4xl font-sans text-[clamp(1.9rem,3.8vw,3.5rem)] font-black uppercase leading-[0.95] tracking-tight text-brutal-black wrap-break-word">
                           {selectedEventName}
                         </h1>
                       </div>
@@ -1085,13 +1085,6 @@ function Storefront() {
                       className="inline-flex min-h-10 items-center justify-center rounded-xl border border-black/10 bg-white px-5 font-mono text-[10px] font-bold uppercase tracking-wider text-brutal-black transition-colors hover:border-brutal-accent hover:text-brutal-accent disabled:cursor-not-allowed disabled:text-gray-400"
                     >
                       Carregar foto
-                    </button>
-                    <button
-                      type="button"
-                      onClick={clearFaceSearch}
-                      className="inline-flex min-h-10 items-center justify-center rounded-xl border border-black/10 bg-white px-5 font-mono text-[10px] font-bold uppercase tracking-wider text-brutal-black transition-colors hover:border-brutal-accent hover:text-brutal-accent"
-                    >
-                      Ver todas as fotos
                     </button>
                   </div>
                 </div>

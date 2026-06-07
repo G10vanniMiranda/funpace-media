@@ -7,17 +7,12 @@ import { PhotoGrid } from './components/PhotoGrid';
 import { VideoGrid } from './components/VideoGrid';
 import { EventGrid } from './components/EventGrid';
 import { CartDrawer } from './components/CartDrawer';
-import { CheckoutPage } from './components/CheckoutPage';
-import { CustomerOrdersPage } from './components/CustomerOrdersDrawer';
-import { CustomerAccountPage } from './components/CustomerAccountPage';
 import { Footer } from './components/Footer';
 import { AuthView } from './components/AuthView';
 import { PhotographerSection } from './components/PhotographerSection';
 import { PhotographerProfile } from './components/PhotographerProfile';
-import { PhotographerDashboard } from './components/PhotographerDashboard';
 import { PhotographerLogin } from './components/PhotographerLogin';
 import { PhotographerPasswordSetup } from './components/PhotographerPasswordSetup';
-import { AdminDashboard } from './components/AdminDashboard';
 import { AdminLogin } from './components/AdminLogin';
 import { PagamentoSucesso } from './routes/pagamento/sucesso';
 import { ParaFotografos } from './routes/ParaFotografos';
@@ -37,6 +32,12 @@ import { AnimatePresence, motion } from 'motion/react';
 import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Instagram, Loader2, MapPin, MessageCircle, ReceiptText, Scan, Search, UserCircle, Video, X, XCircle } from 'lucide-react';
 import { useToast } from './contexts/ToastContext';
 import { buildWhatsappUrl } from './lib/contact';
+
+const CheckoutPage = React.lazy(() => import('./components/CheckoutPage').then((module) => ({ default: module.CheckoutPage })));
+const CustomerOrdersPage = React.lazy(() => import('./components/CustomerOrdersDrawer').then((module) => ({ default: module.CustomerOrdersPage })));
+const CustomerAccountPage = React.lazy(() => import('./components/CustomerAccountPage').then((module) => ({ default: module.CustomerAccountPage })));
+const PhotographerDashboard = React.lazy(() => import('./components/PhotographerDashboard').then((module) => ({ default: module.PhotographerDashboard })));
+const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
 
 enum OperationType {
   CREATE = 'create',
@@ -2345,31 +2346,42 @@ export default function App() {
     <Router>
       <AuthRouteSync />
       <ScrollToTop />
-      <Routes>
-        <Route path="/admin" element={<AdminRoute />} />
-        <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
-        <Route path="/fotografo/:slug" element={<Storefront />} />
-        <Route path="/fotografo" element={<PhotographerRoute />} />
-        <Route path="/checkout" element={<Storefront />} />
-        <Route path="/minha-conta" element={<CustomerAccountRoute />} />
-        <Route path="/minhas-compras" element={<CustomerOrdersRoute />} />
-        <Route path="/eventos" element={<Storefront />} />
-        <Route path="/eventos/:slug" element={<Storefront />} />
-        <Route path="/evento/:slug" element={<Storefront />} />
-        <Route path="/para-fotografos" element={<ParaFotografos />} />
-        <Route path="/precos" element={<Precos />} />
-        <Route path="/faq" element={<Faq />} />
-        <Route path="/contato" element={<Contato />} />
-        <Route path="/termos" element={<Termos />} />
-        <Route path="/privacidade" element={<Privacidade />} />
-        <Route path="/pagar" element={<PagamentoSucesso />} />
-        <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
-        <Route path="/" element={<Storefront />} />
-        <Route path="/@:slug" element={<Storefront />} />
-        <Route path="/:slug" element={<Storefront />} />
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+      <React.Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
+          <Route path="/admin" element={<AdminRoute />} />
+          <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
+          <Route path="/fotografo/:slug" element={<Storefront />} />
+          <Route path="/fotografo" element={<PhotographerRoute />} />
+          <Route path="/checkout" element={<Storefront />} />
+          <Route path="/minha-conta" element={<CustomerAccountRoute />} />
+          <Route path="/minhas-compras" element={<CustomerOrdersRoute />} />
+          <Route path="/eventos" element={<Storefront />} />
+          <Route path="/eventos/:slug" element={<Storefront />} />
+          <Route path="/evento/:slug" element={<Storefront />} />
+          <Route path="/para-fotografos" element={<ParaFotografos />} />
+          <Route path="/precos" element={<Precos />} />
+          <Route path="/faq" element={<Faq />} />
+          <Route path="/contato" element={<Contato />} />
+          <Route path="/termos" element={<Termos />} />
+          <Route path="/privacidade" element={<Privacidade />} />
+          <Route path="/pagar" element={<PagamentoSucesso />} />
+          <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
+          <Route path="/" element={<Storefront />} />
+          <Route path="/@:slug" element={<Storefront />} />
+          <Route path="/:slug" element={<Storefront />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </React.Suspense>
     </Router>
+  );
+}
+
+function RouteLoadingFallback() {
+  return (
+    <div className="min-h-screen bg-brutal-black flex flex-col items-center justify-center p-6 text-white">
+      <Loader2 className="w-10 h-10 text-brutal-accent animate-spin mb-4" />
+      <p className="font-mono text-xs uppercase tracking-widest text-gray-400">Carregando...</p>
+    </div>
   );
 }
 

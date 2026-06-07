@@ -58,6 +58,35 @@ with check (public.is_admin());
 
 revoke all on table public.photo_faces from anon, authenticated;
 
+create table if not exists public.face_search_consents (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid,
+  session_id text not null,
+  accepted boolean not null default false,
+  accepted_at timestamptz,
+  ip_address text,
+  user_agent text,
+  created_at timestamptz not null default now()
+);
+
+create index if not exists face_search_consents_session_accepted_idx
+on public.face_search_consents (session_id, accepted_at desc)
+where accepted = true;
+
+create index if not exists face_search_consents_created_at_idx
+on public.face_search_consents (created_at desc);
+
+alter table public.face_search_consents enable row level security;
+
+drop policy if exists "face_search_consents_admin_only" on public.face_search_consents;
+create policy "face_search_consents_admin_only"
+on public.face_search_consents
+for all
+using (public.is_admin())
+with check (public.is_admin());
+
+revoke all on table public.face_search_consents from anon, authenticated;
+
 create or replace function public.claim_face_backfill_batch(
   batch_size integer default 50,
   stale_after_minutes integer default 15

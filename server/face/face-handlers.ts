@@ -1,14 +1,17 @@
 import { randomUUID } from 'node:crypto';
+import { getClientIp } from '../../api/_security.js';
 import { deletePrivateObject, getAwsS3Config, testS3Connection, uploadPrivateImage } from '../../src/services/aws/s3.service.js';
 import { getRekognitionConfig, indexFaces, removeFaces, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
-import { faceError, isUuid, parseSelfieMultipart, readRequestBuffer, validateImage } from './face-utils.js';
+import { faceError, isUuid, parseSelfieMultipart, readJsonBody, readRequestBuffer, validateImage } from './face-utils.js';
 import { runFaceBackfill } from './face-backfill.js';
 import {
+  createFaceSearchConsent,
   getAuthenticatedUser,
   getEvent,
   getMatchesByEvent,
   getOwnedPhoto,
   getPhotoFaces,
+  hasValidFaceSearchConsent,
   replacePhotoFaces,
   updatePhotoFaceStatus,
 } from './face-repository.js';
@@ -60,8 +63,17 @@ export async function searchFaceHandler(req: any, res: any) {
   const startedAt = Date.now();
   let selfieKey = '';
   try {
-    const { eventId, buffer, contentType } = await parseSelfieMultipart(req);
+    const { eventId, sessionId, buffer, contentType } = await parseSelfieMultipart(req);
     if (!isUuid(eventId)) return res.status(400).json({ error: 'eventId invalido.' });
+    if (!sessionId || !(await hasValidFaceSearchConsent(sessionId))) {
+      console.warn('[face-consent] search:blocked', {
+        eventId,
+        hasSessionId: Boolean(sessionId),
+        ip: getClientIp(req),
+        userAgent: String(req.headers?.['user-agent'] || '').slice(0, 180),
+      });
+      return res.status(403).json({ error: 'Consentimento LGPD necessario para realizar a busca facial.' });
+    }
     validateImage(buffer, contentType);
     const event = await getEvent(eventId);
     if (!event?.id || event.isPublished === false) return res.status(404).json({ error: 'Evento nao encontrado.' });
@@ -81,6 +93,47 @@ export async function searchFaceHandler(req: any, res: any) {
     return res.status(response.statusCode).json({ error: response.message });
   } finally {
     if (selfieKey) await deletePrivateObject(selfieKey).catch((error) => console.error('[aws-s3] selfie:delete-error', { selfieKey, message: error?.message }));
+  }
+}
+
+export async function faceConsentHandler(req: any, res: any) {
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
+
+  try {
+    const body = await readJsonBody(req);
+    const sessionId = String(body?.sessionId || '').trim();
+    const accepted = body?.accepted === true;
+    if (!/^[a-zA-Z0-9._:-]{16,128}$/.test(sessionId)) {
+      return res.status(400).json({ error: 'sessionId invalido.' });
+    }
+    if (!accepted) return res.status(400).json({ error: 'Consentimento nao aceito.' });
+
+    const authUser = await getAuthenticatedUser(req).catch(() => null);
+    const acceptedAt = await createFaceSearchConsent({
+      sessionId,
+      accepted,
+      userId: authUser?.id || null,
+      ipAddress: getClientIp(req),
+      userAgent: String(req.headers?.['user-agent'] || ''),
+    });
+    console.info('[face-consent] accepted', {
+      sessionId,
+      userId: authUser?.id || null,
+      acceptedAt,
+      userAgent: String(req.headers?.['user-agent'] || '').slice(0, 180),
+    });
+    return res.status(200).json({ status: 'ok', acceptedAt, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString() });
+  } catch (error: any) {
+    const rawMessage = String(error?.message || '');
+    if (/face_search_consents|schema cache|relation .* does not exist|PGRST20/i.test(rawMessage)) {
+      console.error('[face-consent] schema-missing', { message: rawMessage });
+      return res.status(503).json({
+        error: 'Tabela de consentimento facial nao aplicada. Execute npm run supabase:schema:apply e publique o backend novamente.',
+      });
+    }
+    const response = faceError(error, 'Nao foi possivel registrar o consentimento.');
+    console.error('[face-consent] error', { name: error?.name, message: error?.message });
+    return res.status(response.statusCode).json({ error: response.message });
   }
 }
 

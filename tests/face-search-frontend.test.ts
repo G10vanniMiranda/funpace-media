@@ -8,6 +8,7 @@ test('face search frontend sends public multipart request without operations sec
 
   assert.match(method, /new FormData\(\)/);
   assert.match(method, /formData\.set\('eventId', eventId\)/);
+  assert.match(method, /formData\.set\('sessionId', sessionId\)/);
   assert.match(method, /formData\.set\('selfie', file, file\.name\)/);
   assert.match(method, /apiUrl\('\/api\/face\/search'\)/);
   assert.doesNotMatch(method, /Authorization|OPERATIONS_SECRET/);
@@ -20,10 +21,13 @@ test('face search modal validates selfie and provides professional search states
   assert.match(source, /image\/png/);
   assert.match(source, /8 \* 1024 \* 1024/);
   assert.match(source, /Trocar selfie/);
-  assert.match(source, /capture="user"/);
-  assert.match(source, /Usar camera/);
+  assert.match(source, /Permissao para Uso de Imagem/);
+  assert.match(source, /navigator\.mediaDevices\.getUserMedia/);
+  assert.match(source, /facingMode: 'user'/);
+  assert.match(source, /Precisamos de acesso a camera/);
+  assert.match(source, /Estou ciente/);
   assert.match(source, /Procurando suas fotos/);
-  assert.match(source, /Buscar minhas fotos/);
+  assert.match(source, /Usar esta selfie/);
 });
 
 test('event galleries expose face search and preserve original photo results', () => {
@@ -44,7 +48,26 @@ test('face search presents safe customer-facing API errors', () => {
 
   assert.match(method, /Nao foi possivel realizar a busca facial/);
   assert.match(method, /Nenhuma foto sua foi encontrada neste evento/);
+  assert.match(method, /Permissao para uso de imagem necessaria/);
   assert.doesNotMatch(method, /OPERATIONS_SECRET|Authorization/);
+});
+
+test('face search requires LGPD consent on frontend and backend', () => {
+  const modal = readFileSync('src/components/FaceSearchModal.tsx', 'utf8');
+  const handlers = readFileSync('server/face/face-handlers.ts', 'utf8');
+  const repository = readFileSync('server/face/face-repository.ts', 'utf8');
+  const migration = readFileSync('scripts/add-aws-rekognition-face-search.sql', 'utf8');
+
+  assert.match(modal, /funpace:face-search-consent/);
+  assert.match(modal, /30 \* 24 \* 60 \* 60 \* 1000/);
+  assert.match(modal, /recordFaceSearchConsent/);
+  assert.match(handlers, /faceConsentHandler/);
+  assert.match(handlers, /hasValidFaceSearchConsent/);
+  assert.match(handlers, /Consentimento LGPD necessario/);
+  assert.match(repository, /face_search_consents/);
+  assert.match(repository, /accepted_at=gte/);
+  assert.match(migration, /create table if not exists public\.face_search_consents/);
+  assert.match(migration, /face_search_consents_session_accepted_idx/);
 });
 
 test('public event page uses compact premium layout without changing gallery behavior', () => {

@@ -1,17 +1,26 @@
-import { Camera, ImagePlus, Loader2, ScanFace, Search, ShieldCheck, X } from 'lucide-react';
+import { Camera, ImagePlus, Loader2, RotateCcw, ScanFace, Search, ShieldCheck, X } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import React from 'react';
+import { productService } from '../lib/services';
 import type { FaceSearchMatch } from '../types';
 
 interface FaceSearchModalProps {
   isOpen: boolean;
   eventName: string;
   onClose: () => void;
-  onSearch: (file: File) => Promise<FaceSearchMatch[]>;
+  onSearch: (file: File, sessionId: string) => Promise<FaceSearchMatch[]>;
 }
 
 const maxSelfieBytes = 8 * 1024 * 1024;
 const allowedTypes = new Set(['image/jpeg', 'image/jpg', 'image/png']);
+const consentStorageKey = 'funpace:face-search-consent';
+const consentTtlMs = 30 * 24 * 60 * 60 * 1000;
+
+type StoredConsent = {
+  sessionId: string;
+  acceptedAt: string;
+  expiresAt: string;
+};
 
 function validateSelfie(file: File) {
   if (!allowedTypes.has(file.type.toLowerCase())) {
@@ -23,13 +32,50 @@ function validateSelfie(file: File) {
   return '';
 }
 
+function createFaceSearchSessionId() {
+  return `face-${crypto.randomUUID()}`;
+}
+
+function readStoredConsent(): StoredConsent | null {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(consentStorageKey) || 'null') as StoredConsent | null;
+    if (!parsed?.sessionId || !parsed.expiresAt) return null;
+    if (new Date(parsed.expiresAt).getTime() <= Date.now()) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function clearStoredConsent() {
+  localStorage.removeItem(consentStorageKey);
+}
+
+function saveStoredConsent(input: { sessionId: string; acceptedAt?: string; expiresAt?: string }) {
+  const acceptedAt = input.acceptedAt || new Date().toISOString();
+  const expiresAt = input.expiresAt || new Date(Date.now() + consentTtlMs).toISOString();
+  const stored = { sessionId: input.sessionId, acceptedAt, expiresAt };
+  localStorage.setItem(consentStorageKey, JSON.stringify(stored));
+  return stored;
+}
+
 export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSearchModalProps) {
   const galleryInputRef = React.useRef<HTMLInputElement>(null);
-  const cameraInputRef = React.useRef<HTMLInputElement>(null);
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+  const streamRef = React.useRef<MediaStream | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState('');
   const [error, setError] = React.useState('');
   const [isSearching, setIsSearching] = React.useState(false);
+  const [isCameraLoading, setIsCameraLoading] = React.useState(false);
+  const [consent, setConsent] = React.useState<StoredConsent | null>(null);
+  const [showConsent, setShowConsent] = React.useState(true);
+
+  const stopCamera = React.useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+  }, []);
 
   const clearFile = React.useCallback(() => {
     setFile(null);
@@ -39,15 +85,51 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       return '';
     });
     if (galleryInputRef.current) galleryInputRef.current.value = '';
-    if (cameraInputRef.current) cameraInputRef.current.value = '';
   }, []);
 
+  const openCamera = React.useCallback(async () => {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setError('Seu navegador nao oferece suporte a camera. Use a opcao de carregar foto.');
+      return;
+    }
+    setError('');
+    setIsCameraLoading(true);
+    clearFile();
+    stopCamera();
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => undefined);
+      }
+    } catch {
+      setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
+    } finally {
+      setIsCameraLoading(false);
+    }
+  }, [clearFile, stopCamera]);
+
   React.useEffect(() => {
-    if (!isOpen) clearFile();
+    if (!isOpen) {
+      clearFile();
+      stopCamera();
+      setShowConsent(true);
+      return;
+    }
+
+    const stored = readStoredConsent();
+    setConsent(stored);
+    setShowConsent(!stored);
+    if (stored) {
+      window.setTimeout(() => {
+        openCamera().catch(() => undefined);
+      }, 80);
+    }
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
     };
-  }, [clearFile, isOpen, previewUrl]);
+  }, [clearFile, isOpen, openCamera, previewUrl, stopCamera]);
 
   const selectFile = (nextFile?: File) => {
     if (!nextFile) return;
@@ -63,6 +145,50 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       if (current) URL.revokeObjectURL(current);
       return URL.createObjectURL(nextFile);
     });
+    stopCamera();
+  };
+
+  const acceptConsent = async () => {
+    setError('');
+    setIsCameraLoading(true);
+    const sessionId = consent?.sessionId || createFaceSearchSessionId();
+    try {
+      const recorded = await productService.recordFaceSearchConsent(sessionId);
+      const stored = saveStoredConsent({ sessionId, acceptedAt: recorded.acceptedAt, expiresAt: recorded.expiresAt });
+      setConsent(stored);
+      setShowConsent(false);
+      window.setTimeout(() => {
+        openCamera().catch(() => undefined);
+      }, 80);
+    } catch (consentError) {
+      setError(consentError instanceof Error ? consentError.message : 'Nao foi possivel registrar o consentimento.');
+    } finally {
+      setIsCameraLoading(false);
+    }
+  };
+
+  const captureSelfie = async () => {
+    const video = videoRef.current;
+    if (!video?.videoWidth || !video.videoHeight) {
+      setError('Camera ainda nao esta pronta. Tente novamente em alguns instantes.');
+      return;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext('2d');
+    if (!context) {
+      setError('Nao foi possivel capturar a selfie neste navegador.');
+      return;
+    }
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+    if (!blob) {
+      setError('Nao foi possivel gerar a selfie. Tente novamente.');
+      return;
+    }
+    selectFile(new File([blob], `selfie-${Date.now()}.jpg`, { type: 'image/jpeg' }));
   };
 
   const submit = async () => {
@@ -70,13 +196,25 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       setError('Selecione uma selfie antes de iniciar a busca.');
       return;
     }
+    const activeConsent = consent || readStoredConsent();
+    if (!activeConsent) {
+      setShowConsent(true);
+      setError('Permissao para uso de imagem necessaria antes da busca facial.');
+      return;
+    }
     setError('');
     setIsSearching(true);
     try {
-      await onSearch(file);
+      await onSearch(file, activeConsent.sessionId);
       onClose();
     } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : 'Nao foi possivel buscar suas fotos.');
+      const message = searchError instanceof Error ? searchError.message : 'Nao foi possivel buscar suas fotos.';
+      if (/permiss[aã]o|consentimento/i.test(message)) {
+        clearStoredConsent();
+        setConsent(null);
+        setShowConsent(true);
+      }
+      setError(message);
     } finally {
       setIsSearching(false);
     }
@@ -124,6 +262,52 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
               </div>
             </div>
 
+            {showConsent ? (
+              <div className="p-5 sm:p-8">
+                <div className="mx-auto max-w-2xl text-center">
+                  <h3 className="font-display text-3xl uppercase text-brutal-accent sm:text-4xl">Permissao para Uso de Imagem</h3>
+                  <p className="mt-5 text-base leading-relaxed text-gray-700">
+                    Para encontrar suas fotos em nosso banco de dados, precisamos que envie uma selfie. Sua privacidade e nossa prioridade e seus dados serao tratados de acordo com a Lei Geral de Protecao de Dados (LGPD).
+                  </p>
+                  <div className="mt-6 rounded-2xl bg-gray-50 p-5 text-left text-sm leading-relaxed text-gray-700">
+                    <p className="mb-3 text-center font-display text-xl uppercase text-brutal-accent">Como usamos sua imagem:</p>
+                    <ul className="space-y-2">
+                      <li>Sua foto sera utilizada exclusivamente para localizar suas fotos atraves do reconhecimento facial.</li>
+                      <li>Nao compartilhamos sua imagem com terceiros.</li>
+                      <li>Caso a opcao de armazenamento nao seja marcada, a selfie sera removida apos o processamento.</li>
+                      <li>O usuario podera solicitar a exclusao dos dados a qualquer momento.</li>
+                    </ul>
+                  </div>
+                  <p className="mt-5 font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">
+                    Leia nossa <a href="/privacidade" className="font-bold text-brutal-black underline hover:text-brutal-accent">Politica de Privacidade</a> e nossos <a href="/termos" className="font-bold text-brutal-black underline hover:text-brutal-accent">Termos de Uso</a>.
+                  </p>
+                  {error && (
+                    <div role="alert" className="mt-5 border-2 border-red-500 bg-red-50 p-3 font-mono text-[10px] uppercase leading-relaxed text-red-700">
+                      {error}
+                    </div>
+                  )}
+                  <div className="mt-8 grid gap-3 sm:grid-cols-2">
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      disabled={isCameraLoading}
+                      className="inline-flex min-h-14 items-center justify-center rounded-full bg-gray-100 px-6 font-display text-base uppercase text-brutal-black transition-colors hover:bg-white disabled:opacity-60"
+                    >
+                      Discordo
+                    </button>
+                    <button
+                      type="button"
+                      onClick={acceptConsent}
+                      disabled={isCameraLoading}
+                      className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-brutal-accent px-6 font-display text-base uppercase text-white shadow-[0_12px_28px_rgba(255,77,0,0.28)] transition-colors hover:bg-brutal-black disabled:cursor-wait disabled:opacity-70"
+                    >
+                      {isCameraLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : <ShieldCheck className="h-5 w-5" />}
+                      Estou ciente
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ) : (
             <div className="grid gap-6 p-5 sm:p-7 md:grid-cols-[minmax(0,1fr)_280px]">
               <div>
                 {previewUrl ? (
@@ -141,11 +325,11 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                         </button>
                         <button
                           type="button"
-                          onClick={() => cameraInputRef.current?.click()}
+                          onClick={openCamera}
                           className="inline-flex min-h-12 items-center justify-center gap-2 bg-brutal-black px-3 font-display text-xs uppercase text-white brutal-border brutal-shadow-hover sm:text-sm"
                         >
-                          <Camera className="h-4 w-4" />
-                          Tirar outra
+                          <RotateCcw className="h-4 w-4" />
+                          Tirar novamente
                         </button>
                       </div>
                     )}
@@ -159,29 +343,24 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                   </div>
                 ) : (
                   <div className="flex aspect-square max-h-105 w-full flex-col items-center justify-center gap-4 bg-gray-50 p-6 text-center brutal-border sm:p-8">
-                    <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brutal-black text-white">
-                      <ScanFace className="h-9 w-9" />
+                    <div className="relative aspect-square w-full max-w-md overflow-hidden rounded-2xl bg-brutal-black">
+                      <video ref={videoRef} className="h-full w-full object-cover" playsInline muted autoPlay />
+                      {isCameraLoading && (
+                        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-brutal-black/80 text-white">
+                          <Loader2 className="h-10 w-10 animate-spin text-brutal-accent" />
+                          <span className="font-mono text-[10px] uppercase tracking-widest">Abrindo camera...</span>
+                        </div>
+                      )}
                     </div>
-                    <span className="font-display text-2xl uppercase">Envie uma selfie</span>
-                    <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">JPG ou PNG, ate 8 MB</span>
+                    <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">Camera frontal quando disponivel</span>
                     <div className="mt-2 grid w-full max-w-sm gap-3 sm:grid-cols-2">
-                      <button
-                        type="button"
-                        onClick={() => galleryInputRef.current?.click()}
-                        disabled={isSearching}
-                        className="inline-flex min-h-13 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border brutal-shadow-hover disabled:opacity-50"
-                      >
-                        <ImagePlus className="h-5 w-5" />
-                        Galeria
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => cameraInputRef.current?.click()}
-                        disabled={isSearching}
-                        className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50"
-                      >
+                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
                         <Camera className="h-5 w-5" />
-                        Usar camera
+                        Tirar selfie
+                      </button>
+                      <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={isSearching} className="inline-flex min-h-13 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border brutal-shadow-hover disabled:opacity-50">
+                        <ImagePlus className="h-5 w-5" />
+                        Carregar foto
                       </button>
                     </div>
                   </div>
@@ -190,14 +369,6 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                   ref={galleryInputRef}
                   type="file"
                   accept="image/jpeg,image/png"
-                  className="sr-only"
-                  onChange={(event) => selectFile(event.target.files?.[0])}
-                />
-                <input
-                  ref={cameraInputRef}
-                  type="file"
-                  accept="image/*"
-                  capture="user"
                   className="sr-only"
                   onChange={(event) => selectFile(event.target.files?.[0])}
                 />
@@ -234,12 +405,13 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                   ) : (
                     <>
                       <Search className="h-5 w-5" />
-                      Buscar minhas fotos
+                      Usar esta selfie
                     </>
                   )}
                 </button>
               </div>
             </div>
+            )}
           </motion.div>
         </div>
       )}

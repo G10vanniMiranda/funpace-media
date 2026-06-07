@@ -518,6 +518,23 @@ function Storefront() {
   const selectedEventDateLabel = selectedEventDate
     ? new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(selectedEventDate.includes('T') ? selectedEventDate : `${selectedEventDate}T12:00:00`))
     : 'Data a confirmar';
+  const selectedEventPhotographer = React.useMemo(() => {
+    if (!selectedEventName) return null;
+    if (selectedRegisteredEvent?.photographerId) {
+      const owner = publicPhotographers.find((photographer) => photographer.id === selectedRegisteredEvent.photographerId);
+      if (owner) return owner;
+    }
+
+    const sellerId = [...displayPhotos, ...displayVideos].find((product) => product.vendedorId)?.vendedorId;
+    return sellerId ? publicPhotographers.find((photographer) => photographer.id === sellerId) ?? null : null;
+  }, [displayPhotos, displayVideos, publicPhotographers, selectedEventName, selectedRegisteredEvent?.photographerId]);
+  const selectedEventCategory = selectedRegisteredEvent?.status === 'scheduled'
+    ? 'Proximo evento'
+    : selectedRegisteredEvent?.status === 'closed'
+      ? 'Evento encerrado'
+      : selectedRegisteredEvent?.status === 'active'
+        ? 'Evento ativo'
+        : 'Evento esportivo';
   const isEventsRoute = location.pathname === '/eventos';
   const isCustomerOrdersRoute = location.pathname === '/minhas-compras';
   const eventSlugFromPath = getEventSlugFromPath(location.pathname);
@@ -656,7 +673,7 @@ function Storefront() {
     openGlobalEventResult(product.event || 'Evento sem nome');
   };
 
-  const handleSelfieSearch = async (file: File) => {
+  const handleSelfieSearch = async (file: File, sessionId: string) => {
     const selectedEvent = selectedRegisteredEvent;
     if (!selectedEvent?.id) {
       throw new Error('Abra um evento antes de enviar a selfie.');
@@ -666,7 +683,7 @@ function Storefront() {
     setEventQuery('');
     setShowDashboard(false);
 
-    const matches = await productService.searchByFace(file, selectedEvent.id);
+    const matches = await productService.searchByFace(file, selectedEvent.id, sessionId);
     setFaceSearchMatches(matches);
     setSearchType('selfie');
     setActiveView('photos');
@@ -968,90 +985,116 @@ function Storefront() {
           )}
 
           {!isLoading && selectedEventName && !searchBib && !searchType && (
-            <div className="max-w-350 mx-auto px-4 md:px-6 pt-10 pb-4">
+            <div className="max-w-350 mx-auto px-4 md:px-6 pt-6 pb-2">
               <button
                 onClick={() => {
                   setSelectedEventName(null);
                   navigate('/eventos');
                 }}
-                className="font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-6 flex items-center gap-2 cursor-pointer"
+                className="font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-5 flex items-center gap-2 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
                 Voltar para eventos
               </button>
 
-              <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_420px] lg:items-start">
-                <div className="space-y-6">
-                  <div className="bg-white brutal-border brutal-shadow p-5 md:p-8">
-                    <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
-                      Evento selecionado
-                    </p>
-                    <h1 className="font-display text-[clamp(2.35rem,8vw,5rem)] uppercase leading-[0.9] tracking-normal wrap-break-word">
-                      {selectedEventName}
-                    </h1>
-
-                    <div className="mt-6 grid gap-3 border-t-2 border-dashed border-gray-200 pt-5 sm:grid-cols-2">
-                      <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-gray-600">
-                        <MapPin className="w-5 h-5 text-brutal-accent shrink-0" />
-                        <span className="truncate">{selectedEventCheckpoints[0] || 'Local a confirmar'}</span>
+              <div className="rounded-[1.75rem] border border-black/10 bg-white p-4 shadow-[0_18px_55px_rgba(5,5,5,0.08)] md:p-5">
+                <div className="grid gap-5 lg:grid-cols-[minmax(280px,0.48fr)_minmax(0,1fr)] lg:items-stretch">
+                  <div className="relative min-h-52 overflow-hidden rounded-[1.35rem] bg-brutal-black shadow-[0_14px_34px_rgba(5,5,5,0.16)] sm:min-h-72 lg:min-h-0">
+                    {selectedEventCover ? (
+                      <img
+                        src={selectedEventCover}
+                        alt={selectedEventName}
+                        loading="eager"
+                        decoding="async"
+                        className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
+                      />
+                    ) : (
+                      <div className="absolute inset-0 grid place-items-center text-white/35">
+                        <ImageIcon className="h-16 w-16" />
                       </div>
-                      <div className="flex items-center gap-3 font-mono text-xs uppercase tracking-widest text-gray-600">
-                        <CalendarDays className="w-5 h-5 text-brutal-accent shrink-0" />
-                        <span>{selectedEventDateLabel}</span>
-                      </div>
-                    </div>
+                    )}
+                    <div className="absolute inset-0 bg-linear-to-t from-black/45 via-transparent to-black/10" />
+                    <span className="absolute left-4 top-4 rounded-full bg-brutal-accent px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-widest text-white shadow-lg">
+                      {selectedEventCategory}
+                    </span>
                   </div>
 
-                  {selectedEventCover && (
-                    <div className="bg-white brutal-border brutal-shadow overflow-hidden">
-                      <div className="aspect-video bg-brutal-black">
-                        <img
-                          src={selectedEventCover}
-                          alt={selectedEventName}
-                          loading="lazy"
-                          decoding="async"
-                          className="h-full w-full object-cover"
-                        />
+                  <div className="min-w-0">
+                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="min-w-0">
+                        <p className="font-mono text-[9px] font-bold uppercase tracking-[0.26em] text-brutal-accent">
+                          Evento selecionado
+                        </p>
+                        <h1 className="mt-2 max-w-4xl font-display text-[clamp(2.15rem,5vw,4.75rem)] uppercase leading-[0.9] tracking-normal text-brutal-black wrap-break-word">
+                          {selectedEventName}
+                        </h1>
+                      </div>
+                      <div className="shrink-0 rounded-2xl bg-[#f7f7f4] px-4 py-3 ring-1 ring-black/10">
+                        <p className="font-mono text-[8px] uppercase tracking-[0.2em] text-gray-400">Loja criada por</p>
+                        <p className="mt-1 font-display text-sm uppercase text-brutal-black">
+                          {selectedEventPhotographer ? getPhotographerPublicName(selectedEventPhotographer) : 'Funpace Media'}
+                        </p>
                       </div>
                     </div>
-                  )}
+
+                    <div className="mt-5 grid gap-3 border-y border-black/10 py-4 sm:grid-cols-2 xl:grid-cols-4">
+                      <EventMeta icon={<CalendarDays className="h-4 w-4" />} label="Data" value={selectedEventDateLabel} />
+                      <EventMeta icon={<MapPin className="h-4 w-4" />} label="Cidade" value={selectedEventCheckpoints[0] || 'Local a confirmar'} />
+                      <EventMeta icon={<Camera className="h-4 w-4" />} label="Categoria" value={selectedEventCategory} />
+                      <EventMeta icon={<Clock3 className="h-4 w-4" />} label="Expiracao" value="Sem data definida" />
+                    </div>
+
+                    <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
+                      <EventCompactStat icon={<Images className="h-4 w-4" />} label="Fotos" value={displayPhotos.length} />
+                      <EventCompactStat icon={<Video className="h-4 w-4" />} label="Videos" value={displayVideos.length} />
+                      <EventCompactStat icon={<MapPin className="h-4 w-4" />} label="Pontos" value={selectedEventCheckpoints.length || 1} />
+                    </div>
+                  </div>
                 </div>
 
-                <aside className="space-y-4 lg:sticky lg:top-28">
-                  <button
-                    type="button"
-                    onClick={() => setIsFaceSearchOpen(true)}
-                    disabled={!selectedRegisteredEvent?.id}
-                    className="flex min-h-16 w-full items-center justify-center gap-3 bg-brutal-accent px-5 text-center font-display text-base uppercase tracking-widest text-white brutal-border brutal-shadow-hover hover:bg-brutal-black disabled:cursor-not-allowed disabled:bg-gray-300"
-                  >
-                    <Scan className="h-5 w-5" />
-                    Encontrar minhas fotos com selfie
-                  </button>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div className="bg-white brutal-border p-4">
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Fotos</p>
-                      <div className="flex items-end justify-between gap-2">
-                        <span className="font-display text-3xl leading-none">{displayPhotos.length}</span>
-                        <Camera className="w-5 h-5 text-brutal-accent" />
+                <div className="mx-auto mt-5 max-w-4xl rounded-[1.5rem] border border-black/10 bg-linear-to-br from-white via-[#fffdf3] to-[#f3f3ef] p-4 shadow-[0_14px_42px_rgba(5,5,5,0.10)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_50px_rgba(5,5,5,0.14)] sm:p-5">
+                  <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
+                    <div className="flex items-center gap-4">
+                      <div className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-brutal-black text-brutal-accent shadow-inner ring-1 ring-white/40 sm:h-20 sm:w-20">
+                        <ScanFace className="h-8 w-8 sm:h-10 sm:w-10" />
+                      </div>
+                      <div>
+                        <p className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Reconhecimento facial</p>
+                        <h2 className="mt-1 max-w-lg font-display text-2xl uppercase leading-tight text-brutal-black sm:text-3xl">
+                          Encontre suas fotos com Reconhecimento facial
+                        </h2>
                       </div>
                     </div>
-                    <div className="bg-white brutal-border p-4">
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Videos</p>
-                      <div className="flex items-end justify-between gap-2">
-                        <span className="font-display text-3xl leading-none">{displayVideos.length}</span>
-                        <Video className="w-5 h-5 text-brutal-accent" />
-                      </div>
-                    </div>
-                    <div className="bg-white brutal-border p-4">
-                      <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Pontos</p>
-                      <div className="flex items-end justify-between gap-2">
-                        <span className="font-display text-3xl leading-none">{selectedEventCheckpoints.length || 1}</span>
-                        <MapPin className="w-5 h-5 text-brutal-accent" />
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsFaceSearchOpen(true)}
+                      disabled={!selectedRegisteredEvent?.id}
+                      aria-label="Encontrar minhas fotos com selfie"
+                      className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-brutal-accent px-6 font-display text-sm uppercase tracking-wider text-white shadow-[0_10px_24px_rgba(255,77,0,0.25)] transition-all hover:-translate-y-0.5 hover:bg-brutal-black disabled:cursor-not-allowed disabled:bg-gray-300 disabled:shadow-none"
+                    >
+                      <Scan className="h-4 w-4" />
+                      Tirar selfie
+                    </button>
                   </div>
-
-                </aside>
+                  <div className="mt-4 flex flex-col gap-2 border-t border-black/10 pt-4 sm:flex-row sm:items-center sm:justify-end">
+                    <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500 sm:mr-auto">Voce tambem pode:</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsFaceSearchOpen(true)}
+                      disabled={!selectedRegisteredEvent?.id}
+                      className="inline-flex min-h-10 items-center justify-center rounded-xl border border-black/10 bg-white px-5 font-mono text-[10px] font-bold uppercase tracking-wider text-brutal-black transition-colors hover:border-brutal-accent hover:text-brutal-accent disabled:cursor-not-allowed disabled:text-gray-400"
+                    >
+                      Carregar foto
+                    </button>
+                    <button
+                      type="button"
+                      onClick={clearFaceSearch}
+                      className="inline-flex min-h-10 items-center justify-center rounded-xl border border-black/10 bg-white px-5 font-mono text-[10px] font-bold uppercase tracking-wider text-brutal-black transition-colors hover:border-brutal-accent hover:text-brutal-accent"
+                    >
+                      Ver todas as fotos
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -1694,8 +1737,8 @@ function PublicEventPage({
         isOpen={isFaceSearchOpen}
         eventName={event.name}
         onClose={() => setIsFaceSearchOpen(false)}
-        onSearch={async (file) => {
-          const matches = await productService.searchByFace(file, event.id);
+        onSearch={async (file, sessionId) => {
+          const matches = await productService.searchByFace(file, event.id, sessionId);
           setFaceMatches(matches);
           setActiveView('photos');
           if (matches.length === 0) {

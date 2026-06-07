@@ -1,6 +1,6 @@
 import 'dotenv/config';
 import { handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.js';
-import { backfillFaceHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from '../server/face/face-handlers.js';
+import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from '../server/face/face-handlers.js';
 import { shouldBypassFaceBackfillRateLimit } from '../server/face/face-rate-limit.js';
 
 export const config = {
@@ -14,6 +14,7 @@ function routeName(req: any) {
   if (route) return route;
   const url = String(req.url || '');
   if (url.includes('/search')) return 'search';
+  if (url.includes('/consent')) return 'consent';
   if (url.includes('/index')) return 'index';
   if (url.includes('/backfill')) return 'backfill';
   return 'test';
@@ -27,6 +28,7 @@ export default async function handler(req: any, res: any) {
 
   const route = routeName(req);
   if (route === 'backfill' && !bypassBackfillRateLimit && rateLimit(req, res, { keyPrefix: 'face-backfill', windowMs: 60 * 1000, max: 4 })) return;
+  if (route === 'consent' && req.method === 'POST') return faceConsentHandler(req, res);
   if (route === 'search' && req.method === 'POST') return searchFaceHandler(req, res);
   if (route === 'index' && req.method === 'POST') return indexPhotoHandler(req, res);
   if (route === 'backfill' && req.method === 'POST') return backfillFaceHandler(req, res);

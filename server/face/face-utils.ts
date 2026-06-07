@@ -34,7 +34,7 @@ export async function readRequestBuffer(req: any) {
   return Buffer.concat(chunks);
 }
 
-export function parseSelfieMultipart(req: any): Promise<{ eventId: string; buffer: Buffer; contentType: string }> {
+export function parseSelfieMultipart(req: any): Promise<{ eventId: string; sessionId: string; buffer: Buffer; contentType: string }> {
   return new Promise((resolve, reject) => {
     const fields: Record<string, string> = {};
     const chunks: Buffer[] = [];
@@ -68,10 +68,33 @@ export function parseSelfieMultipart(req: any): Promise<{ eventId: string; buffe
         reject(Object.assign(new Error('Campo selfie nao enviado.'), { statusCode: 400 }));
         return;
       }
-      resolve({ eventId: fields.eventId || '', buffer: Buffer.concat(chunks, size), contentType: fileContentType });
+      resolve({
+        eventId: fields.eventId || '',
+        sessionId: fields.sessionId || '',
+        buffer: Buffer.concat(chunks, size),
+        contentType: fileContentType,
+      });
     });
     req.pipe(parser);
   });
+}
+
+export async function readJsonBody(req: any, maxBytes = 20 * 1024) {
+  if (req.body && typeof req.body === 'object' && !Buffer.isBuffer(req.body)) return req.body;
+  if (typeof req.body === 'string' && req.body.trim()) return JSON.parse(req.body);
+
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += chunk.length;
+    if (size > maxBytes) {
+      throw Object.assign(new Error('Payload maior que o limite permitido.'), { statusCode: 413 });
+    }
+    chunks.push(Buffer.from(chunk));
+  }
+
+  const raw = Buffer.concat(chunks).toString('utf8').trim();
+  return raw ? JSON.parse(raw) : {};
 }
 
 export function faceError(error: any, fallback: string) {

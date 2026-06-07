@@ -46,6 +46,38 @@ export async function getEvent(eventId: string) {
   return rows[0] || null;
 }
 
+export async function createFaceSearchConsent(input: {
+  sessionId: string;
+  accepted: boolean;
+  ipAddress: string;
+  userAgent: string;
+  userId?: string | null;
+}) {
+  const acceptedAt = input.accepted ? new Date().toISOString() : null;
+  await supabaseRequest('/rest/v1/face_search_consents', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      session_id: input.sessionId,
+      user_id: input.userId || null,
+      accepted: input.accepted,
+      accepted_at: acceptedAt,
+      ip_address: input.ipAddress || null,
+      user_agent: input.userAgent?.slice(0, 1000) || null,
+    }),
+  });
+  return acceptedAt;
+}
+
+export async function hasValidFaceSearchConsent(sessionId: string) {
+  if (!sessionId) return false;
+  const acceptedAfter = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+  const rows = await supabaseRequest<Array<{ id: string }>>(
+    `/rest/v1/face_search_consents?select=id&session_id=eq.${encodeURIComponent(sessionId)}&accepted=eq.true&accepted_at=gte.${encodeURIComponent(acceptedAfter)}&order=accepted_at.desc&limit=1`,
+  );
+  return rows.length > 0;
+}
+
 export async function getPendingFacePhotoCount() {
   const count = await supabaseRequest<number>('/rest/v1/rpc/count_face_backfill_pending', {
     method: 'POST',

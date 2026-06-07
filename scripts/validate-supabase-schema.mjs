@@ -51,6 +51,7 @@ const requiredColumns = {
   coupons: ["id", "code", "type", "value", "maxUses", "usedCount", "startsAt", "expiresAt", "isActive", "createdAt", "updatedAt"],
   admin_activity_logs: ["id", "actorId", "actorEmail", "action", "targetType", "targetId", "metadata", "createdAt"],
   platform_settings: ["id", "platformFeePercent", "withdrawalFee", "autoBlockSuspicious", "paymentProvider", "brandName", "supportEmail", "maxUploadBytes", "createdAt", "updatedAt"],
+  face_search_consents: ["id", "user_id", "session_id", "accepted", "accepted_at", "ip_address", "user_agent", "created_at"],
 };
 
 const requiredPolicies = [
@@ -88,12 +89,15 @@ const requiredPolicies = [
   "admin_activity_logs_admin_select_insert",
   "platform_settings_select_public",
   "platform_settings_update_admin_only",
+  "face_search_consents_admin_only",
 ];
 
 const requiredIndexes = [
   "products_public_event_created_at_idx",
   "products_public_vendor_event_created_at_idx",
   "products_face_backfill_pending_idx",
+  "face_search_consents_session_accepted_idx",
+  "face_search_consents_created_at_idx",
   "orders_pending_provider_created_at_idx",
   "payment_events_order_provider_created_at_idx",
   "payments_order_provider_updated_at_idx",

@@ -13,7 +13,7 @@ import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
 import adminApiHandler from "./api/admin";
 import type { PaymentMethod } from "./server/payments/providers/types";
-import { backfillFaceHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
+import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
 
 const app = express();
@@ -84,7 +84,7 @@ app.use((_req, res, next) => {
   res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  res.setHeader("Permissions-Policy", "camera=(self), microphone=(), geolocation=()");
   res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
   res.setHeader("Cross-Origin-Resource-Policy", "same-site");
   res.setHeader("Origin-Agent-Cluster", "?1");
@@ -1904,6 +1904,7 @@ app.post("/api/face/index", express.raw({
 }), indexPhotoHandler);
 
 app.post("/api/face/search", searchFaceHandler);
+app.post("/api/face/consent", faceConsentHandler);
 app.post("/api/face/backfill", backfillFaceHandler);
 app.get("/api/face/test", testFaceHandler);
 

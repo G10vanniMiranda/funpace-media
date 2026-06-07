@@ -577,9 +577,33 @@ export const productService = {
     return signMediaUrls(products, { protectImageOriginals: true });
   },
 
-  async searchByFace(file: File, eventId: string): Promise<FaceSearchMatch[]> {
+  async recordFaceSearchConsent(sessionId: string) {
+    const response = await fetch(apiUrl('/api/face/consent'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, accepted: true }),
+    });
+    const raw = await response.text();
+    let payload = {} as { acceptedAt?: string; expiresAt?: string; error?: string };
+    try {
+      payload = raw ? JSON.parse(raw) : {};
+    } catch {
+      payload = { error: raw };
+    }
+    if (!response.ok) {
+      const message = String(payload.error || raw || '');
+      if (response.status === 404 || /Cannot POST \/api\/face\/consent/i.test(message)) {
+        throw new Error('Backend de consentimento ainda nao publicado. Reinicie/deploye a API com a rota /api/face/consent.');
+      }
+      throw new Error(message || 'Nao foi possivel registrar o consentimento.');
+    }
+    return payload;
+  },
+
+  async searchByFace(file: File, eventId: string, sessionId?: string): Promise<FaceSearchMatch[]> {
     const formData = new FormData();
     formData.set('eventId', eventId);
+    if (sessionId) formData.set('sessionId', sessionId);
     formData.set('selfie', file, file.name);
     const response = await fetch(apiUrl('/api/face/search'), { method: 'POST', body: formData });
     const payload = await response.json().catch(() => ({})) as Partial<FaceSearchResponse> & { error?: string };
@@ -587,6 +611,7 @@ export const productService = {
       if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de ate 8 MB.');
       if (response.status === 415) throw new Error('Formato invalido. Envie uma selfie JPG ou PNG.');
       if (response.status === 422) throw new Error('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.');
+      if (response.status === 403) throw new Error('Permissao para uso de imagem necessaria para realizar a busca facial.');
       throw new Error('Nao foi possivel realizar a busca facial. Tente novamente em alguns instantes.');
     }
     const matches = Array.isArray(payload.matches) ? payload.matches : [];

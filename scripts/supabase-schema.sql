@@ -931,6 +931,73 @@ with check (public.is_admin());
 
 revoke all on table public.photo_faces from anon, authenticated;
 
+create or replace function public.claim_face_backfill_batch(
+  batch_size integer default 50,
+  stale_after_minutes integer default 15
+)
+returns setof public.products
+language sql
+security definer
+set search_path = public
+as $$
+  with candidates as (
+    select p.id
+    from public.products p
+    where p.status = 'published'
+      and p.type = 'IMG'
+      and (
+        p."faceIndexStatus" = 'pending'
+        or (
+          p."faceIndexStatus" = 'processing'
+          and (
+            p."faceIndexedAt" is null
+            or p."faceIndexedAt" < now() - make_interval(mins => greatest(stale_after_minutes, 1))
+          )
+        )
+      )
+    order by p."createdAt" asc
+    for update skip locked
+    limit least(greatest(batch_size, 1), 50)
+  )
+  update public.products p
+  set
+    "faceIndexStatus" = 'processing',
+    "faceIndexError" = null,
+    "faceIndexedAt" = now()
+  from candidates
+  where p.id = candidates.id
+  returning p.*;
+$$;
+
+revoke all on function public.claim_face_backfill_batch(integer, integer) from public, anon, authenticated;
+grant execute on function public.claim_face_backfill_batch(integer, integer) to service_role;
+
+create or replace function public.count_face_backfill_pending()
+returns bigint
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)
+  from public.products p
+  where p.status = 'published'
+    and p.type = 'IMG'
+    and (
+      p."faceIndexStatus" = 'pending'
+      or (
+        p."faceIndexStatus" = 'processing'
+        and (
+          p."faceIndexedAt" is null
+          or p."faceIndexedAt" < now() - interval '15 minutes'
+        )
+      )
+    );
+$$;
+
+revoke all on function public.count_face_backfill_pending() from public, anon, authenticated;
+grant execute on function public.count_face_backfill_pending() to service_role;
+
 drop policy if exists "user_sessions_owner_or_admin" on public.user_sessions;
 create policy "user_sessions_owner_or_admin"
 on public.user_sessions

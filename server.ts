@@ -13,7 +13,7 @@ import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
 import adminApiHandler from "./api/admin";
 import type { PaymentMethod } from "./server/payments/providers/types";
-import { indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
+import { backfillFaceHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -231,6 +231,11 @@ app.use(["/api/media/sign"], createRateLimiter({
   keyPrefix: "media-sign",
   windowMs: 60 * 1000,
   max: 60,
+}));
+app.use(["/api/face/backfill"], createRateLimiter({
+  keyPrefix: "face-backfill",
+  windowMs: 60 * 1000,
+  max: 4,
 }));
 app.use(["/api/products"], createRateLimiter({
   keyPrefix: "product-engagement",
@@ -1885,6 +1890,7 @@ app.post("/api/face/index", express.raw({
 }), indexPhotoHandler);
 
 app.post("/api/face/search", searchFaceHandler);
+app.post("/api/face/backfill", backfillFaceHandler);
 app.get("/api/face/test", testFaceHandler);
 
 app.post("/api/photographers/profile-image", express.raw({

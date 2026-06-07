@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { deletePrivateObject, getAwsS3Config, testS3Connection, uploadPrivateImage } from '../../src/services/aws/s3.service.js';
 import { getRekognitionConfig, indexFaces, removeFaces, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
 import { faceError, isUuid, parseSelfieMultipart, readRequestBuffer, validateImage } from './face-utils.js';
+import { runFaceBackfill } from './face-backfill.js';
 import {
   getAuthenticatedUser,
   getEvent,
@@ -116,5 +117,27 @@ export async function testFaceHandler(req: any, res: any) {
       : `Falha AWS em ${stage}: ${errorName}.`;
     console.error('[aws-face-test] error', { stage, name: errorName, message: error?.message });
     return res.status(503).json({ status: 'error', stage, error: safeMessage });
+  }
+}
+
+export async function backfillFaceHandler(req: any, res: any) {
+  const bearer = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
+  const operationsSecret = process.env.OPERATIONS_SECRET || process.env.CRON_SECRET || '';
+  const hasOperationsAccess = Boolean(operationsSecret && bearer === operationsSecret);
+  const authUser = hasOperationsAccess ? null : await getAuthenticatedUser(req);
+  const role = String(authUser?.app_metadata?.role || '');
+  const isAdmin = role === 'admin' || role === 'super_admin';
+
+  if (!hasOperationsAccess && !isAdmin) {
+    return res.status(401).json({ error: 'Acesso administrativo necessario.' });
+  }
+
+  try {
+    const result = await runFaceBackfill();
+    return res.status(200).json(result);
+  } catch (error: any) {
+    const message = String(error?.message || 'Nao foi possivel executar o backfill facial.');
+    console.error('[face-backfill] batch:error', { name: error?.name, message });
+    return res.status(500).json({ error: message });
   }
 }

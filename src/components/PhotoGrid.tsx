@@ -113,6 +113,13 @@ export function PhotoGrid({
         )}
       </div>
 
+      {photos.length === 0 && (
+        <div className="mb-8 bg-white p-8 text-center brutal-border">
+          <p className="font-display text-2xl uppercase text-gray-400">Nenhuma foto encontrada</p>
+          <p className="mt-3 font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">{subtitle}</p>
+        </div>
+      )}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
         {visiblePhotos.map((photo, index) => (
           <div

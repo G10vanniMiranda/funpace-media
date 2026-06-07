@@ -62,6 +62,15 @@ export interface Product {
   salesCount?: number;
 }
 
+export interface FaceSearchMatch {
+  product: Product;
+  similarity: number;
+}
+
+export interface FaceSearchResponse {
+  matches: FaceSearchMatch[];
+}
+
 export interface Buyer {
   fullName: string;
   email: string;

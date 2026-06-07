@@ -4,7 +4,7 @@
       "maxDuration": 30
     },
     "api/face.ts": {
-      "maxDuration": 30
+      "maxDuration": 300
     }
   },
   "crons": [
@@ -95,6 +95,10 @@
     {
       "source": "/api/face/test",
       "destination": "/api/face?route=test"
+    },
+    {
+      "source": "/api/face/backfill",
+      "destination": "/api/face?route=backfill"
     },
     {
       "source": "/api/:path*",

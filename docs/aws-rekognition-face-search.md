@@ -38,6 +38,7 @@ Na busca, o cliente abre um evento e envia a selfie. `POST /api/face/search` rec
 - `POST /api/face/index`: autenticada, body binario da foto, headers `X-Photo-Id` e `X-Event-Id`.
 - `POST /api/face/search`: multipart com `eventId` e arquivo `selfie`.
 - `GET /api/face/test`: valida credenciais, S3, Rekognition e collection. Em producao exige `Authorization: Bearer <OPERATIONS_SECRET>`.
+- `POST /api/face/backfill`: processa ate 50 fotos publicadas pendentes. Exige `Authorization: Bearer <OPERATIONS_SECRET>` ou sessao administrativa.
 
 ## Banco
 
@@ -75,6 +76,9 @@ AWS_REQUEST_TIMEOUT_MS=20000
 FACE_SIMILARITY_THRESHOLD=90
 FACE_SEARCH_MAX_CANDIDATES=1000
 FACE_SEARCH_MAX_UPLOAD_BYTES=8388608
+FACE_BACKFILL_CONCURRENCY=3
+FACE_BACKFILL_MAX_IMAGE_BYTES=31457280
+FACE_BACKFILL_DOWNLOAD_TIMEOUT_MS=30000
 ```
 
 ## IAM Minimo
@@ -93,6 +97,29 @@ Configure lifecycle no prefixo `face-search/selfies/` para expirar objetos rapid
 6. Confirmar que somente fotos publicadas daquele evento sao retornadas.
 7. Testar imagem sem rosto, arquivo corrompido, MIME invalido, timeout e selfie acima do limite.
 8. Executar `npm run lint`, `npm test` e `npm run build`.
+
+## Backfill
+
+Aplicar novamente `scripts/add-aws-rekognition-face-search.sql` para criar as funcoes privadas de claim e contagem. Cada chamada processa no maximo 50 fotos:
+
+```bash
+curl -X POST https://api.funpace.media/api/face/backfill \
+  -H "Authorization: Bearer $OPERATIONS_SECRET"
+```
+
+Resposta:
+
+```json
+{
+  "total": 2914,
+  "processed": 50,
+  "indexed": 42,
+  "noFace": 6,
+  "failed": 2
+}
+```
+
+Repita enquanto `total` for maior que zero. O claim usa `FOR UPDATE SKIP LOCKED`, impedindo dois processos de selecionarem a mesma foto. Execucoes interrompidas com status `processing` voltam a ser elegiveis apos 15 minutos.
 
 ## Operacao
 

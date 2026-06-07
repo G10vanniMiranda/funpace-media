@@ -45,11 +45,39 @@ test('selfie search always attempts to delete the temporary S3 object', () => {
   assert.match(source, /getMatchesByEvent\(eventId/);
 });
 
-test('Vercel and Express expose face search, index and diagnostics routes', () => {
+test('Vercel and Express expose face search, index, backfill and diagnostics routes', () => {
   const vercel = readFileSync('vercel.json', 'utf8');
   const express = readFileSync('server.ts', 'utf8');
-  for (const route of ['/api/face/search', '/api/face/index', '/api/face/test']) {
+  for (const route of ['/api/face/search', '/api/face/index', '/api/face/backfill', '/api/face/test']) {
     assert.match(vercel, new RegExp(route.replaceAll('/', '\\/')));
     assert.match(express, new RegExp(route.replaceAll('/', '\\/')));
   }
+});
+
+test('face backfill claims resumable batches of at most 50 without duplicate workers', () => {
+  const job = readFileSync('server/face/face-backfill.ts', 'utf8');
+  const repository = readFileSync('server/face/face-repository.ts', 'utf8');
+  const sql = readFileSync('scripts/add-aws-rekognition-face-search.sql', 'utf8');
+
+  assert.match(job, /const batchSize = 50/);
+  assert.match(job, /claimPendingFacePhotos\(batchSize\)/);
+  assert.match(repository, /rpc\/claim_face_backfill_batch/);
+  assert.match(repository, /rpc\/count_face_backfill_pending/);
+  assert.match(sql, /for update skip locked/i);
+  assert.match(sql, /limit least\(greatest\(batch_size, 1\), 50\)/i);
+  assert.match(sql, /"faceIndexStatus" = 'processing'/);
+  assert.match(sql, /stale_after_minutes/);
+  assert.match(sql, /grant execute on function public\.claim_face_backfill_batch\(integer, integer\) to service_role/);
+});
+
+test('face backfill records indexed, no-face and failed outcomes', () => {
+  const job = readFileSync('server/face/face-backfill.ts', 'utf8');
+  const handlers = readFileSync('server/face/face-handlers.ts', 'utf8');
+
+  assert.match(job, /records\.length > 0 \? 'indexed' : 'no_face'/);
+  assert.match(job, /updatePhotoFaceStatus\(photo\.id, 'failed', message\)/);
+  assert.match(job, /replacePhotoFaces/);
+  assert.match(job, /removeFaces/);
+  assert.match(handlers, /hasOperationsAccess/);
+  assert.match(handlers, /role === 'admin' \|\| role === 'super_admin'/);
 });

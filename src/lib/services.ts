@@ -16,6 +16,8 @@ import {
   PaymentRecoveryIssue,
   Coupon,
   AdminActivityLog,
+  FaceSearchMatch,
+  FaceSearchResponse,
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
@@ -575,15 +577,15 @@ export const productService = {
     return signMediaUrls(products, { protectImageOriginals: true });
   },
 
-  async searchByFace(file: File, eventId: string): Promise<Array<{ product: Product; similarity: number }>> {
+  async searchByFace(file: File, eventId: string): Promise<FaceSearchMatch[]> {
     const formData = new FormData();
     formData.set('eventId', eventId);
     formData.set('selfie', file, file.name);
     const response = await fetch(apiUrl('/api/face/search'), { method: 'POST', body: formData });
-    const payload = await response.json().catch(() => ({}));
+    const payload = await response.json().catch(() => ({})) as Partial<FaceSearchResponse> & { error?: string };
     if (!response.ok) throw new Error(payload?.error || `Busca facial falhou com HTTP ${response.status}.`);
-    const matches = Array.isArray(payload?.matches) ? payload.matches : [];
-    const signed = await signMediaUrls(matches.map((match: any) => match.product) as Product[], { protectImageOriginals: true });
+    const matches = Array.isArray(payload.matches) ? payload.matches : [];
+    const signed = await signMediaUrls(matches.map((match) => match.product), { protectImageOriginals: true });
     return signed.map((product, index) => ({ product, similarity: Number(matches[index]?.similarity || 0) }));
   },
 

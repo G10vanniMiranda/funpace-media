@@ -14,6 +14,7 @@ import { PhotographerProfile } from './components/PhotographerProfile';
 import { PhotographerLogin } from './components/PhotographerLogin';
 import { PhotographerPasswordSetup } from './components/PhotographerPasswordSetup';
 import { AdminLogin } from './components/AdminLogin';
+import { FaceSearchModal } from './components/FaceSearchModal';
 import { PagamentoSucesso } from './routes/pagamento/sucesso';
 import { ParaFotografos } from './routes/ParaFotografos';
 import { Precos } from './routes/Precos';
@@ -21,7 +22,7 @@ import { Faq } from './routes/Faq';
 import { Contato } from './routes/Contato';
 import { Termos } from './routes/Termos';
 import { Privacidade } from './routes/Privacidade';
-import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, Customer, PaymentRecord, PaymentEventLog, Coupon, AdminActivityLog } from './types';
+import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, Customer, PaymentRecord, PaymentEventLog, Coupon, AdminActivityLog, FaceSearchMatch } from './types';
 import type { Event } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
@@ -170,10 +171,9 @@ function Storefront() {
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [searchBib, setSearchBib] = useState<string | null>(null);
   const [activeView, setActiveView] = useState<'photos' | 'videos'>('photos');
-  const [isAnalyzingSelfie, setIsAnalyzingSelfie] = useState(false);
-  const [selfieFile, setSelfieFile] = useState<File | null>(null);
   const [searchType, setSearchType] = useState<'bib' | 'selfie' | null>(null);
-  const [selfieNotice, setSelfieNotice] = useState<{ previewUrl: string; fileName: string } | null>(null);
+  const [isFaceSearchOpen, setIsFaceSearchOpen] = useState(false);
+  const [faceSearchMatches, setFaceSearchMatches] = useState<FaceSearchMatch[]>([]);
   const [selectedPhotographerId, setSelectedPhotographerId] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [loggedInPhotographer, setLoggedInPhotographer] = useState<Photographer | null>(null);
@@ -344,12 +344,17 @@ function Storefront() {
     }
   };
 
-  const displayPhotos = selectedEventName
+  const eventPhotos = selectedEventName
     ? photos.filter((photo) => normalizeEventName(photo.event || '') === normalizeEventName(selectedEventName))
     : photos;
-  const displayVideos = selectedEventName
-    ? videos.filter((video) => normalizeEventName(video.event || '') === normalizeEventName(selectedEventName))
-    : videos;
+  const displayPhotos = searchType === 'selfie'
+    ? faceSearchMatches.map((match) => match.product).filter((product) => product.type === 'IMG')
+    : eventPhotos;
+  const displayVideos = searchType === 'selfie'
+    ? []
+    : selectedEventName
+      ? videos.filter((video) => normalizeEventName(video.event || '') === normalizeEventName(selectedEventName))
+      : videos;
   const allDisplayProducts = React.useMemo(() => [...photos, ...videos], [photos, videos]);
   const eventNames = React.useMemo(() => (
     Array.from(new Map(
@@ -654,43 +659,34 @@ function Storefront() {
   const handleSelfieSearch = async (file: File) => {
     const selectedEvent = selectedRegisteredEvent;
     if (!selectedEvent?.id) {
-      showToast('Abra um evento antes de enviar a selfie.', 'error');
-      return;
+      throw new Error('Abra um evento antes de enviar a selfie.');
     }
-    setSelfieFile(file);
-    setIsAnalyzingSelfie(true);
     setSearchBib(null);
-    setSearchType(null);
     setSelectedPhotographerId(null);
     setEventQuery('');
     setShowDashboard(false);
-    setSelfieNotice((current) => {
-      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-      return null;
-    });
 
-    try {
-      const matches = await productService.searchByFace(file, selectedEvent.id);
-      const products = matches.map((match) => match.product);
-      setPhotos(products.filter((product) => product.type === 'IMG'));
-      setVideos(products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW'));
-      if (products.length === 0) showToast('Nenhuma foto correspondente foi encontrada neste evento.', 'info');
-    } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Nao foi possivel realizar a busca facial.', 'error');
-      setPhotos([]);
-      setVideos([]);
-    } finally {
-      setIsAnalyzingSelfie(false);
-      setSearchType('selfie');
-      setActiveView('photos');
+    const matches = await productService.searchByFace(file, selectedEvent.id);
+    setFaceSearchMatches(matches);
+    setSearchType('selfie');
+    setActiveView('photos');
+    if (matches.length === 0) {
+      showToast('Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.', 'info');
     }
+    return matches;
+  };
+
+  const clearFaceSearch = () => {
+    setSearchType(null);
+    setFaceSearchMatches([]);
+    setActiveView('photos');
   };
 
   const clearSearch = async () => {
     setIsLoading(true);
     setSearchBib(null);
     setSearchType(null);
-    setSelfieFile(null);
+    setFaceSearchMatches([]);
     setSelectedPhotographerId(null);
     setSelectedEventName(null);
     setEventQuery('');
@@ -704,14 +700,6 @@ function Storefront() {
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const closeSelfieNotice = () => {
-    setSelfieNotice((current) => {
-      if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
-      return null;
-    });
-    setSelfieFile(null);
   };
 
   const handleCheckout = async (buyer: Buyer, paymentMethod: CheckoutPaymentMethod = 'checkout', couponCode?: string) => {
@@ -950,7 +938,7 @@ function Storefront() {
           {!isLoading && (searchBib || searchType) && (
             <div className="max-w-350 mx-auto px-6 pt-12 pb-4">
               <button
-                onClick={clearSearch}
+                onClick={searchType === 'selfie' ? clearFaceSearch : clearSearch}
                 className="font-mono text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-4 flex items-center gap-2 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -959,8 +947,13 @@ function Storefront() {
               <div className="bg-brutal-black text-white p-6 brutal-border brutal-shadow inline-block">
                 <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
                 <p className="font-display text-5xl">
-                  {searchType === 'selfie' ? 'BUSCA POR SELFIE' : `PEITO ${searchBib}`}
+                  {searchType === 'selfie' ? `ENCONTRAMOS ${displayPhotos.length} ${displayPhotos.length === 1 ? 'FOTO SUA' : 'FOTOS SUAS'}` : `PEITO ${searchBib}`}
                 </p>
+                {searchType === 'selfie' && (
+                  <p className="mt-3 font-mono text-xs uppercase tracking-widest text-gray-300">
+                    Resultado facial dentro de {selectedEventName || 'este evento'}
+                  </p>
+                )}
               </div>
             </div>
           )}
@@ -1025,6 +1018,15 @@ function Storefront() {
                 </div>
 
                 <aside className="space-y-4 lg:sticky lg:top-28">
+                  <button
+                    type="button"
+                    onClick={() => setIsFaceSearchOpen(true)}
+                    disabled={!selectedRegisteredEvent?.id}
+                    className="flex min-h-16 w-full items-center justify-center gap-3 bg-brutal-accent px-5 text-center font-display text-base uppercase tracking-widest text-white brutal-border brutal-shadow-hover hover:bg-brutal-black disabled:cursor-not-allowed disabled:bg-gray-300"
+                  >
+                    <Scan className="h-5 w-5" />
+                    Encontrar minhas fotos com selfie
+                  </button>
                   <div className="grid grid-cols-3 gap-3">
                     <div className="bg-white brutal-border p-4">
                       <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400 mb-2">Fotos</p>
@@ -1057,7 +1059,11 @@ function Storefront() {
           {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
             <PhotoGrid
               title={searchType === 'selfie' ? 'BUSCA POR SELFIE' : searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ULTIMOS LANCAMENTOS'}
-              subtitle={searchType === 'selfie' ? 'Confira as imagens do evento e selecione as suas.' : searchType ? 'Resultados filtrados por numero de peito.' : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ULTIMOS EVENTOS'}
+              subtitle={searchType === 'selfie'
+                ? displayPhotos.length > 0
+                  ? `Encontramos ${displayPhotos.length} ${displayPhotos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento.`
+                  : 'Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.'
+                : searchType ? 'Resultados filtrados por numero de peito.' : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ULTIMOS EVENTOS'}
               photos={displayPhotos}
               onAddToCart={handleAddToCart}
               cartItems={cart}
@@ -1090,38 +1096,6 @@ function Storefront() {
         </>
       )}
 
-      <AnimatePresence>
-        {isAnalyzingSelfie && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-100 bg-brutal-black/90 flex flex-col items-center justify-center p-6 text-center"
-          >
-            <div className="relative mb-8">
-              {selfieFile && (
-                <div className="w-64 h-64 brutal-border overflow-hidden relative">
-                  <img src={URL.createObjectURL(selfieFile)} alt="Selfie" className="w-full h-full object-cover" />
-                  <motion.div
-                    animate={{ top: ['0%', '100%', '0%'] }}
-                    transition={{ duration: 1.5, repeat: Infinity, ease: "linear" }}
-                    className="absolute left-0 w-full h-1 bg-brutal-accent shadow-[0_0_15px_#FF4D00] z-10"
-                  />
-                </div>
-              )}
-              <div className="absolute -top-4 -left-4 text-brutal-accent">
-                <Scan className="w-12 h-12" />
-              </div>
-            </div>
-            <h3 className="font-display text-4xl text-white mb-2 tracking-tighter uppercase">Analisando Face...</h3>
-            <div className="flex items-center gap-2 text-brutal-accent font-mono text-sm tracking-[0.2em] uppercase">
-              <Loader2 className="w-4 h-4 animate-spin text-white" />
-              <span>Mapeando Pontos</span>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
       <CartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
@@ -1145,9 +1119,11 @@ function Storefront() {
         }}
       />
 
-      <SelfieNoticeModal
-        notice={selfieNotice}
-        onClose={closeSelfieNotice}
+      <FaceSearchModal
+        isOpen={isFaceSearchOpen}
+        eventName={selectedEventName || 'Evento'}
+        onClose={() => setIsFaceSearchOpen(false)}
+        onSearch={handleSelfieSearch}
       />
 
       <FloatingWhatsappSupport />
@@ -1530,11 +1506,14 @@ function PublicEventPage({
   onToggleFavorite,
 }: PublicPageCartProps & { slug: string }) {
   const navigate = useNavigate();
+  const { showToast } = useToast();
   const [event, setEvent] = React.useState<Event | null>(null);
   const [photographer, setPhotographer] = React.useState<Photographer | null>(null);
   const [products, setProducts] = React.useState<Product[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [activeView, setActiveView] = React.useState<'photos' | 'videos'>('photos');
+  const [isFaceSearchOpen, setIsFaceSearchOpen] = React.useState(false);
+  const [faceMatches, setFaceMatches] = React.useState<FaceSearchMatch[] | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -1584,7 +1563,8 @@ function PublicEventPage({
   if (isLoading) return <PublicLoading label="Carregando evento..." />;
   if (!event) return <PublicEmpty title="Evento nao encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
 
-  const photos = products.filter((product) => product.type === 'IMG');
+  const allPhotos = products.filter((product) => product.type === 'IMG');
+  const photos = faceMatches ? faceMatches.map((match) => match.product).filter((product) => product.type === 'IMG') : allPhotos;
   const videos = products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW');
   const cover = event.bannerImage || event.coverImage || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || '';
 
@@ -1605,13 +1585,37 @@ function PublicEventPage({
             {photographer && <span className="inline-flex items-center gap-2"><Camera className="h-4 w-4 text-brutal-accent" />{getPhotographerPublicName(photographer)}</span>}
           </div>
           {event.description && <p className="mt-6 max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">{event.description}</p>}
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="button"
+              onClick={() => setIsFaceSearchOpen(true)}
+              className="inline-flex min-h-14 items-center justify-center gap-3 bg-brutal-accent px-6 font-display text-sm uppercase tracking-widest text-white brutal-border brutal-shadow-hover hover:bg-white hover:text-brutal-black"
+            >
+              <Scan className="h-5 w-5" />
+              Encontrar minhas fotos com selfie
+            </button>
+            {faceMatches && (
+              <button
+                type="button"
+                onClick={() => setFaceMatches(null)}
+                className="inline-flex min-h-14 items-center justify-center gap-2 bg-white px-6 font-display text-sm uppercase tracking-widest text-brutal-black brutal-border hover:bg-brutal-black hover:text-white"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Ver todas as fotos
+              </button>
+            )}
+          </div>
         </div>
       </section>
 
       {activeView === 'photos' ? (
         <PhotoGrid
-          title="Fotos do evento"
-          subtitle={`${photos.length} fotos publicadas neste evento`}
+          title={faceMatches ? 'Suas fotos encontradas' : 'Fotos do evento'}
+          subtitle={faceMatches
+            ? photos.length > 0
+              ? `Encontramos ${photos.length} ${photos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento`
+              : 'Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.'
+            : `${photos.length} fotos publicadas neste evento`}
           photos={photos}
           onAddToCart={onAddToCart}
           cartItems={cartItems}
@@ -1635,6 +1639,20 @@ function PublicEventPage({
           onToggleFavorite={onToggleFavorite}
         />
       )}
+      <FaceSearchModal
+        isOpen={isFaceSearchOpen}
+        eventName={event.name}
+        onClose={() => setIsFaceSearchOpen(false)}
+        onSearch={async (file) => {
+          const matches = await productService.searchByFace(file, event.id);
+          setFaceMatches(matches);
+          setActiveView('photos');
+          if (matches.length === 0) {
+            showToast('Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.', 'info');
+          }
+          return matches;
+        }}
+      />
     </main>
   );
 }
@@ -1686,69 +1704,6 @@ function FloatingWhatsappSupport() {
     >
       <MessageCircle className="h-6 w-6" />
     </a>
-  );
-}
-
-function SelfieNoticeModal({
-  notice,
-  onClose,
-}: {
-  notice: { previewUrl: string; fileName: string } | null;
-  onClose: () => void;
-}) {
-  return (
-    <AnimatePresence>
-      {notice && (
-        <div className="fixed inset-0 z-120 flex items-center justify-center p-4 sm:p-6">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ scale: 0.92, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.92, y: 20 }}
-            className="relative w-full max-w-lg overflow-hidden bg-white brutal-border brutal-shadow-heavy p-5 sm:p-8"
-          >
-            <button
-              onClick={onClose}
-              className="absolute right-4 top-4 p-2 text-gray-400 hover:text-brutal-black transition-colors cursor-pointer"
-              aria-label="Fechar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex flex-col gap-5 sm:flex-row">
-              <div className="h-24 w-24 shrink-0 overflow-hidden brutal-border bg-gray-50">
-                <img src={notice.previewUrl} alt={notice.fileName} className="h-full w-full object-cover" />
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">
-                  Busca por selfie
-                </p>
-                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] wrap-break-word">
-                  Em preparacao
-                </h2>
-                <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-4">
-                  A busca facial automatica ainda nao esta ativa. Use o numero de peito para encontrar suas fotos enquanto essa etapa e validada.
-                </p>
-
-                <button
-                  onClick={onClose}
-                  className="mt-6 min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer sm:w-auto"
-                >
-                  Buscar por numero
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
   );
 }
 

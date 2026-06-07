@@ -8,6 +8,16 @@ export type FaceRow = {
   confidence: number | null;
 };
 
+export type BackfillPhoto = {
+  id: string;
+  eventId: string | null;
+  event: string;
+  vendedorId: string;
+  storagePath: string | null;
+  url: string;
+  type: string;
+};
+
 export async function getAuthenticatedUser(req: any) {
   const token = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
   if (!token) return null;
@@ -34,6 +44,39 @@ export async function getOwnedPhoto(photoId: string, photographerId: string) {
 export async function getEvent(eventId: string) {
   const rows = await supabaseRequest<any[]>(`/rest/v1/events?select=id,photographerId,isPublished&id=eq.${encodeURIComponent(eventId)}&limit=1`);
   return rows[0] || null;
+}
+
+export async function getPendingFacePhotoCount() {
+  const count = await supabaseRequest<number>('/rest/v1/rpc/count_face_backfill_pending', {
+    method: 'POST',
+    body: JSON.stringify({}),
+  });
+  return Number(count || 0);
+}
+
+export async function claimPendingFacePhotos(limit = 50): Promise<BackfillPhoto[]> {
+  const safeLimit = Math.min(50, Math.max(1, limit));
+  return supabaseRequest<BackfillPhoto[]>('/rest/v1/rpc/claim_face_backfill_batch', {
+    method: 'POST',
+    body: JSON.stringify({ batch_size: safeLimit, stale_after_minutes: 15 }),
+  });
+}
+
+export async function resolvePhotoEventId(photo: Pick<BackfillPhoto, 'eventId' | 'event' | 'vendedorId'>) {
+  if (photo.eventId) return photo.eventId;
+  if (!photo.event || !photo.vendedorId) return null;
+  const rows = await supabaseRequest<Array<{ id: string }>>(
+    `/rest/v1/events?select=id&photographerId=eq.${encodeURIComponent(photo.vendedorId)}&name=eq.${encodeURIComponent(photo.event)}&order=createdAt.desc&limit=1`,
+  );
+  return rows[0]?.id || null;
+}
+
+export async function updatePhotoEventId(photoId: string, eventId: string) {
+  await supabaseRequest(`/rest/v1/products?id=eq.${encodeURIComponent(photoId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ eventId }),
+  });
 }
 
 export async function getPhotoFaces(photoId: string): Promise<FaceRow[]> {

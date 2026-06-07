@@ -5,25 +5,33 @@ import {
   S3Client,
 } from '@aws-sdk/client-s3';
 
-const region = process.env.AWS_REGION || 'sa-east-1';
-const bucketName = process.env.AWS_BUCKET_NAME || '';
-const timeoutMs = Number(process.env.AWS_REQUEST_TIMEOUT_MS || 20_000);
-
 let client: S3Client | null = null;
+let clientRegion = '';
 
-function getClient() {
-  if (!client) {
+export function getAwsS3Config() {
+  const bucket = String(process.env.AWS_BUCKET_NAME || '').trim();
+  const region = String(process.env.AWS_REGION || '').trim();
+  const timeoutMs = Number(process.env.AWS_REQUEST_TIMEOUT_MS || 20_000);
+
+  if (!bucket) throw new Error('AWS_BUCKET_NAME nao configurado.');
+  if (!region) throw new Error('AWS_REGION nao configurado.');
+
+  return {
+    bucket,
+    region,
+    timeoutMs: Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 20_000,
+  };
+}
+
+function getClient(region: string) {
+  if (!client || clientRegion !== region) {
     client = new S3Client({ region });
+    clientRegion = region;
   }
   return client;
 }
 
-function assertBucket() {
-  if (!bucketName) throw new Error('AWS_BUCKET_NAME nao configurado.');
-  return bucketName;
-}
-
-async function sendWithTimeout<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function sendWithTimeout<T>(timeoutMs: number, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -34,12 +42,12 @@ async function sendWithTimeout<T>(operation: (signal: AbortSignal) => Promise<T>
 }
 
 export function getAwsBucketName() {
-  return assertBucket();
+  return getAwsS3Config().bucket;
 }
 
 export async function testS3Connection() {
-  const bucket = assertBucket();
-  await sendWithTimeout((abortSignal) => getClient().send(new HeadBucketCommand({ Bucket: bucket }), { abortSignal }));
+  const { bucket, region, timeoutMs } = getAwsS3Config();
+  await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new HeadBucketCommand({ Bucket: bucket }), { abortSignal }));
   return { bucket, region };
 }
 
@@ -49,9 +57,9 @@ export async function uploadPrivateImage(input: {
   contentType: string;
   metadata?: Record<string, string>;
 }) {
-  const bucket = assertBucket();
+  const { bucket, region, timeoutMs } = getAwsS3Config();
   console.info('[aws-s3] upload:start', { bucket, key: input.key, size: input.buffer.length });
-  await sendWithTimeout((abortSignal) => getClient().send(new PutObjectCommand({
+  await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new PutObjectCommand({
     Bucket: bucket,
     Key: input.key,
     Body: input.buffer,
@@ -64,8 +72,8 @@ export async function uploadPrivateImage(input: {
 }
 
 export async function deletePrivateObject(key: string) {
-  const bucket = assertBucket();
-  await sendWithTimeout((abortSignal) => getClient().send(new DeleteObjectCommand({
+  const { bucket, region, timeoutMs } = getAwsS3Config();
+  await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new DeleteObjectCommand({
     Bucket: bucket,
     Key: key,
   }), { abortSignal }));

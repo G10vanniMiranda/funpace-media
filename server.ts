@@ -1,9 +1,9 @@
+import "dotenv/config";
 import express from "express";
 import path from "path";
 import crypto from "crypto";
 import fs from "fs/promises";
 import { createServer as createViteServer } from "vite";
-import dotenv from "dotenv";
 import pg from "pg";
 import cors from "cors";
 import helmet from "helmet";
@@ -14,8 +14,6 @@ import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfill
 import adminApiHandler from "./api/admin";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
-
-dotenv.config();
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);

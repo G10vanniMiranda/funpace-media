@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.js';
 import { indexPhotoHandler, searchFaceHandler, testFaceHandler } from '../server/face/face-handlers.js';
 

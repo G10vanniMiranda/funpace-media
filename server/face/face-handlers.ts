@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { deletePrivateObject, testS3Connection, uploadPrivateImage } from '../../src/services/aws/s3.service.js';
-import { indexFaces, removeFaces, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
+import { deletePrivateObject, getAwsS3Config, testS3Connection, uploadPrivateImage } from '../../src/services/aws/s3.service.js';
+import { getRekognitionConfig, indexFaces, removeFaces, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
 import { faceError, isUuid, parseSelfieMultipart, readRequestBuffer, validateImage } from './face-utils.js';
 import {
   getAuthenticatedUser,
@@ -89,11 +89,32 @@ export async function testFaceHandler(req: any, res: any) {
   if (process.env.NODE_ENV === 'production' && (!secret || bearer !== secret)) {
     return res.status(401).json({ error: 'Nao autorizado.' });
   }
+  let stage = 'configuration';
   try {
-    const [s3, rekognition] = await Promise.all([testS3Connection(), testRekognitionConnection()]);
-    return res.status(200).json({ status: 'ok', s3, rekognition, credentials: 'ok' });
+    const s3Config = getAwsS3Config();
+    const rekognitionConfig = getRekognitionConfig();
+    stage = 's3';
+    const s3 = await testS3Connection();
+    stage = 'rekognition';
+    const rekognition = await testRekognitionConnection();
+    return res.status(200).json({
+      status: 'ok',
+      configuration: {
+        bucketConfigured: Boolean(s3Config.bucket),
+        regionConfigured: Boolean(s3Config.region),
+        collectionConfigured: Boolean(rekognitionConfig.collectionId),
+      },
+      s3,
+      rekognition,
+      credentials: 'ok',
+    });
   } catch (error: any) {
-    console.error('[aws-face-test] error', { name: error?.name, message: error?.message });
-    return res.status(503).json({ status: 'error', error: 'Falha ao validar AWS S3/Rekognition.' });
+    const errorName = String(error?.name || 'AwsConfigurationError');
+    const isConfigurationError = /nao configurado/i.test(String(error?.message || ''));
+    const safeMessage = isConfigurationError
+      ? String(error.message)
+      : `Falha AWS em ${stage}: ${errorName}.`;
+    console.error('[aws-face-test] error', { stage, name: errorName, message: error?.message });
+    return res.status(503).json({ status: 'error', stage, error: safeMessage });
   }
 }

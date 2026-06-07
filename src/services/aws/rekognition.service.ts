@@ -10,21 +10,19 @@ import {
   type FaceMatch,
 } from '@aws-sdk/client-rekognition';
 
-const region = process.env.AWS_REGION || 'sa-east-1';
-const collectionId = process.env.AWS_REKOGNITION_COLLECTION || 'funpace-faces';
-const similarityThreshold = Math.min(100, Math.max(0, Number(process.env.FACE_SIMILARITY_THRESHOLD || 90)));
-const maxSearchFaces = Math.min(4096, Math.max(1, Number(process.env.FACE_SEARCH_MAX_CANDIDATES || 1000)));
-const timeoutMs = Number(process.env.AWS_REQUEST_TIMEOUT_MS || 20_000);
-
 let client: RekognitionClient | null = null;
-let collectionPromise: Promise<void> | null = null;
+let clientRegion = '';
+const collectionPromises = new Map<string, Promise<void>>();
 
-function getClient() {
-  if (!client) client = new RekognitionClient({ region });
+function getClient(region: string) {
+  if (!client || clientRegion !== region) {
+    client = new RekognitionClient({ region });
+    clientRegion = region;
+  }
   return client;
 }
 
-async function sendWithTimeout<T>(operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
+async function sendWithTimeout<T>(timeoutMs: number, operation: (signal: AbortSignal) => Promise<T>): Promise<T> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -39,43 +37,64 @@ function isMissingCollection(error: any) {
 }
 
 export function getRekognitionConfig() {
-  return { collectionId, region, similarityThreshold, maxSearchFaces };
+  const region = String(process.env.AWS_REGION || '').trim();
+  const collectionId = String(process.env.AWS_REKOGNITION_COLLECTION || '').trim();
+  const similarityThreshold = Math.min(100, Math.max(0, Number(process.env.FACE_SIMILARITY_THRESHOLD || 90)));
+  const maxSearchFaces = Math.min(4096, Math.max(1, Number(process.env.FACE_SEARCH_MAX_CANDIDATES || 1000)));
+  const configuredTimeout = Number(process.env.AWS_REQUEST_TIMEOUT_MS || 20_000);
+
+  if (!region) throw new Error('AWS_REGION nao configurado.');
+  if (!collectionId) throw new Error('AWS_REKOGNITION_COLLECTION nao configurado.');
+
+  return {
+    collectionId,
+    region,
+    similarityThreshold,
+    maxSearchFaces,
+    timeoutMs: Number.isFinite(configuredTimeout) && configuredTimeout > 0 ? configuredTimeout : 20_000,
+  };
 }
 
 export async function createCollection() {
-  await sendWithTimeout((abortSignal) => getClient().send(new CreateCollectionCommand({
+  const { collectionId, region, timeoutMs } = getRekognitionConfig();
+  await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new CreateCollectionCommand({
     CollectionId: collectionId,
   }), { abortSignal }));
   console.info('[aws-rekognition] collection:created', { collectionId, region });
 }
 
 export async function ensureCollection() {
-  if (!collectionPromise) {
-    collectionPromise = (async () => {
+  const config = getRekognitionConfig();
+  const cacheKey = `${config.region}:${config.collectionId}`;
+  if (!collectionPromises.has(cacheKey)) {
+    const promise = (async () => {
       try {
-        await sendWithTimeout((abortSignal) => getClient().send(new DescribeCollectionCommand({
-          CollectionId: collectionId,
+        await sendWithTimeout(config.timeoutMs, (abortSignal) => getClient(config.region).send(new DescribeCollectionCommand({
+          CollectionId: config.collectionId,
         }), { abortSignal }));
       } catch (error) {
         if (!isMissingCollection(error)) throw error;
         await createCollection();
       }
     })().catch((error) => {
-      collectionPromise = null;
+      collectionPromises.delete(cacheKey);
       throw error;
     });
+    collectionPromises.set(cacheKey, promise);
   }
-  return collectionPromise;
+  return collectionPromises.get(cacheKey);
 }
 
 export async function listCollections() {
-  const result = await sendWithTimeout((abortSignal) => getClient().send(new ListCollectionsCommand({ MaxResults: 100 }), { abortSignal }));
+  const { region, timeoutMs } = getRekognitionConfig();
+  const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new ListCollectionsCommand({ MaxResults: 100 }), { abortSignal }));
   return result.CollectionIds || [];
 }
 
 export async function indexFaces(input: { bucket: string; key: string; photoId: string }): Promise<FaceRecord[]> {
   await ensureCollection();
-  const result = await sendWithTimeout((abortSignal) => getClient().send(new IndexFacesCommand({
+  const { collectionId, region, timeoutMs } = getRekognitionConfig();
+  const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new IndexFacesCommand({
     CollectionId: collectionId,
     Image: { S3Object: { Bucket: input.bucket, Name: input.key } },
     ExternalImageId: input.photoId,
@@ -90,7 +109,8 @@ export async function indexFaces(input: { bucket: string; key: string; photoId: 
 
 export async function searchFaces(input: { bucket: string; key: string }): Promise<FaceMatch[]> {
   await ensureCollection();
-  const result = await sendWithTimeout((abortSignal) => getClient().send(new SearchFacesByImageCommand({
+  const { collectionId, region, similarityThreshold, maxSearchFaces, timeoutMs } = getRekognitionConfig();
+  const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new SearchFacesByImageCommand({
     CollectionId: collectionId,
     Image: { S3Object: { Bucket: input.bucket, Name: input.key } },
     FaceMatchThreshold: similarityThreshold,
@@ -104,7 +124,8 @@ export async function searchFaces(input: { bucket: string; key: string }): Promi
 export async function removeFaces(faceIds: string[]) {
   if (faceIds.length === 0) return [];
   await ensureCollection();
-  const result = await sendWithTimeout((abortSignal) => getClient().send(new DeleteFacesCommand({
+  const { collectionId, region, timeoutMs } = getRekognitionConfig();
+  const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new DeleteFacesCommand({
     CollectionId: collectionId,
     FaceIds: faceIds,
   }), { abortSignal }));
@@ -112,6 +133,7 @@ export async function removeFaces(faceIds: string[]) {
 }
 
 export async function testRekognitionConnection() {
+  const { collectionId, region } = getRekognitionConfig();
   await ensureCollection();
   const collections = await listCollections();
   return {

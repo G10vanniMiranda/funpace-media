@@ -4,13 +4,25 @@ import test from 'node:test';
 
 test('AWS Rekognition service manages the production collection and face lifecycle', () => {
   const source = readFileSync('src/services/aws/rekognition.service.ts', 'utf8');
-  assert.match(source, /AWS_REKOGNITION_COLLECTION \|\| 'funpace-faces'/);
+  assert.match(source, /export function getRekognitionConfig\(\)/);
+  assert.doesNotMatch(source, /^const .*process\.env/m);
   assert.match(source, /CreateCollectionCommand/);
   assert.match(source, /ListCollectionsCommand/);
   assert.match(source, /IndexFacesCommand/);
   assert.match(source, /SearchFacesByImageCommand/);
   assert.match(source, /DeleteFacesCommand/);
   assert.match(source, /FACE_SIMILARITY_THRESHOLD \|\| 90/);
+});
+
+test('AWS configuration is read at runtime after dotenv initialization', () => {
+  const server = readFileSync('server.ts', 'utf8');
+  const s3 = readFileSync('src/services/aws/s3.service.ts', 'utf8');
+  const rekognition = readFileSync('src/services/aws/rekognition.service.ts', 'utf8');
+
+  assert.match(server, /^import "dotenv\/config";/);
+  assert.match(s3, /export function getAwsS3Config\(\)/);
+  assert.doesNotMatch(s3, /^const .*process\.env/m);
+  assert.doesNotMatch(rekognition, /^const .*process\.env/m);
 });
 
 test('face migration is incremental, private and linked to events and products', () => {

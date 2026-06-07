@@ -30,7 +30,7 @@ import { CheckoutPaymentMethod, adminService, customerAccountService, productSer
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Image as ImageIcon, Instagram, Loader2, MapPin, MessageCircle, ReceiptText, Scan, Search, UserCircle, Video, X, XCircle } from 'lucide-react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Clock3, Image as ImageIcon, Images, Instagram, Loader2, MapPin, MessageCircle, ReceiptText, Scan, ScanFace, Search, Upload, UserCircle, Video, X, XCircle } from 'lucide-react';
 import { useToast } from './contexts/ToastContext';
 import { buildWhatsappUrl } from './lib/contact';
 
@@ -671,7 +671,7 @@ function Storefront() {
     setSearchType('selfie');
     setActiveView('photos');
     if (matches.length === 0) {
-      showToast('Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.', 'info');
+      showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
     }
     return matches;
   };
@@ -942,12 +942,12 @@ function Storefront() {
                 className="font-mono text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-4 flex items-center gap-2 cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" />
-                Voltar
+                {searchType === 'selfie' ? 'Limpar Busca' : 'Voltar'}
               </button>
               <div className="bg-brutal-black text-white p-6 brutal-border brutal-shadow inline-block">
                 <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
                 <p className="font-display text-5xl">
-                  {searchType === 'selfie' ? `ENCONTRAMOS ${displayPhotos.length} ${displayPhotos.length === 1 ? 'FOTO SUA' : 'FOTOS SUAS'}` : `PEITO ${searchBib}`}
+                  {searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : `PEITO ${searchBib}`}
                 </p>
                 {searchType === 'selfie' && (
                   <p className="mt-3 font-mono text-xs uppercase tracking-widest text-gray-300">
@@ -1058,11 +1058,11 @@ function Storefront() {
 
           {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
             <PhotoGrid
-              title={searchType === 'selfie' ? 'BUSCA POR SELFIE' : searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ULTIMOS LANCAMENTOS'}
+              title={searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ULTIMOS LANCAMENTOS'}
               subtitle={searchType === 'selfie'
                 ? displayPhotos.length > 0
                   ? `Encontramos ${displayPhotos.length} ${displayPhotos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento.`
-                  : 'Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.'
+                  : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'
                 : searchType ? 'Resultados filtrados por numero de peito.' : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ULTIMOS EVENTOS'}
               photos={displayPhotos}
               onAddToCart={handleAddToCart}
@@ -1527,12 +1527,12 @@ function PublicEventPage({
         }
         const [owner, ownerProducts] = await Promise.all([
           eventRow.photographerId ? photographerService.getPhotographerById(eventRow.photographerId) : Promise.resolve(null),
-          eventRow.photographerId ? productService.getPublishedProductsByPhotographer(eventRow.photographerId, storefrontProductLimit) : productService.getLatestProducts(storefrontProductLimit),
+          productService.getPublishedProductsByEvent(eventRow.id, eventRow.name, eventRow.photographerId, storefrontProductLimit),
         ]);
         if (cancelled) return;
         setEvent(eventRow);
         setPhotographer(owner);
-        setProducts(ownerProducts.filter((product) => normalizeEventName(product.event || '') === normalizeEventName(eventRow.name)));
+        setProducts(ownerProducts);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -1567,54 +1567,103 @@ function PublicEventPage({
   const photos = faceMatches ? faceMatches.map((match) => match.product).filter((product) => product.type === 'IMG') : allPhotos;
   const videos = products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW');
   const cover = event.bannerImage || event.coverImage || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || '';
+  const checkpoints = new Set(products.map((product) => product.checkpoint).filter(Boolean)).size;
+  const eventCategory = event.status === 'scheduled' ? 'Proximo evento' : event.status === 'closed' ? 'Evento encerrado' : 'Evento esportivo';
 
   return (
-    <main>
-      <section className="relative overflow-hidden border-b-4 border-brutal-black bg-brutal-black text-white">
-        {cover && <img src={cover} alt={event.name} className="absolute inset-0 h-full w-full object-cover opacity-40" />}
-        <div className="absolute inset-0 bg-linear-to-t from-brutal-black via-brutal-black/60 to-transparent" />
-        <div className="relative mx-auto max-w-350 px-4 py-16 md:px-6 md:py-24">
-          <button type="button" onClick={() => navigate(photographer?.username || photographer?.slug ? `/${photographer.username || photographer.slug}` : '/eventos')} className="mb-8 inline-flex items-center gap-2 font-mono text-xs uppercase tracking-widest text-white/75 hover:text-brutal-accent">
-            <ArrowLeft className="h-4 w-4" /> Voltar
+    <main className="bg-[#f4f4f2]">
+      <section className="border-b border-black/10 bg-white">
+        <div className="mx-auto max-w-350 px-4 py-4 md:px-6 md:py-6">
+          <button
+            type="button"
+            onClick={() => navigate(photographer?.username || photographer?.slug ? `/${photographer.username || photographer.slug}` : '/eventos')}
+            className="mb-4 inline-flex items-center gap-2 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-gray-500 transition-colors hover:text-brutal-accent"
+          >
+            <ArrowLeft className="h-3.5 w-3.5" /> Voltar
           </button>
-          <p className="mb-3 font-mono text-xs uppercase tracking-[0.3em] text-brutal-accent">Evento</p>
-          <h1 className="max-w-5xl font-display text-[clamp(3rem,10vw,7rem)] uppercase leading-[0.88] tracking-normal wrap-break-word">{event.name}</h1>
-          <div className="mt-6 flex flex-wrap gap-4 font-mono text-xs uppercase tracking-widest text-white/75">
-            <span className="inline-flex items-center gap-2"><CalendarDays className="h-4 w-4 text-brutal-accent" />{formatPublicDate(event.date)}</span>
-            <span className="inline-flex items-center gap-2"><MapPin className="h-4 w-4 text-brutal-accent" />{event.location || event.checkpoint || 'Local a confirmar'}</span>
-            {photographer && <span className="inline-flex items-center gap-2"><Camera className="h-4 w-4 text-brutal-accent" />{getPhotographerPublicName(photographer)}</span>}
-          </div>
-          {event.description && <p className="mt-6 max-w-3xl text-base leading-relaxed text-white/85 md:text-lg">{event.description}</p>}
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="button"
-              onClick={() => setIsFaceSearchOpen(true)}
-              className="inline-flex min-h-14 items-center justify-center gap-3 bg-brutal-accent px-6 font-display text-sm uppercase tracking-widest text-white brutal-border brutal-shadow-hover hover:bg-white hover:text-brutal-black"
-            >
-              <Scan className="h-5 w-5" />
-              Encontrar minhas fotos com selfie
-            </button>
-            {faceMatches && (
-              <button
-                type="button"
-                onClick={() => setFaceMatches(null)}
-                className="inline-flex min-h-14 items-center justify-center gap-2 bg-white px-6 font-display text-sm uppercase tracking-widest text-brutal-black brutal-border hover:bg-brutal-black hover:text-white"
-              >
-                <ArrowLeft className="h-4 w-4" />
-                Ver todas as fotos
-              </button>
-            )}
+
+          <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_55px_rgba(5,5,5,0.10)]">
+            <div className="grid lg:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.5fr)]">
+              <div className="relative min-h-55 overflow-hidden bg-brutal-black sm:min-h-72 lg:min-h-full">
+                {cover ? (
+                  <img src={cover} alt={event.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
+                ) : (
+                  <div className="absolute inset-0 grid place-items-center text-white/30"><ImageIcon className="h-16 w-16" /></div>
+                )}
+                <div className="absolute inset-0 bg-linear-to-t from-black/60 via-transparent to-transparent" />
+                <span className="absolute left-4 top-4 rounded-full bg-brutal-accent px-3 py-1.5 font-mono text-[9px] font-bold uppercase tracking-widest text-white shadow-lg">{eventCategory}</span>
+              </div>
+
+              <div className="flex min-w-0 flex-col p-5 sm:p-6 lg:p-7">
+                <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-brutal-accent">Evento Funpace Media</p>
+                    <h1 className="mt-2 max-w-4xl font-display text-[clamp(2rem,4vw,4.25rem)] uppercase leading-[0.92] tracking-normal wrap-break-word">{event.name}</h1>
+                    {event.description && <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-relaxed text-gray-600">{event.description}</p>}
+                  </div>
+                  {photographer && (
+                    <div className="shrink-0 rounded-xl bg-brutal-black px-4 py-3 text-white shadow-md">
+                      <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-white/50">Fotografo</p>
+                      <p className="mt-1 font-display text-sm uppercase">{getPhotographerPublicName(photographer)}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-5 grid gap-x-6 gap-y-3 border-y border-black/10 py-4 sm:grid-cols-2 xl:grid-cols-4">
+                  <EventMeta icon={<CalendarDays className="h-4 w-4" />} label="Data" value={formatPublicDate(event.date)} />
+                  <EventMeta icon={<MapPin className="h-4 w-4" />} label="Cidade / Local" value={event.location || event.checkpoint || 'Local a confirmar'} />
+                  <EventMeta icon={<Camera className="h-4 w-4" />} label="Categoria" value={eventCategory} />
+                  <EventMeta icon={<Clock3 className="h-4 w-4" />} label="Expiracao" value="Sem data definida" />
+                </div>
+
+                <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(310px,0.9fr)]">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                    <EventCompactStat icon={<Images className="h-4 w-4" />} label="Fotos" value={allPhotos.length} />
+                    <EventCompactStat icon={<Video className="h-4 w-4" />} label="Videos" value={videos.length} />
+                    <EventCompactStat icon={<MapPin className="h-4 w-4" />} label="Pontos" value={checkpoints || 1} />
+                  </div>
+
+                  <div className="group rounded-xl border border-black/10 bg-[#fff7d6] p-4 shadow-[0_10px_30px_rgba(5,5,5,0.08)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_16px_35px_rgba(5,5,5,0.13)]">
+                    <div className="flex items-start gap-3">
+                      <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brutal-black text-brutal-accent transition-transform duration-300 group-hover:scale-105"><ScanFace className="h-5 w-5" /></div>
+                      <div>
+                        <p className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Reconhecimento facial</p>
+                        <h2 className="mt-1 font-display text-lg uppercase leading-tight">Encontre suas fotos com uma selfie</h2>
+                      </div>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+                      <button type="button" onClick={() => setIsFaceSearchOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg bg-brutal-accent px-4 font-display text-xs uppercase tracking-wider text-white transition-colors hover:bg-brutal-black">
+                        <Scan className="h-4 w-4" /> Tirar selfie
+                      </button>
+                      <button type="button" onClick={() => setIsFaceSearchOpen(true)} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-lg border border-black/15 bg-white px-4 font-mono text-[9px] font-bold uppercase tracking-wider transition-colors hover:border-brutal-accent hover:text-brutal-accent">
+                        <Upload className="h-4 w-4" /> Carregar foto
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setFaceMatches(null);
+                        setActiveView('photos');
+                      }}
+                      className="mt-3 w-full font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500 transition-colors hover:text-brutal-accent"
+                    >
+                      {faceMatches ? 'Limpar busca e ver todas as fotos' : 'Ver todas as fotos'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
 
       {activeView === 'photos' ? (
         <PhotoGrid
-          title={faceMatches ? 'Suas fotos encontradas' : 'Fotos do evento'}
+          title={faceMatches ? `Fotos Encontradas (${photos.length})` : 'Fotos do evento'}
           subtitle={faceMatches
             ? photos.length > 0
               ? `Encontramos ${photos.length} ${photos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento`
-              : 'Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.'
+              : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'
             : `${photos.length} fotos publicadas neste evento`}
           photos={photos}
           onAddToCart={onAddToCart}
@@ -1625,6 +1674,7 @@ function PublicEventPage({
           likedIds={likedProductIds}
           heartCounts={heartCounts}
           onToggleFavorite={onToggleFavorite}
+          compact
         />
       ) : (
         <VideoGrid
@@ -1637,6 +1687,7 @@ function PublicEventPage({
           likedIds={likedProductIds}
           heartCounts={heartCounts}
           onToggleFavorite={onToggleFavorite}
+          compact
         />
       )}
       <FaceSearchModal
@@ -1648,12 +1699,33 @@ function PublicEventPage({
           setFaceMatches(matches);
           setActiveView('photos');
           if (matches.length === 0) {
-            showToast('Nao encontramos fotos com essa selfie. Tente uma foto mais nitida, de frente e bem iluminada.', 'info');
+            showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
           }
           return matches;
         }}
       />
     </main>
+  );
+}
+
+function EventMeta({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
+  return (
+    <div className="flex min-w-0 items-center gap-3">
+      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-gray-100 text-brutal-accent">{icon}</div>
+      <div className="min-w-0">
+        <p className="font-mono text-[8px] font-bold uppercase tracking-[0.18em] text-gray-400">{label}</p>
+        <p className="mt-0.5 truncate text-xs font-semibold text-gray-800" title={value}>{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function EventCompactStat({ icon, label, value }: { icon: React.ReactNode; label: string; value: number }) {
+  return (
+    <div className="rounded-xl border border-black/10 bg-gray-50 p-3 transition-colors hover:border-brutal-accent/60 hover:bg-white">
+      <div className="flex items-center gap-2 text-brutal-accent">{icon}<span className="font-mono text-[8px] font-bold uppercase tracking-widest text-gray-500">{label}</span></div>
+      <p className="mt-2 font-display text-2xl leading-none">{value}</p>
+    </div>
   );
 }
 

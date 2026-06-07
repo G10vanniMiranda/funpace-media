@@ -12,6 +12,8 @@ type RateLimitOptions = {
 declare global {
   // eslint-disable-next-line no-var
   var __funpaceRateLimitBuckets: Map<string, RateLimitBucket> | undefined;
+  // eslint-disable-next-line no-var
+  var __funpaceRateLimitCleanupCounter: number | undefined;
 }
 
 const defaultOrigins = [
@@ -87,10 +89,19 @@ function rateLimitBuckets() {
   return globalThis.__funpaceRateLimitBuckets;
 }
 
+function cleanupRateLimitBuckets(buckets: Map<string, RateLimitBucket>, now: number) {
+  globalThis.__funpaceRateLimitCleanupCounter = (globalThis.__funpaceRateLimitCleanupCounter || 0) + 1;
+  if (buckets.size < 10_000 && globalThis.__funpaceRateLimitCleanupCounter % 256 !== 0) return;
+  for (const [key, bucket] of buckets) {
+    if (bucket.resetAt <= now) buckets.delete(key);
+  }
+}
+
 export function rateLimit(req: any, res: any, options: RateLimitOptions) {
   const now = Date.now();
   const key = `${options.keyPrefix}:${getClientIp(req)}`;
   const buckets = rateLimitBuckets();
+  cleanupRateLimitBuckets(buckets, now);
   const bucket = buckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {

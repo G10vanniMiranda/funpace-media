@@ -583,7 +583,12 @@ export const productService = {
     formData.set('selfie', file, file.name);
     const response = await fetch(apiUrl('/api/face/search'), { method: 'POST', body: formData });
     const payload = await response.json().catch(() => ({})) as Partial<FaceSearchResponse> & { error?: string };
-    if (!response.ok) throw new Error(payload?.error || `Busca facial falhou com HTTP ${response.status}.`);
+    if (!response.ok) {
+      if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de ate 8 MB.');
+      if (response.status === 415) throw new Error('Formato invalido. Envie uma selfie JPG ou PNG.');
+      if (response.status === 422) throw new Error('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.');
+      throw new Error('Nao foi possivel realizar a busca facial. Tente novamente em alguns instantes.');
+    }
     const matches = Array.isArray(payload.matches) ? payload.matches : [];
     const signed = await signMediaUrls(matches.map((match) => match.product), { protectImageOriginals: true });
     return signed.map((product, index) => ({ product, similarity: Number(matches[index]?.similarity || 0) }));
@@ -637,6 +642,40 @@ export const productService = {
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
     return signMediaUrls(products, { protectImageOriginals: true });
+  },
+
+  async getPublishedProductsByEvent(eventId: string, eventName: string, photographerId?: string | null, count = 5000): Promise<Product[]> {
+    if (isMockMode) {
+      const normalizedEventName = eventName.trim().toLocaleLowerCase('pt-BR');
+      return mockProducts
+        .filter((product) => (
+          (product.eventId === eventId || String(product.event || '').trim().toLocaleLowerCase('pt-BR') === normalizedEventName) &&
+          (!photographerId || product.vendedorId === photographerId) &&
+          (product.status ?? 'published') === 'published'
+        ))
+        .slice(0, count);
+    }
+
+    const eventIdParams = new URLSearchParams({
+      select: '*',
+      eventId: `eq.${eventId}`,
+      status: 'eq.published',
+      order: 'createdAt.desc',
+    });
+    if (photographerId) eventIdParams.set('vendedorId', `eq.${photographerId}`);
+
+    const byEventId = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${eventIdParams.toString()}`, count);
+    if (byEventId.length > 0) return signMediaUrls(byEventId, { protectImageOriginals: true });
+
+    const legacyParams = new URLSearchParams({
+      select: '*',
+      event: `eq.${eventName}`,
+      status: 'eq.published',
+      order: 'createdAt.desc',
+    });
+    if (photographerId) legacyParams.set('vendedorId', `eq.${photographerId}`);
+    const legacyProducts = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${legacyParams.toString()}`, count);
+    return signMediaUrls(legacyProducts, { protectImageOriginals: true });
   },
 
   async addProduct(product: Omit<Product, 'id'>): Promise<string> {

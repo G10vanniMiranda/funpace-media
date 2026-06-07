@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from 'crypto';
+import { Readable } from 'node:stream';
 import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
 
 function setCors(req: any, res: any) {
@@ -149,6 +150,46 @@ function publicMediaUrl(rawPathOrUrl: string) {
 
 async function createSignedMediaUrl(rawPathOrUrl: string) {
   return publicMediaUrl(rawPathOrUrl);
+}
+
+function isPrivateDownloadHostname(hostname: string) {
+  const value = hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (value === 'localhost' || value.endsWith('.localhost') || value.endsWith('.local')) return true;
+  if (value === '::1' || value === '0:0:0:0:0:0:0:1' || value.startsWith('fe80:') || value.startsWith('fc') || value.startsWith('fd')) return true;
+  const parts = value.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  return parts[0] === 10 ||
+    parts[0] === 127 ||
+    parts[0] === 0 ||
+    (parts[0] === 169 && parts[1] === 254) ||
+    (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) ||
+    (parts[0] === 192 && parts[1] === 168);
+}
+
+function assertAllowedDownloadUrl(rawUrl: string) {
+  const url = new URL(rawUrl);
+  if (!['http:', 'https:'].includes(url.protocol) || isPrivateDownloadHostname(url.hostname)) {
+    throw Object.assign(new Error('Origem de download nao permitida.'), { statusCode: 403 });
+  }
+  return url;
+}
+
+async function fetchDownloadSource(rawUrl: string) {
+  let url = assertAllowedDownloadUrl(rawUrl);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), Number(process.env.DOWNLOAD_SOURCE_TIMEOUT_MS || 30_000));
+  try {
+    for (let redirects = 0; redirects <= 3; redirects += 1) {
+      const response = await fetch(url, { redirect: 'manual', signal: controller.signal });
+      if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+      const location = response.headers.get('location');
+      if (!location) return response;
+      url = assertAllowedDownloadUrl(new URL(location, url).toString());
+    }
+    throw Object.assign(new Error('Muitos redirecionamentos na origem de download.'), { statusCode: 502 });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function getDownloadSecret() {
@@ -354,7 +395,7 @@ async function proxyDownload(req: any, res: any, token: string, inline: boolean)
     email: payload.email,
   });
 
-  const upstream = await fetch(sourceUrl);
+  const upstream = await fetchDownloadSource(sourceUrl);
   if (!upstream.ok || !upstream.body) {
     const status = upstream.status === 404 ? 404 : 502;
     return res.status(status).json({ error: status === 404 ? 'Arquivo nao encontrado no armazenamento.' : 'Nao foi possivel acessar o arquivo no armazenamento.' });
@@ -372,8 +413,11 @@ async function proxyDownload(req: any, res: any, token: string, inline: boolean)
   const contentLength = upstream.headers.get('content-length');
   if (contentLength) res.setHeader('Content-Length', contentLength);
 
-  const arrayBuffer = await upstream.arrayBuffer();
-  return res.status(200).send(Buffer.from(arrayBuffer));
+  Readable.fromWeb(upstream.body as any).on('error', (error) => {
+    console.error('[download-proxy] stream:error', { orderId: order.id, orderItemId: item.id, message: error?.message });
+    if (!res.headersSent) res.status(502).json({ error: 'Falha durante a transferencia do arquivo.' });
+    else res.destroy(error);
+  }).pipe(res);
 }
 
 function renderSavePage(req: any, res: any, token: string) {

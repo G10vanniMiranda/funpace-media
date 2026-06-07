@@ -15,6 +15,7 @@ interface VideoGridProps {
   likedIds?: Set<string>;
   heartCounts?: Record<string, number>;
   onToggleFavorite?: (video: Product) => void;
+  compact?: boolean;
 }
 
 export function VideoGrid({
@@ -27,6 +28,7 @@ export function VideoGrid({
   likedIds = new Set(),
   heartCounts = {},
   onToggleFavorite,
+  compact = false,
 }: VideoGridProps) {
   const isVideoInCart = (id: string) => cartItems.some(item => item.id === id);
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
@@ -53,8 +55,8 @@ export function VideoGrid({
   };
 
   return (
-    <section className="max-w-350 mx-auto px-6 py-12 md:py-20">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+    <section className={`max-w-350 mx-auto px-4 md:px-6 ${compact ? 'py-7 md:py-10' : 'py-12 md:py-20'}`}>
+      <div className={`flex flex-col md:flex-row md:items-end justify-between gap-6 ${compact ? 'mb-7' : 'mb-12'}`}>
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <div className="w-12 h-0.5 bg-brutal-accent"></div>

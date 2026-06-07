@@ -26,6 +26,10 @@ where (status = 'removed' or type <> 'IMG')
 
 create index if not exists products_event_id_idx on public.products ("eventId");
 create index if not exists products_face_index_status_idx on public.products ("faceIndexStatus");
+create index if not exists products_public_event_created_at_idx on public.products ("eventId", "createdAt" desc) where status = 'published';
+create index if not exists products_public_vendor_event_created_at_idx on public.products ("vendedorId", "eventId", "createdAt" desc) where status = 'published';
+create index if not exists products_face_backfill_pending_idx on public.products ("createdAt" asc)
+  where status = 'published' and type = 'IMG' and "faceIndexStatus" = 'pending' and "eventId" is not null and "faceIndexedAt" is null;
 
 create table if not exists public.photo_faces (
   id uuid primary key default gen_random_uuid(),

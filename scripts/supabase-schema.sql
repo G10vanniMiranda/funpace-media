@@ -659,6 +659,10 @@ create index if not exists products_vendedor_id_idx on public.products ("vendedo
 create index if not exists products_created_at_idx on public.products ("createdAt" desc);
 create index if not exists products_status_idx on public.products (status);
 create index if not exists products_event_idx on public.products (event);
+create index if not exists products_public_event_created_at_idx on public.products ("eventId", "createdAt" desc) where status = 'published';
+create index if not exists products_public_vendor_event_created_at_idx on public.products ("vendedorId", "eventId", "createdAt" desc) where status = 'published';
+create index if not exists products_face_backfill_pending_idx on public.products ("createdAt" asc)
+  where status = 'published' and type = 'IMG' and "faceIndexStatus" = 'pending' and "eventId" is not null and "faceIndexedAt" is null;
 create index if not exists products_search_text_trgm_idx on public.products using gin ((coalesce(name, '') || ' ' || coalesce(event, '') || ' ' || coalesce(checkpoint, '') || ' ' || coalesce(bib, '') || ' ' || coalesce("originalFileName", '')) gin_trgm_ops) where status = 'published';
 create index if not exists products_file_hash_vendedor_idx on public.products ("vendedorId", "fileHash") where "fileHash" is not null and coalesce(status, 'published') <> 'removed';
 create index if not exists products_upload_batch_idx on public.products ("uploadBatchId") where "uploadBatchId" is not null;
@@ -680,12 +684,15 @@ create index if not exists customers_email_idx on public.customers (email);
 create index if not exists orders_user_id_idx on public.orders ("userId");
 create index if not exists orders_buyer_email_idx on public.orders ("buyerEmail");
 create index if not exists orders_status_idx on public.orders (status);
+create index if not exists orders_pending_provider_created_at_idx on public.orders ("paymentProvider", "createdAt" asc) where status = 'pending';
 create index if not exists order_items_order_id_idx on public.order_items ("orderId");
 create index if not exists order_items_product_id_idx on public.order_items ("productId");
 create index if not exists payment_events_order_id_idx on public.payment_events ("orderId");
 create index if not exists payment_events_provider_event_id_idx on public.payment_events (provider, "eventId");
+create index if not exists payment_events_order_provider_created_at_idx on public.payment_events ("orderId", provider, "createdAt" desc);
 create index if not exists payments_order_id_idx on public.payments ("orderId");
 create index if not exists payments_status_idx on public.payments (status);
+create index if not exists payments_order_provider_updated_at_idx on public.payments ("orderId", provider, "updatedAt" desc);
 create index if not exists download_access_order_id_idx on public.download_access ("orderId");
 create index if not exists download_access_photo_id_idx on public.download_access ("photoId");
 create index if not exists download_access_customer_email_idx on public.download_access ("customerEmail");
@@ -1030,16 +1037,14 @@ for select
 using ("userId" = auth.uid()::text or public.is_admin());
 
 drop policy if exists "events_select_authenticated" on public.events;
-create policy "events_select_authenticated"
+drop policy if exists "events_select_published_owner_or_admin" on public.events;
+create policy "events_select_published_owner_or_admin"
 on public.events
 for select
 using (
-  auth.uid() is not null
-  and (
-    "isPublished" = true
-    or "photographerId" = auth.uid()::text
-    or public.is_admin()
-  )
+  "isPublished" = true
+  or "photographerId" = auth.uid()::text
+  or public.is_admin()
 );
 
 drop policy if exists "events_insert_admin_only" on public.events;

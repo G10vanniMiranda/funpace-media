@@ -18,6 +18,7 @@ interface PhotoGridProps {
   likedIds?: Set<string>;
   heartCounts?: Record<string, number>;
   onToggleFavorite?: (photo: Product) => void;
+  compact?: boolean;
 }
 
 const initialVisiblePhotos = 48;
@@ -35,6 +36,7 @@ export function PhotoGrid({
   likedIds = new Set(),
   heartCounts = {},
   onToggleFavorite,
+  compact = false,
 }: PhotoGridProps) {
   const isInCart = (id: string) => cartItems.some(item => item.id === id);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -69,7 +71,7 @@ export function PhotoGrid({
   };
 
   return (
-    <section className="protected-gallery py-12 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
+    <section className={`protected-gallery px-4 md:px-6 max-w-350 mx-auto ${compact ? 'py-7 md:py-10' : 'py-12 md:py-20'}`}>
       {contentProtection.notice && (
         <ContentProtectionNotice message={contentProtection.notice} onClose={contentProtection.clearNotice} />
       )}
@@ -83,9 +85,9 @@ export function PhotoGrid({
           </div>
         </div>
       )}
-      <div className="mb-12 flex flex-col md:flex-row md:items-end justify-between gap-6">
+      <div className={`flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 ${compact ? 'mb-7' : 'mb-12'}`}>
         <div className="max-w-2xl">
-          <h2 className="text-4xl md:text-6xl mb-2">{title}</h2>
+          <h2 className={`${compact ? 'text-3xl md:text-4xl' : 'text-4xl md:text-6xl'} mb-2`}>{title}</h2>
           <p className="font-mono text-xs md:text-sm text-gray-600 uppercase tracking-widest">{subtitle}</p>
         </div>
 

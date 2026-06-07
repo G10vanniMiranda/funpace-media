@@ -19,12 +19,14 @@ import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const { Pool } = pg;
+const isLocalViteDevelopment = !process.env.VERCEL && process.env.NODE_ENV !== "production";
 
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(helmet({
   contentSecurityPolicy: false,
   crossOriginResourcePolicy: { policy: "same-site" },
+  strictTransportSecurity: isLocalViteDevelopment ? false : undefined,
 }));
 
 type RateLimitBucket = {
@@ -45,6 +47,7 @@ function getSecurityCsp() {
   const apiUrl = process.env.API_URL || process.env.VITE_API_URL || "";
   const connectSources = [
     "'self'",
+    ...(isLocalViteDevelopment ? ["ws:", "http://localhost:*", "http://127.0.0.1:*"] : []),
     apiUrl,
     "https://api.checkout.infinitepay.io",
     "https://checkout.infinitepay.io",
@@ -71,9 +74,9 @@ function getSecurityCsp() {
     "media-src 'self' blob: data: https:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "script-src 'self'",
+    `script-src 'self'${isLocalViteDevelopment ? " 'unsafe-inline'" : ""}`,
     "form-action 'self' https://*.infinitepay.io",
-    "upgrade-insecure-requests",
+    ...(!isLocalViteDevelopment ? ["upgrade-insecure-requests"] : []),
   ].join("; ");
 }
 
@@ -86,7 +89,7 @@ app.use((_req, res, next) => {
   res.setHeader("Cross-Origin-Resource-Policy", "same-site");
   res.setHeader("Origin-Agent-Cluster", "?1");
   res.setHeader("Content-Security-Policy", getSecurityCsp());
-  if (process.env.NODE_ENV === "production") {
+  if (!isLocalViteDevelopment) {
     res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");
   }
   next();
@@ -2750,11 +2753,12 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
 });
 
 async function setupViteAndListen() {
-  if (process.env.NODE_ENV !== "production") {
+  if (isLocalViteDevelopment) {
     const vite = await createViteServer({
-      // In middleware mode, Vite may try to bind an HMR WebSocket server (default 24678).
-      // When that port is busy it crashes the whole app, causing client fetches to fail.
-      server: { middlewareMode: true, hmr: false },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === "true" ? false : true,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);

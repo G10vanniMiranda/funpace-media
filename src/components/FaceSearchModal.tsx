@@ -24,7 +24,8 @@ function validateSelfie(file: File) {
 }
 
 export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSearchModalProps) {
-  const inputRef = React.useRef<HTMLInputElement>(null);
+  const galleryInputRef = React.useRef<HTMLInputElement>(null);
+  const cameraInputRef = React.useRef<HTMLInputElement>(null);
   const [file, setFile] = React.useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = React.useState('');
   const [error, setError] = React.useState('');
@@ -37,7 +38,8 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       if (current) URL.revokeObjectURL(current);
       return '';
     });
-    if (inputRef.current) inputRef.current.value = '';
+    if (galleryInputRef.current) galleryInputRef.current.value = '';
+    if (cameraInputRef.current) cameraInputRef.current.value = '';
   }, []);
 
   React.useEffect(() => {
@@ -128,33 +130,74 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                   <div className="relative aspect-square max-h-105 overflow-hidden bg-gray-100 brutal-border">
                     <img src={previewUrl} alt="Preview da selfie" className="h-full w-full object-cover" />
                     {!isSearching && (
-                      <button
-                        type="button"
-                        onClick={() => inputRef.current?.click()}
-                        className="absolute bottom-4 left-4 right-4 inline-flex min-h-12 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border brutal-shadow-hover"
-                      >
-                        <ImagePlus className="h-4 w-4" />
-                        Trocar selfie
-                      </button>
+                      <div className="absolute bottom-4 left-4 right-4 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={() => galleryInputRef.current?.click()}
+                          className="inline-flex min-h-12 items-center justify-center gap-2 bg-white px-3 font-display text-xs uppercase brutal-border brutal-shadow-hover sm:text-sm"
+                        >
+                          <ImagePlus className="h-4 w-4" />
+                          Trocar selfie
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => cameraInputRef.current?.click()}
+                          className="inline-flex min-h-12 items-center justify-center gap-2 bg-brutal-black px-3 font-display text-xs uppercase text-white brutal-border brutal-shadow-hover sm:text-sm"
+                        >
+                          <Camera className="h-4 w-4" />
+                          Tirar outra
+                        </button>
+                      </div>
+                    )}
+                    {isSearching && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-brutal-black/80 p-6 text-center text-white backdrop-blur-sm">
+                        <Loader2 className="h-12 w-12 animate-spin text-brutal-accent" />
+                        <span className="font-display text-xl uppercase tracking-widest">Procurando suas fotos...</span>
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-white/70">Comparando seu rosto com as fotos do evento</span>
+                      </div>
                     )}
                   </div>
                 ) : (
-                  <button
-                    type="button"
-                    onClick={() => inputRef.current?.click()}
-                    className="flex aspect-square max-h-105 w-full flex-col items-center justify-center gap-4 bg-gray-50 p-8 text-center brutal-border transition-colors hover:bg-orange-50"
-                  >
+                  <div className="flex aspect-square max-h-105 w-full flex-col items-center justify-center gap-4 bg-gray-50 p-6 text-center brutal-border sm:p-8">
                     <div className="flex h-20 w-20 items-center justify-center rounded-full bg-brutal-black text-white">
-                      <Camera className="h-9 w-9" />
+                      <ScanFace className="h-9 w-9" />
                     </div>
-                    <span className="font-display text-2xl uppercase">Selecionar selfie</span>
+                    <span className="font-display text-2xl uppercase">Envie uma selfie</span>
                     <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">JPG ou PNG, ate 8 MB</span>
-                  </button>
+                    <div className="mt-2 grid w-full max-w-sm gap-3 sm:grid-cols-2">
+                      <button
+                        type="button"
+                        onClick={() => galleryInputRef.current?.click()}
+                        disabled={isSearching}
+                        className="inline-flex min-h-13 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border brutal-shadow-hover disabled:opacity-50"
+                      >
+                        <ImagePlus className="h-5 w-5" />
+                        Galeria
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => cameraInputRef.current?.click()}
+                        disabled={isSearching}
+                        className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50"
+                      >
+                        <Camera className="h-5 w-5" />
+                        Usar camera
+                      </button>
+                    </div>
+                  </div>
                 )}
                 <input
-                  ref={inputRef}
+                  ref={galleryInputRef}
                   type="file"
                   accept="image/jpeg,image/png"
+                  className="sr-only"
+                  onChange={(event) => selectFile(event.target.files?.[0])}
+                />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  accept="image/*"
+                  capture="user"
                   className="sr-only"
                   onChange={(event) => selectFile(event.target.files?.[0])}
                 />
@@ -186,7 +229,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                   {isSearching ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      Buscando suas fotos com reconhecimento facial...
+                      Procurando suas fotos...
                     </>
                   ) : (
                     <>

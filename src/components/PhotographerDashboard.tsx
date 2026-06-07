@@ -2164,6 +2164,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             type: item.file.type.startsWith('image') ? 'IMG' : 'VIDEO',
             vendedorId: photographer.id,
             event: normalizedEvent,
+            eventId: selectedEvent?.id || null,
             checkpoint: normalizedCheckpoint,
             bib: item.bib.trim(),
             thumbnailUrl: uploadedThumbnail?.path,
@@ -2177,8 +2178,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             status: 'published'
           } satisfies Omit<Product, 'id'>;
 
+          let indexedPhotoId: string | null = null;
           if (duplicateAction === 'replace' && existingNameProduct) {
             await productService.replaceProductMedia(existingNameProduct.id, productPayload);
+            indexedPhotoId = existingNameProduct.id;
             await productService.logUploadConflictAction({
               action: 'upload_replace',
               productId: existingNameProduct.id,
@@ -2193,6 +2196,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             replacedCount += 1;
           } else {
             const productId = await productService.addProduct(productPayload);
+            indexedPhotoId = productId;
             if (duplicateAction === 'copy') {
               await productService.logUploadConflictAction({
                 action: 'upload_copy',
@@ -2208,6 +2212,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               copiedCount += 1;
             }
             publishedCount += 1;
+          }
+          if (indexedPhotoId && selectedEvent?.id && uploadFile.type.startsWith('image/')) {
+            await productService.indexProductFace(indexedPhotoId, selectedEvent.id, uploadFile).catch((faceError) => {
+              console.error('[face-index] automatic:index-error', {
+                photoId: indexedPhotoId,
+                eventId: selectedEvent.id,
+                message: faceError instanceof Error ? faceError.message : String(faceError),
+              });
+            });
           }
           setPublishProgress({ done: index + 1, total: selectedFiles.length });
         } catch (fileError) {

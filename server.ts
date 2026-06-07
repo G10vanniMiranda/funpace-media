@@ -13,6 +13,7 @@ import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
 import adminApiHandler from "./api/admin";
 import type { PaymentMethod } from "./server/payments/providers/types";
+import { indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 
 dotenv.config();
 
@@ -1879,6 +1880,14 @@ app.post("/api/media/upload", express.raw({
     return res.status(500).json({ error: error?.message || "Nao foi possivel enviar a midia." });
   }
 });
+
+app.post("/api/face/index", express.raw({
+  type: ["image/jpeg", "image/jpg", "image/png", "application/octet-stream"],
+  limit: process.env.FACE_SEARCH_MAX_UPLOAD_BYTES || "8mb",
+}), indexPhotoHandler);
+
+app.post("/api/face/search", searchFaceHandler);
+app.get("/api/face/test", testFaceHandler);
 
 app.post("/api/photographers/profile-image", express.raw({
   type: ["image/jpeg", "image/jpg", "image/png", "image/webp", "application/octet-stream"],

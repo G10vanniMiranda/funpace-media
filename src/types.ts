@@ -51,6 +51,10 @@ export interface Product {
   originalFileName?: string | null;
   thumbnailHash?: string | null;
   uploadBatchId?: string | null;
+  eventId?: string | null;
+  faceIndexStatus?: 'pending' | 'processing' | 'indexed' | 'no_face' | 'failed' | 'disabled';
+  faceIndexError?: string | null;
+  faceIndexedAt?: string | null;
   status?: 'draft' | 'pending' | 'processing' | 'published' | 'sold' | 'hidden' | 'removed';
   createdAt?: string;
   favoriteCount?: number;

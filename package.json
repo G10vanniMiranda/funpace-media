@@ -24,11 +24,14 @@
     "supabase:multiphoto:verify": "node scripts/verify-multiphoto-face-architecture.mjs"
   },
   "dependencies": {
+    "@aws-sdk/client-rekognition": "^3.1063.0",
+    "@aws-sdk/client-s3": "^3.1063.0",
     "@supabase/supabase-js": "^2.106.2",
     "@tailwindcss/vite": "^4.1.14",
     "@types/cors": "^2.8.19",
     "@vercel/analytics": "^2.0.1",
     "@vitejs/plugin-react": "^5.0.4",
+    "busboy": "^1.6.0",
     "cors": "^2.8.6",
     "dotenv": "^17.2.3",
     "esbuild": "^0.28.0",
@@ -44,6 +47,7 @@
   },
   "devDependencies": {
     "@types/express": "^4.17.21",
+    "@types/busboy": "^1.5.4",
     "@types/node": "^22.14.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",

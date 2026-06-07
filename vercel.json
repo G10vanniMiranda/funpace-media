@@ -2,6 +2,9 @@
   "functions": {
     "api/checkout/create-session.ts": {
       "maxDuration": 30
+    },
+    "api/face.ts": {
+      "maxDuration": 30
     }
   },
   "crons": [
@@ -80,6 +83,18 @@
     {
       "source": "/api/admin/photographers/:id",
       "destination": "/api/admin?route=photographers-action&id=:id"
+    },
+    {
+      "source": "/api/face/search",
+      "destination": "/api/face?route=search"
+    },
+    {
+      "source": "/api/face/index",
+      "destination": "/api/face?route=index"
+    },
+    {
+      "source": "/api/face/test",
+      "destination": "/api/face?route=test"
     },
     {
       "source": "/api/:path*",

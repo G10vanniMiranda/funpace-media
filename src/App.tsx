@@ -650,7 +650,12 @@ function Storefront() {
     openGlobalEventResult(product.event || 'Evento sem nome');
   };
 
-  const handleSelfieSearch = (file: File) => {
+  const handleSelfieSearch = async (file: File) => {
+    const selectedEvent = selectedRegisteredEvent;
+    if (!selectedEvent?.id) {
+      showToast('Abra um evento antes de enviar a selfie.', 'error');
+      return;
+    }
     setSelfieFile(file);
     setIsAnalyzingSelfie(true);
     setSearchBib(null);
@@ -663,11 +668,21 @@ function Storefront() {
       return null;
     });
 
-    setTimeout(() => {
+    try {
+      const matches = await productService.searchByFace(file, selectedEvent.id);
+      const products = matches.map((match) => match.product);
+      setPhotos(products.filter((product) => product.type === 'IMG'));
+      setVideos(products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW'));
+      if (products.length === 0) showToast('Nenhuma foto correspondente foi encontrada neste evento.', 'info');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Nao foi possivel realizar a busca facial.', 'error');
+      setPhotos([]);
+      setVideos([]);
+    } finally {
       setIsAnalyzingSelfie(false);
       setSearchType('selfie');
       setActiveView('photos');
-    }, 900);
+    }
   };
 
   const clearSearch = async () => {

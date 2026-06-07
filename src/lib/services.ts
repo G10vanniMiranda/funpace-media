@@ -575,6 +575,37 @@ export const productService = {
     return signMediaUrls(products, { protectImageOriginals: true });
   },
 
+  async searchByFace(file: File, eventId: string): Promise<Array<{ product: Product; similarity: number }>> {
+    const formData = new FormData();
+    formData.set('eventId', eventId);
+    formData.set('selfie', file, file.name);
+    const response = await fetch(apiUrl('/api/face/search'), { method: 'POST', body: formData });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || `Busca facial falhou com HTTP ${response.status}.`);
+    const matches = Array.isArray(payload?.matches) ? payload.matches : [];
+    const signed = await signMediaUrls(matches.map((match: any) => match.product) as Product[], { protectImageOriginals: true });
+    return signed.map((product, index) => ({ product, similarity: Number(matches[index]?.similarity || 0) }));
+  },
+
+  async indexProductFace(photoId: string, eventId: string, file: File) {
+    if (isMockMode || !file.type.startsWith('image/')) return { status: 'disabled', facesIndexed: 0 };
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessao de fotografo ausente para indexacao facial.');
+    const response = await fetch(apiUrl('/api/face/index'), {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': file.type,
+        'X-Photo-Id': photoId,
+        'X-Event-Id': eventId,
+      },
+      body: file,
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || `Indexacao facial falhou com HTTP ${response.status}.`);
+    return payload as { status: string; facesIndexed: number };
+  },
+
   async getVendedorProducts(vendedorId: string): Promise<Product[]> {
     if (isMockMode) {
       return mockProducts.filter((product) => product.vendedorId === vendedorId);
@@ -708,7 +739,7 @@ export const productService = {
     return updated;
   },
 
-  async replaceProductMedia(id: string, changes: Partial<Pick<Product, 'name' | 'price' | 'url' | 'type' | 'event' | 'checkpoint' | 'bib' | 'thumbnailUrl' | 'watermarkUrl' | 'storagePath' | 'fileHash' | 'fileSize' | 'originalFileName' | 'thumbnailHash' | 'uploadBatchId' | 'status'>>): Promise<Product> {
+  async replaceProductMedia(id: string, changes: Partial<Pick<Product, 'name' | 'price' | 'url' | 'type' | 'event' | 'eventId' | 'checkpoint' | 'bib' | 'thumbnailUrl' | 'watermarkUrl' | 'storagePath' | 'fileHash' | 'fileSize' | 'originalFileName' | 'thumbnailHash' | 'uploadBatchId' | 'status'>>): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
       if (!existingProduct) throw new Error('Produto nao encontrado.');

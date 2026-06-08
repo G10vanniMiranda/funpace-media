@@ -1,0 +1,71 @@
+{
+  "generatedAt": "2026-06-08T17:15:25.903Z",
+  "source": "supabase.orders",
+  "criteria": {
+    "paidSales": "orders.status = paid"
+  },
+  "summary": {
+    "ordersTotal": 68,
+    "paidSales": 32,
+    "paidGrossTotal": 378.86,
+    "paidSubtotalTotal": 387.4,
+    "paidDiscountTotal": 69,
+    "firstPaidAt": "2026-05-19T23:59:22.459547+00:00",
+    "lastPaidAt": "2026-06-04T03:29:48.620421+00:00"
+  },
+  "breakdowns": {
+    "byStatus": [
+      {
+        "name": "paid",
+        "count": 32,
+        "total": 378.86
+      },
+      {
+        "name": "pending",
+        "count": 28,
+        "total": 314.84
+      },
+      {
+        "name": "canceled",
+        "count": 8,
+        "total": 91.42
+      }
+    ],
+    "paidByPaymentMethod": [
+      {
+        "name": "pix",
+        "count": 5,
+        "total": 193.7
+      },
+      {
+        "name": "checkout",
+        "count": 25,
+        "total": 95.76
+      },
+      {
+        "name": "credit_card",
+        "count": 2,
+        "total": 89.4
+      }
+    ],
+    "paidByPaymentProvider": [
+      {
+        "name": "infinitepay",
+        "count": 32,
+        "total": 378.86
+      }
+    ],
+    "paidByMonth": [
+      {
+        "month": "2026-05",
+        "count": 19,
+        "total": 75.36
+      },
+      {
+        "month": "2026-06",
+        "count": 13,
+        "total": 303.5
+      }
+    ]
+  }
+}

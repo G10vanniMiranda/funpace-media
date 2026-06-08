@@ -608,14 +608,22 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
       context.save();
       context.translate(width / 2, height / 2);
       context.rotate(-Math.PI / 6);
-      context.font = `900 ${Math.max(18, Math.round(width / 12))}px Arial, sans-serif`;
+      const watermarkFontSize = Math.max(14, Math.round(Math.min(width, height) / 16));
+      const watermarkStepX = Math.max(180, Math.round(width / 2.6));
+      const watermarkStepY = Math.max(92, Math.round(height / 4.8));
+      const watermarkBounds = Math.hypot(width, height);
+      context.font = `900 ${watermarkFontSize}px Arial, sans-serif`;
       context.textAlign = 'center';
       context.textBaseline = 'middle';
-      context.fillStyle = 'rgba(255,255,255,0.26)';
-      context.strokeStyle = 'rgba(0,0,0,0.32)';
-      context.lineWidth = Math.max(2, width / 220);
-      context.strokeText('FUNPACE', 0, 0);
-      context.fillText('FUNPACE', 0, 0);
+      context.fillStyle = 'rgba(255,255,255,0.20)';
+      context.strokeStyle = 'rgba(0,0,0,0.22)';
+      context.lineWidth = Math.max(1, Math.min(width, height) / 360);
+      for (let y = -watermarkBounds; y <= watermarkBounds; y += watermarkStepY) {
+        for (let x = -watermarkBounds; x <= watermarkBounds; x += watermarkStepX) {
+          context.strokeText('FUNPACE MEDIA', x, y);
+          context.fillText('FUNPACE MEDIA', x, y);
+        }
+      }
       context.restore();
       canvas.toBlob((blob) => {
         if (!blob) {

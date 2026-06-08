@@ -147,11 +147,15 @@ function isDuplicateSlugError(error: unknown) {
     message.toLowerCase().includes('duplicate key value') && message.toLowerCase().includes('slug');
 }
 
-function isMissingEventCoverMediaColumnError(error: unknown) {
+function getMissingEventColumnName(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '');
   const normalized = message.toLowerCase();
-  return normalized.includes('covermediaid') &&
-    (normalized.includes('schema cache') || normalized.includes('could not find') || normalized.includes('pgrst204'));
+  if (!(normalized.includes('schema cache') || normalized.includes('could not find') || normalized.includes('pgrst204'))) {
+    return null;
+  }
+  if (normalized.includes('covermediaid')) return 'coverMediaId';
+  if (normalized.includes('cover_position')) return 'cover_position';
+  return null;
 }
 
 async function createAvailableEventSlug(name: string, date: string, ignoredEventId?: string) {
@@ -1213,7 +1217,7 @@ export const eventService = {
     }
   },
 
-  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & Partial<Pick<Event, 'photographerId' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'isPublished'>>): Promise<Event> {
+  async createEvent(input: Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & Partial<Pick<Event, 'photographerId' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'cover_position' | 'isPublished'>>): Promise<Event> {
     if (isMockMode) {
       const created = {
         id: `mock-event-${crypto.randomUUID()}`,
@@ -1243,9 +1247,12 @@ export const eventService = {
           true,
         );
       } catch (error) {
-        if (!isMissingEventCoverMediaColumnError(error)) throw error;
-        console.warn('Coluna events.coverMediaId ausente no cache do Supabase; salvando evento sem vinculo de midia da capa.');
-        const { coverMediaId: _coverMediaId, ...fallbackPayload } = payload;
+        const missingColumn = getMissingEventColumnName(error);
+        if (!missingColumn) throw error;
+        console.warn(`Coluna events.${missingColumn} ausente no cache do Supabase; salvando evento sem este campo.`);
+        const fallbackPayload = { ...payload };
+        delete (fallbackPayload as Partial<Event>).coverMediaId;
+        delete (fallbackPayload as Partial<Event>).cover_position;
         createdRows = await supabaseRest.post<SupabaseRow<Event>[]>(
           `/rest/v1/events?${selectAll}`,
           fallbackPayload,
@@ -1311,7 +1318,7 @@ export const eventService = {
     };
   },
 
-  async updateEvent(id: string, input: Partial<Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'isPublished' | 'isFeatured' | 'moderationStatus'>>): Promise<Event> {
+  async updateEvent(id: string, input: Partial<Pick<Event, 'name' | 'date' | 'location' | 'checkpoint' | 'status' | 'description' | 'coverImage' | 'coverMediaId' | 'bannerImage' | 'cover_position' | 'isPublished' | 'isFeatured' | 'moderationStatus'>>): Promise<Event> {
     if (isMockMode) {
       const events = loadLocalEvents();
       const existing = events.find((event) => event.id === id);
@@ -1352,9 +1359,12 @@ export const eventService = {
         true,
       );
     } catch (error) {
-      if (!isMissingEventCoverMediaColumnError(error)) throw error;
-      console.warn('Coluna events.coverMediaId ausente no cache do Supabase; salvando evento sem alterar vinculo de midia da capa.');
-      const { coverMediaId: _coverMediaId, ...fallbackPayload } = payload;
+      const missingColumn = getMissingEventColumnName(error);
+      if (!missingColumn) throw error;
+      console.warn(`Coluna events.${missingColumn} ausente no cache do Supabase; salvando evento sem alterar este campo.`);
+      const fallbackPayload = { ...payload };
+      delete (fallbackPayload as Partial<Event>).coverMediaId;
+      delete (fallbackPayload as Partial<Event>).cover_position;
       updatedRows = await supabaseRest.patch<SupabaseRow<Event>[]>(
         `/rest/v1/events?${params.toString()}&${selectAll}`,
         fallbackPayload,

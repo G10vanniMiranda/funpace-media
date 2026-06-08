@@ -1196,6 +1196,7 @@ type PublicPhotographerAlbum = {
   city: string;
   description?: string | null;
   coverUrl: string | null;
+  coverPosition: string;
   sortTime: number;
   products: Product[];
   event?: Event | null;
@@ -1322,6 +1323,7 @@ function PublicPhotographerPage({
         city: event.location || event.checkpoint || '',
         description: event.description,
         coverUrl: event.bannerImage || event.coverImage || coverProduct?.thumbnailUrl || null,
+        coverPosition: event.cover_position || 'center center',
         sortTime: Math.max(getStorefrontTimestamp(event.date), getStorefrontTimestamp(event.createdAt), latestProductTime),
         products: eventProducts,
         event,
@@ -1339,6 +1341,7 @@ function PublicPhotographerPage({
           ...existing,
           city: existing.city || eventProducts[0]?.checkpoint || '',
           coverUrl: existing.coverUrl || coverProduct?.thumbnailUrl || null,
+          coverPosition: existing.coverPosition || 'center center',
           sortTime: Math.max(existing.sortTime, latestProductTime),
           products: eventProducts,
         });
@@ -1353,6 +1356,7 @@ function PublicPhotographerPage({
         city: eventProducts[0]?.checkpoint || '',
         description: null,
         coverUrl: coverProduct?.thumbnailUrl || null,
+        coverPosition: 'center center',
         sortTime: latestProductTime,
         products: eventProducts,
         event: null,
@@ -1497,7 +1501,7 @@ function PublicPhotographerPage({
               return (
                 <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-116 flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-120">
                   <div className="h-48 shrink-0 border-b-2 border-brutal-black bg-gray-100 lg:h-52">
-                    {album.coverUrl ? <img src={album.coverUrl} alt={album.name} loading="lazy" className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
+                    {album.coverUrl ? <img src={album.coverUrl} alt={album.name} loading="lazy" style={{ objectPosition: album.coverPosition || 'center center' }} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
                   </div>
                   <div className="flex flex-1 flex-col p-4">
                     <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(album.date)}</p>
@@ -1623,7 +1627,7 @@ function PublicEventPage({
             <div className="grid lg:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.5fr)]">
               <div className="relative min-h-55 overflow-hidden bg-brutal-black sm:min-h-72 lg:min-h-full">
                 {cover ? (
-                  <img src={cover} alt={event.name} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
+                  <img src={cover} alt={event.name} style={{ objectPosition: event.cover_position || 'center center' }} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center text-white/30"><ImageIcon className="h-16 w-16" /></div>
                 )}

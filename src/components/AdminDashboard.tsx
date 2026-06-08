@@ -74,6 +74,13 @@ type StorageStats = {
 type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'coupons' | 'logs' | 'settings';
 type PhotographerStatusFilter = 'all' | 'active' | 'pending' | 'disabled';
 type PhotographerAdminAction = 'disable' | 'reactivate' | 'delete';
+const EVENT_COVER_POSITION_OPTIONS = [
+  { label: 'Centro', value: 'center center' },
+  { label: 'Topo', value: 'center top' },
+  { label: 'Baixo', value: 'center bottom' },
+  { label: 'Esquerda', value: 'left center' },
+  { label: 'Direita', value: 'right center' },
+];
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', {
@@ -512,6 +519,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     checkpoint: 'Ponto Principal',
     status: 'active' as Event['status'],
     coverImage: '',
+    cover_position: 'center center',
   });
   const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>({
     platformFeePercent: 30,
@@ -958,6 +966,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         date: eventItem.date,
         status: eventItem.status,
         coverImage: eventItem.coverImage || '',
+        cover_position: eventItem.cover_position || 'center center',
         source: 'Cadastro',
         mediaLabel: '',
         canEdit: true,
@@ -972,6 +981,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           date: eventItem.date,
           status: 'active' as const,
           coverImage: eventItem.coverImage,
+          cover_position: 'center center',
           source: 'Midias',
           mediaLabel: `${eventItem.photoCount} foto(s) / ${eventItem.videoCount} video(s)`,
           canEdit: true,
@@ -1316,6 +1326,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       checkpoint: 'Ponto Principal',
       status: 'active',
       coverImage: '',
+      cover_position: 'center center',
     });
   };
 
@@ -1328,11 +1339,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       checkpoint: 'Ponto Principal',
       status: 'active',
       coverImage: '',
+      cover_position: 'center center',
     });
     setShowEventModal(true);
   };
 
-  const openEditEvent = (eventItem: Pick<Event, 'id' | 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & { coverImage?: string | null }) => {
+  const openEditEvent = (eventItem: Pick<Event, 'id' | 'name' | 'date' | 'location' | 'checkpoint' | 'status'> & { coverImage?: string | null; cover_position?: string | null }) => {
     setEditingEventId(eventItem.id);
     setEventForm({
       name: eventItem.name,
@@ -1341,6 +1353,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       checkpoint: eventItem.checkpoint ?? 'Ponto Principal',
       status: eventItem.status,
       coverImage: eventItem.coverImage ?? '',
+      cover_position: eventItem.cover_position ?? 'center center',
     });
     setShowEventModal(true);
   };
@@ -1362,6 +1375,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         checkpoint: eventForm.checkpoint.trim() || null,
         status: eventForm.status,
         coverImage: eventForm.coverImage.trim() || null,
+        cover_position: eventForm.cover_position || 'center center',
       };
 
       if (editingEventId && !editingEventId.startsWith('media-')) {
@@ -3385,7 +3399,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <div>
                       <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest mb-2">Capa do evento</label>
                       <p className="font-mono text-[10px] uppercase text-gray-600">
-                        Escolha uma foto ou preview ja enviado neste evento.
+                        Escolha uma foto ou preview ja enviado neste evento. Use imagens horizontais em 16:9 para melhor resultado. Sugestao: 1920x1080.
                       </p>
                     </div>
                     {eventForm.coverImage && (
@@ -3406,11 +3420,24 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
                           <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
                         ) : (
-                          <img src={eventForm.coverImage} alt="Capa atual do evento" className="w-full h-full object-cover" />
+                          <img src={eventForm.coverImage} alt="Capa atual do evento" style={{ objectPosition: eventForm.cover_position || 'center center' }} className="w-full h-full object-cover" />
                         )}
                       </div>
                     </div>
                   )}
+
+                  <div className="mb-4">
+                    <label className="mb-2 block font-mono text-[10px] uppercase font-bold tracking-widest text-gray-400">Enquadramento da capa</label>
+                    <select
+                      value={eventForm.cover_position}
+                      onChange={(event) => setEventForm((current) => ({ ...current, cover_position: event.target.value }))}
+                      className="h-12 w-full bg-[#05080d] border border-white/15 px-3 font-mono text-xs uppercase text-white outline-none focus:border-brutal-accent"
+                    >
+                      {EVENT_COVER_POSITION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                  </div>
 
                   {eventCoverCandidates.length > 0 ? (
                     <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">

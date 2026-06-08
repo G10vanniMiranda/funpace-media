@@ -12,6 +12,7 @@ create table if not exists public.events (
   "coverImage" text,
   "coverMediaId" uuid references public.products(id) on delete set null,
   "bannerImage" text,
+  cover_position text not null default 'center center',
   "isPublished" boolean not null default true,
   status text not null default 'scheduled' check (status in ('scheduled', 'active', 'closed')),
   "createdAt" timestamptz not null default now(),
@@ -25,6 +26,7 @@ alter table public.events add column if not exists checkpoint text;
 alter table public.events add column if not exists "coverImage" text;
 alter table public.events add column if not exists "coverMediaId" uuid references public.products(id) on delete set null;
 alter table public.events add column if not exists "bannerImage" text;
+alter table public.events add column if not exists cover_position text not null default 'center center';
 alter table public.events add column if not exists "isPublished" boolean not null default true;
 alter table public.events add column if not exists "isFeatured" boolean not null default false;
 alter table public.events add column if not exists "moderationStatus" text not null default 'approved';

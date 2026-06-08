@@ -102,6 +102,7 @@ export interface Event {
   coverImage?: string | null;
   coverMediaId?: string | null;
   bannerImage?: string | null;
+  cover_position?: string | null;
   isPublished?: boolean;
   isFeatured?: boolean;
   moderationStatus?: 'pending' | 'approved' | 'rejected';

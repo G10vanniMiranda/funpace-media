@@ -383,6 +383,7 @@ create table if not exists public.events (
   "coverImage" text,
   "coverMediaId" uuid references public.products(id) on delete set null,
   "bannerImage" text,
+  cover_position text not null default 'center center',
   "defaultPrice" numeric(10, 2) check ("defaultPrice" is null or "defaultPrice" > 0),
   "isPublished" boolean not null default true,
   "isFeatured" boolean not null default false,
@@ -398,6 +399,7 @@ alter table public.events add column if not exists description text;
 alter table public.events add column if not exists "coverImage" text;
 alter table public.events add column if not exists "coverMediaId" uuid references public.products(id) on delete set null;
 alter table public.events add column if not exists "bannerImage" text;
+alter table public.events add column if not exists cover_position text not null default 'center center';
 alter table public.events add column if not exists "defaultPrice" numeric(10, 2);
 alter table public.events add column if not exists "isPublished" boolean not null default true;
 alter table public.events add column if not exists "isFeatured" boolean not null default false;

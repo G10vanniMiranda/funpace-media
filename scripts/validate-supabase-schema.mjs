@@ -34,7 +34,7 @@ if (!process.env.DATABASE_URL && dbConfig.host && /[a-z]/i.test(dbConfig.host)) 
 const requiredColumns = {
   photographers: ["id", "slug", "username", "isPublic", "displayName", "profilePhoto", "coverPhoto", "city", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "role", "commissionPercent", "blockedAt", "lastLoginAt", "stats", "createdAt", "updatedAt"],
   customers: ["id", "email", "name", "phone", "cpf", "avatarUrl", "preferences", "createdAt", "updatedAt"],
-  events: ["id", "photographerId", "name", "slug", "description", "date", "location", "checkpoint", "coverImage", "coverMediaId", "bannerImage", "isPublished", "isFeatured", "moderationStatus", "status", "createdAt", "updatedAt"],
+  events: ["id", "photographerId", "name", "slug", "description", "date", "location", "checkpoint", "coverImage", "coverMediaId", "bannerImage", "cover_position", "isPublished", "isFeatured", "moderationStatus", "status", "createdAt", "updatedAt"],
   products: ["id", "name", "price", "url", "type", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "watermarkUrl", "duration", "storagePath", "fileHash", "fileSize", "originalFileName", "thumbnailHash", "uploadBatchId", "status", "viewCount", "salesCount", "createdAt", "updatedAt"],
   orders: ["id", "userId", "buyerName", "buyerEmail", "buyerPhone", "buyerCpf", "total", "subtotal", "discountTotal", "status", "paymentMethod", "paymentProvider", "paymentExternalId", "checkoutUrl", "paidEmailSentAt", "createdAt", "updatedAt"],
   order_items: ["id", "orderId", "productId", "name", "type", "price", "url", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "createdAt"],

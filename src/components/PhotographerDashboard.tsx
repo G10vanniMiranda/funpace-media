@@ -86,6 +86,7 @@ type PhotographerCatalogEvent = {
   name: string;
   checkpoint: string;
   coverUrl: string | null;
+  coverPosition: string;
   dateLabel: string;
   createdAtLabel: string;
   photos: number;
@@ -105,6 +106,7 @@ type EventFormState = {
   coverImage: string;
   coverMediaId: string;
   bannerImage: string;
+  cover_position: string;
 };
 
 type ProfileImageKind = 'avatar' | 'cover';
@@ -128,6 +130,13 @@ const defaultUploadMaxBytes = 300 * 1024 * 1024;
 const clientUploadMaxBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadMaxBytes);
 const imageCompressionMaxBytes = 900 * 1024;
 const imageCompressionMaxSide = 2200;
+const EVENT_COVER_POSITION_OPTIONS = [
+  { label: 'Centro', value: 'center center' },
+  { label: 'Topo', value: 'center top' },
+  { label: 'Baixo', value: 'center bottom' },
+  { label: 'Esquerda', value: 'left center' },
+  { label: 'Direita', value: 'right center' },
+];
 const minImageCompressionSide = 900;
 const imageCompressionQualities = [0.82, 0.74, 0.66, 0.58, 0.5, 0.42];
 const imagePreviewMaxSide = 960;
@@ -1008,6 +1017,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     coverImage: '',
     coverMediaId: '',
     bannerImage: '',
+    cover_position: 'center center',
   }));
   const [eventError, setEventError] = useState('');
   const [isSavingEvent, setIsSavingEvent] = useState(false);
@@ -1304,6 +1314,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         name: eventName,
         checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
         coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || (coverProduct?.type === 'IMG' ? coverProduct.url : null) || null,
+        coverPosition: eventDetail?.cover_position || 'center center',
         dateLabel: formatCatalogDate(eventDetail?.date || fallbackDate),
         createdAtLabel: formatCreatedOrderLabel(eventDetail?.createdAt || fallbackDate),
         photos: groupProducts.filter((product) => product.type === 'IMG').length,
@@ -1623,6 +1634,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       coverImage: '',
       coverMediaId: '',
       bannerImage: '',
+      cover_position: 'center center',
     });
     setEventError('');
     setEventCoverError('');
@@ -1645,6 +1657,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       coverImage: '',
       coverMediaId: '',
       bannerImage: '',
+      cover_position: 'center center',
     });
     setEventError('');
     setEventCoverError('');
@@ -1668,6 +1681,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       coverImage: eventItem.coverImage || '',
       coverMediaId: eventItem.coverMediaId || '',
       bannerImage: eventItem.bannerImage || '',
+      cover_position: eventItem.cover_position || 'center center',
     });
     setEventError('');
     setEventCoverError('');
@@ -1714,6 +1728,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         coverImage: uploadedCover?.publicUrl || eventForm.coverImage.trim() || null,
         coverMediaId: uploadedCover ? null : eventForm.coverMediaId || null,
         bannerImage: eventForm.bannerImage.trim() || null,
+        cover_position: eventForm.cover_position || 'center center',
       };
       console.info('[event-cover] event:update:start', {
         eventId: eventForm.id || null,
@@ -2902,7 +2917,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   eventItem.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
                                     <video src={eventItem.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
                                   ) : (
-                                    <img src={eventItem.coverImage} alt={eventItem.name} className="w-full h-full object-cover" />
+                                    <img src={eventItem.coverImage} alt={eventItem.name} style={{ objectPosition: eventItem.cover_position || 'center center' }} className="w-full h-full object-cover" />
                                   )
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center">
@@ -3155,7 +3170,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                 eventItem.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
                                   <video src={eventItem.coverUrl} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" muted preload="metadata" />
                                 ) : (
-                                  <img src={eventItem.coverUrl} alt={eventItem.name} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" />
+                                  <img src={eventItem.coverUrl} alt={eventItem.name} style={{ objectPosition: eventItem.coverPosition || 'center center' }} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" />
                                 )
                               ) : (
                                 <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -3226,7 +3241,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             selectedProductEventCard.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
                               <video src={selectedProductEventCard.coverUrl} className="absolute inset-0 w-full h-full object-cover opacity-80" muted preload="metadata" />
                             ) : (
-                              <img src={selectedProductEventCard.coverUrl} alt={selectedProductEventCard.name} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                              <img src={selectedProductEventCard.coverUrl} alt={selectedProductEventCard.name} style={{ objectPosition: selectedProductEventCard.coverPosition || 'center center' }} className="absolute inset-0 w-full h-full object-cover opacity-80" />
                             )
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center">
@@ -3979,6 +3994,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Capa do evento</label>
                       <p className="font-mono text-[10px] uppercase text-gray-600">
                         Escolha uma foto ja enviada ou envie uma capa personalizada.
+                        Use imagens horizontais em 16:9 para melhor resultado. Sugestao: 1920x1080.
                       </p>
                     </div>
                     {(eventForm.coverImage || pendingEventCover) && (
@@ -4001,6 +4017,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             <img
                               src={pendingEventCover?.previewUrl || eventForm.coverImage}
                               alt="Capa atual do evento"
+                              style={{ objectPosition: eventForm.cover_position || 'center center' }}
                               className="w-full h-full object-cover"
                               loading="lazy"
                               decoding="async"
@@ -4019,6 +4036,19 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             Capa vinculada a foto do evento
                           </p>
                         )}
+                      </div>
+
+                      <div>
+                        <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Enquadramento da capa</label>
+                        <select
+                          value={eventForm.cover_position}
+                          onChange={(event) => setEventForm((current) => ({ ...current, cover_position: event.target.value }))}
+                          className="w-full h-12 px-3 bg-[#05080d] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent transition-colors"
+                        >
+                          {EVENT_COVER_POSITION_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
                       </div>
 
                       <ProfileImageUploader

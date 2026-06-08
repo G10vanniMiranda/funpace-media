@@ -13,6 +13,7 @@ interface MediaEvent {
   name: string;
   checkpoint: string;
   coverUrl: string | null;
+  coverPosition: string;
   date?: string;
   createdAt?: string;
   sortTime: number;
@@ -85,6 +86,7 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
       name,
       checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
       coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || null,
+      coverPosition: eventDetail?.cover_position || 'center center',
       date: eventDetail?.date || fallbackDate,
       createdAt,
       sortTime: getTimestamp(eventDetail?.createdAt) || fallbackSortTime,
@@ -107,6 +109,7 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
       name,
       checkpoint: eventItem.checkpoint || eventItem.location || 'Local a confirmar',
       coverUrl: eventItem.coverImage || null,
+      coverPosition: eventItem.cover_position || 'center center',
       date: eventItem.date,
       createdAt: eventItem.createdAt,
       sortTime: getTimestamp(eventItem.createdAt) || getTimestamp(eventItem.date),
@@ -186,6 +189,7 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                     loading="lazy"
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
+                    style={{ objectPosition: event.coverPosition || 'center center' }}
                     className="block w-full h-full object-cover object-center opacity-85 group-hover:scale-105 transition-transform duration-500"
                   />
                 ) : (

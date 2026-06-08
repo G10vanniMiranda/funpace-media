@@ -1566,6 +1566,14 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
     const buyerCpf = onlyCpfDigits(typeof buyer?.cpf === "string" ? buyer.cpf : "");
+    console.info("[checkout] buyer cpf received", {
+      hasCpf: buyerCpf.length > 0,
+      cpfLength: buyerCpf.length,
+      cpfValid: isValidCpf(buyerCpf),
+    });
+    if (!isValidCpf(buyerCpf)) {
+      return res.status(400).json({ error: "Informe um CPF valido para continuar o pagamento." });
+    }
     const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
     if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
       return res.status(403).json({ error: "Use o mesmo e-mail da conta logada para finalizar a compra." });
@@ -1640,6 +1648,12 @@ app.post("/api/checkout/create-session", async (req, res) => {
     const provider = getActivePaymentProvider();
     let paymentResult;
     try {
+      console.info("[checkout] provider payload source", {
+        orderId,
+        provider: provider.name,
+        hasCpf: buyerCpf.length === 11,
+        cpfLength: buyerCpf.length,
+      });
       paymentResult = await provider.createCheckout({
         orderId,
         buyer: {

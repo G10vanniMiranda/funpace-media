@@ -59,6 +59,7 @@ export const infinitePayProvider: PaymentProvider = {
 
   async createCheckout(input: CreatePaymentInput): Promise<CreatePaymentResult> {
     const phoneDigits = String(input.buyer.phone || '').replace(/\D/g, '');
+    const cpfDigits = String(input.buyer.cpf || '').replace(/\D/g, '').slice(0, 11);
     const payload: any = {
       handle: getHandle(),
       order_nsu: input.orderId,
@@ -78,13 +79,21 @@ export const infinitePayProvider: PaymentProvider = {
       payload.cancel_url = input.cancelUrl;
     }
 
-    if (phoneDigits.length >= 10) {
-      payload.customer = {
-        name: String(input.buyer.fullName || '').slice(0, 120),
-        email: String(input.buyer.email || '').slice(0, 256),
-        phone_number: `+55${phoneDigits}`,
-      };
-    }
+    payload.customer = {
+      name: String(input.buyer.fullName || '').slice(0, 120),
+      email: String(input.buyer.email || '').slice(0, 256),
+      ...(phoneDigits.length >= 10 ? { phone_number: `+55${phoneDigits}` } : {}),
+      document: cpfDigits,
+      cpf: cpfDigits,
+    };
+
+    console.info('[infinitepay] checkout payload', {
+      order_nsu: payload.order_nsu,
+      itemCount: payload.items.length,
+      hasCustomer: Boolean(payload.customer),
+      hasCpf: cpfDigits.length === 11,
+      cpfLength: cpfDigits.length,
+    });
 
     const response = await fetchWithTimeout(getInfinitePayCheckoutEndpoint(), {
       method: 'POST',

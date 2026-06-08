@@ -1440,6 +1440,10 @@ function createCheckoutClientError(input: { response: Response; data: any; raw: 
     return new Error(`Não foi possível iniciar o pagamento. Tente novamente em alguns minutos.${requestId}`);
   }
 
+  if (/cpf/i.test(detail)) {
+    return new Error('Informe um CPF válido para continuar o pagamento.');
+  }
+
   if (detail) {
     return new Error(`Não foi possível iniciar o pagamento: ${detail}${requestId}`);
   }

@@ -5,6 +5,7 @@ import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { isValidAuthEmail, normalizeAuthEmail } from '../lib/supabase';
 import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
+import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { ProtectedMedia } from './ProtectedMedia';
 import { CheckoutPaymentMethod, CreateCheckoutResult } from '../lib/services';
 
@@ -52,6 +53,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const [fullName, setFullName] = useState(user?.displayName || titleCaseFromEmail(user?.email));
   const [email, setEmail] = useState(user?.email ?? '');
   const [phone, setPhone] = useState('');
+  const [cpf, setCpf] = useState(user?.cpf ?? '');
   const [submittingMethod, setSubmittingMethod] = useState<CheckoutPaymentMethod | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<CreateCheckoutResult | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
@@ -60,14 +62,17 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   useEffect(() => {
     setFullName(user?.displayName || titleCaseFromEmail(user?.email));
     setEmail(user?.email ?? '');
-  }, [user?.displayName, user?.email]);
+    setCpf(user?.cpf ?? '');
+  }, [user?.cpf, user?.displayName, user?.email]);
 
   const total = useMemo(() => cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0), [cartItems]);
   const meetsMinimumTotal = total > MIN_CHECKOUT_TOTAL;
   const phoneDigits = onlyWhatsappDigits(phone);
+  const cpfDigits = onlyCpfDigits(cpf);
   const contactValid = fullName.trim().length >= 3 &&
     isValidAuthEmail(email) &&
-    phoneDigits.length >= 10;
+    phoneDigits.length >= 10 &&
+    isValidCpf(cpfDigits);
   const isSubmitting = Boolean(submittingMethod);
   const canPay = cartItems.length > 0 && Boolean(user) && contactValid && meetsMinimumTotal && !isSubmitting;
 
@@ -83,11 +88,15 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
     setCheckoutResult(null);
     try {
       const normalizedCoupon = couponCode.trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '');
-      const result = await onCheckout({
+      const payload = {
         fullName: fullName.trim(),
         email: normalizeAuthEmail(email),
         phone: phoneDigits,
-      }, paymentMethod, normalizedCoupon || undefined);
+        cpf: cpfDigits,
+      };
+      console.log('CPF digitado:', cpfDigits ? `***${cpfDigits.slice(-2)}` : '');
+      console.log('Payload checkout:', { ...payload, cpf: payload.cpf ? `***${payload.cpf.slice(-2)}` : '' });
+      const result = await onCheckout(payload, paymentMethod, normalizedCoupon || undefined);
 
       setCheckoutResult(result);
       if (paymentMethod !== 'pix' || !result.pix?.qrCode) {
@@ -156,6 +165,15 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <CheckoutInput label="Nome completo" value={fullName} onChange={setFullName} placeholder="Seu nome" />
               <CheckoutInput label="E-mail para liberar download" value={email} onChange={setEmail} placeholder="seu@email.com" type="email" />
+              <CheckoutInput
+                label="CPF"
+                value={formatCpf(cpf)}
+                onChange={(value) => setCpf(formatCpf(value))}
+                placeholder="000.000.000-00"
+                type="tel"
+                inputMode="numeric"
+                maxLength={14}
+              />
               <CheckoutInput
                 label="WhatsApp"
                 value={phone}
@@ -329,7 +347,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             {!isSubmitting && <ArrowRight className="w-6 h-6 mt-1" />}
           </button>
           {user && cartItems.length > 0 && !contactValid && (
-            <p className="font-mono text-[9px] uppercase text-red-500 text-center">Preencha nome, e-mail e WhatsApp válidos.</p>
+            <p className="font-mono text-[9px] uppercase text-red-500 text-center">Preencha nome, e-mail, CPF e WhatsApp válidos.</p>
           )}
           {cartItems.length > 0 && !meetsMinimumTotal && (
             <p className="font-mono text-[9px] uppercase text-red-500 text-center">

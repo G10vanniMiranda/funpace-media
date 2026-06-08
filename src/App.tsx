@@ -344,12 +344,9 @@ function Storefront() {
     }
   };
 
-  const eventPhotos = selectedEventName
-    ? photos.filter((photo) => normalizeEventName(photo.event || '') === normalizeEventName(selectedEventName))
-    : photos;
   const displayPhotos = searchType === 'selfie'
     ? faceSearchMatches.map((match) => match.product).filter((product) => product.type === 'IMG')
-    : eventPhotos;
+    : [];
   const displayVideos = searchType === 'selfie'
     ? []
     : selectedEventName
@@ -1045,8 +1042,7 @@ function Storefront() {
                           <EventMeta icon={<Clock3 className="h-4 w-4" />} label="Expiracao" value="Sem data definida" />
                         </div>
 
-                        <div className="mt-5 grid grid-cols-3 gap-2 sm:gap-3">
-                          <EventCompactStat icon={<Images className="h-4 w-4" />} label="Fotos" value={displayPhotos.length} />
+                        <div className="mt-5 grid grid-cols-2 gap-2 sm:gap-3">
                           <EventCompactStat icon={<Video className="h-4 w-4" />} label="Videos" value={displayVideos.length} />
                           <EventCompactStat icon={<MapPin className="h-4 w-4" />} label="Pontos" value={selectedEventCheckpoints.length || 1} />
                         </div>
@@ -1060,10 +1056,13 @@ function Storefront() {
                             <ScanFace className="h-8 w-8 sm:h-10 sm:w-10" />
                           </div>
                           <div>
-                            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Reconhecimento facial</p>
+                            <p className="font-mono text-[9px] font-bold uppercase tracking-[0.22em] text-gray-500">Busca facial exclusiva</p>
                             <h2 className="mt-1 max-w-lg font-display text-2xl uppercase leading-tight text-brutal-black sm:text-3xl">
-                              Encontre suas fotos com Reconhecimento facial
+                              Encontre suas fotos através da Selfie
                             </h2>
+                            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-gray-600">
+                              Para proteger a privacidade dos participantes, as fotos deste evento são exibidas apenas através da busca facial. Tire uma selfie ou envie uma foto para localizar suas imagens.
+                            </p>
                           </div>
                         </div>
                         <button
@@ -1094,8 +1093,9 @@ function Storefront() {
               )}
 
               {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
+                searchType === 'selfie' ? (
                 <PhotoGrid
-                  title={searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : searchType ? 'SUAS FOTOS' : selectedEventName ? 'FOTOS DO EVENTO' : 'ULTIMOS LANCAMENTOS'}
+                  title={`FOTOS ENCONTRADAS (${displayPhotos.length})`}
                   subtitle={searchType === 'selfie'
                     ? displayPhotos.length > 0
                       ? `Encontramos ${displayPhotos.length} ${displayPhotos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento.`
@@ -1111,6 +1111,7 @@ function Storefront() {
                   heartCounts={heartCounts}
                   onToggleFavorite={handleToggleFavorite}
                 />
+                ) : null
               ) : (
                 <VideoGrid
                   videos={displayVideos}
@@ -1496,7 +1497,7 @@ function PublicPhotographerPage({
         <section className="mx-auto max-w-300 px-4 pb-16 md:px-6">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredAlbums.map((album) => {
-              const photoTotal = album.products.filter((product) => product.type === 'IMG').length;
+              const videoTotal = album.products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length;
               const destination = album.slug ? `/evento/${album.slug}` : `/eventos/${createEventSlug(album.name)}`;
               return (
                 <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-116 flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-120">
@@ -1508,8 +1509,8 @@ function PublicPhotographerPage({
                     <h2 className="min-h-18 font-display text-xl uppercase leading-tight">{album.name}</h2>
                     <p className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-gray-500"><MapPin className="h-3.5 w-3.5 text-brutal-accent" />{album.city || 'Local a confirmar'}</p>
                     <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest">
-                      <span>{photoTotal} fotos</span>
-                      <span className="font-display text-sm text-brutal-accent">Ver Fotos</span>
+                      <span>{videoTotal} videos</span>
+                      <span className="font-display text-sm text-brutal-accent">Ver evento</span>
                     </div>
                   </div>
                 </button>
@@ -1590,7 +1591,7 @@ function PublicEventPage({
   React.useEffect(() => {
     if (!event) return;
     const title = `${event.name} | Fotos Funpace Media`;
-    const description = event.description || `Fotos do evento ${event.name} na Funpace Media.`;
+    const description = event.description || `Evento ${event.name} na Funpace Media com videos publicos e busca facial para fotos.`;
     document.title = title;
     setMetaTag('meta[name="description"]', { name: 'description' }, description);
     setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
@@ -1604,8 +1605,7 @@ function PublicEventPage({
   if (isLoading) return <PublicLoading label="Carregando evento..." />;
   if (!event) return <PublicEmpty title="Evento não encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
 
-  const allPhotos = products.filter((product) => product.type === 'IMG');
-  const photos = faceMatches ? faceMatches.map((match) => match.product).filter((product) => product.type === 'IMG') : allPhotos;
+  const photos = faceMatches ? faceMatches.map((match) => match.product).filter((product) => product.type === 'IMG') : [];
   const videos = products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW');
   const cover = event.bannerImage || event.coverImage || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || '';
   const checkpoints = new Set(products.map((product) => product.checkpoint).filter(Boolean)).size;
@@ -1658,8 +1658,7 @@ function PublicEventPage({
                 </div>
 
                 <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1fr)_minmax(310px,0.9fr)]">
-                  <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                    <EventCompactStat icon={<Images className="h-4 w-4" />} label="Fotos" value={allPhotos.length} />
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
                     <EventCompactStat icon={<Video className="h-4 w-4" />} label="Videos" value={videos.length} />
                     <EventCompactStat icon={<MapPin className="h-4 w-4" />} label="Pontos" value={checkpoints || 1} />
                   </div>
@@ -1668,8 +1667,11 @@ function PublicEventPage({
                     <div className="flex items-start gap-3">
                       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brutal-black text-brutal-accent transition-transform duration-300 group-hover:scale-105"><ScanFace className="h-5 w-5" /></div>
                       <div>
-                        <p className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Reconhecimento facial</p>
-                        <h2 className="mt-1 font-display text-lg uppercase leading-tight">Encontre suas fotos com uma selfie</h2>
+                        <p className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Busca facial exclusiva</p>
+                        <h2 className="mt-1 font-display text-lg uppercase leading-tight">Encontre suas fotos através da Selfie</h2>
+                        <p className="mt-2 text-xs leading-relaxed text-gray-600">
+                          Para proteger a privacidade dos participantes, as fotos deste evento são exibidas apenas através da busca facial.
+                        </p>
                       </div>
                     </div>
                     <div className="mt-4 grid gap-2 sm:grid-cols-2">
@@ -1680,16 +1682,18 @@ function PublicEventPage({
                         <Upload className="h-4 w-4" /> Carregar foto
                       </button>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFaceMatches(null);
-                        setActiveView('photos');
-                      }}
-                      className="mt-3 w-full font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500 transition-colors hover:text-brutal-accent"
-                    >
-                      {faceMatches ? 'Limpar busca e ver todas as fotos' : 'Ver todas as fotos'}
-                    </button>
+                    {faceMatches && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFaceMatches(null);
+                          setActiveView('photos');
+                        }}
+                        className="mt-3 w-full font-mono text-[9px] font-bold uppercase tracking-[0.18em] text-gray-500 transition-colors hover:text-brutal-accent"
+                      >
+                        Limpar busca facial
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1699,13 +1703,12 @@ function PublicEventPage({
       </section>
 
       {activeView === 'photos' ? (
+        faceMatches ? (
         <PhotoGrid
-          title={faceMatches ? `Fotos Encontradas (${photos.length})` : 'Fotos do evento'}
-          subtitle={faceMatches
-            ? photos.length > 0
+          title={`Fotos Encontradas (${photos.length})`}
+          subtitle={photos.length > 0
               ? `Encontramos ${photos.length} ${photos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento`
-              : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'
-            : `${photos.length} fotos publicadas neste evento`}
+              : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'}
           photos={photos}
           onAddToCart={onAddToCart}
           cartItems={cartItems}
@@ -1717,6 +1720,7 @@ function PublicEventPage({
           onToggleFavorite={onToggleFavorite}
           compact
         />
+        ) : null
       ) : (
         <VideoGrid
           videos={videos}

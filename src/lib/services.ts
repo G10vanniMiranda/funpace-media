@@ -237,6 +237,10 @@ function mediaPathKey(value?: string | null) {
   return value || '';
 }
 
+function isPubliclyListableProduct(product: Product) {
+  return product.type === 'VIDEO' || product.type === 'VIEW';
+}
+
 async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; watermarkUrl?: string | null; type?: string }>(
   items: T[],
   options: { protectImageOriginals?: boolean; protectOriginals?: boolean; allowOriginals?: boolean } = {},
@@ -550,7 +554,9 @@ async function attachOrderItems(orders: SupabaseRow<Order>[], useAuth: boolean):
 export const productService = {
   async getLatestProducts(count = 20): Promise<Product[]> {
     if (isMockMode) {
-      return mockProducts.filter((product) => (product.status ?? 'published') === 'published').slice(0, count);
+      return mockProducts
+        .filter((product) => isPubliclyListableProduct(product) && (product.status ?? 'published') === 'published')
+        .slice(0, count);
     }
 
     const params = new URLSearchParams({
@@ -559,7 +565,7 @@ export const productService = {
       order: 'createdAt.desc',
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
-    return signMediaUrls(products, { protectOriginals: true });
+    return signMediaUrls(products.filter(isPubliclyListableProduct), { protectOriginals: true });
   },
 
   async getAdminProducts(count = 1000): Promise<Product[]> {
@@ -577,7 +583,7 @@ export const productService = {
 
   async searchByBib(bib: string): Promise<Product[]> {
     if (isMockMode) {
-      return mockProducts.filter((product) => product.bib === bib && (product.status ?? 'published') === 'published');
+      return mockProducts.filter((product) => isPubliclyListableProduct(product) && product.bib === bib && (product.status ?? 'published') === 'published');
     }
 
     const params = new URLSearchParams({
@@ -586,7 +592,7 @@ export const productService = {
       status: 'eq.published',
     });
     const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
-    return signMediaUrls(products, { protectOriginals: true });
+    return signMediaUrls(products.filter(isPubliclyListableProduct), { protectOriginals: true });
   },
 
   async recordFaceSearchConsent(sessionId: string) {
@@ -667,7 +673,7 @@ export const productService = {
   async getPublishedProductsByPhotographer(photographerId: string, count = 5000): Promise<Product[]> {
     if (isMockMode) {
       return mockProducts
-        .filter((product) => product.vendedorId === photographerId && (product.status ?? 'published') === 'published')
+        .filter((product) => isPubliclyListableProduct(product) && product.vendedorId === photographerId && (product.status ?? 'published') === 'published')
         .slice(0, count);
     }
 
@@ -678,7 +684,7 @@ export const productService = {
       order: 'createdAt.desc',
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
-    return signMediaUrls(products, { protectOriginals: true });
+    return signMediaUrls(products.filter(isPubliclyListableProduct), { protectOriginals: true });
   },
 
   async getPublishedProductsByEvent(eventId: string, eventName: string, photographerId?: string | null, count = 5000): Promise<Product[]> {
@@ -686,6 +692,7 @@ export const productService = {
       const normalizedEventName = eventName.trim().toLocaleLowerCase('pt-BR');
       return mockProducts
         .filter((product) => (
+          isPubliclyListableProduct(product) &&
           (product.eventId === eventId || String(product.event || '').trim().toLocaleLowerCase('pt-BR') === normalizedEventName) &&
           (!photographerId || product.vendedorId === photographerId) &&
           (product.status ?? 'published') === 'published'
@@ -702,7 +709,7 @@ export const productService = {
     if (photographerId) eventIdParams.set('vendedorId', `eq.${photographerId}`);
 
     const byEventId = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${eventIdParams.toString()}`, count);
-    if (byEventId.length > 0) return signMediaUrls(byEventId, { protectOriginals: true });
+    if (byEventId.length > 0) return signMediaUrls(byEventId.filter(isPubliclyListableProduct), { protectOriginals: true });
 
     const legacyParams = new URLSearchParams({
       select: '*',
@@ -712,7 +719,7 @@ export const productService = {
     });
     if (photographerId) legacyParams.set('vendedorId', `eq.${photographerId}`);
     const legacyProducts = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${legacyParams.toString()}`, count);
-    return signMediaUrls(legacyProducts, { protectOriginals: true });
+    return signMediaUrls(legacyProducts.filter(isPubliclyListableProduct), { protectOriginals: true });
   },
 
   async addProduct(product: Omit<Product, 'id'>): Promise<string> {

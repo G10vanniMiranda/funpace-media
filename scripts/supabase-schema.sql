@@ -892,7 +892,11 @@ drop policy if exists "products_select_published_owner_or_admin" on public.produ
 create policy "products_select_published_owner_or_admin"
 on public.products
 for select
-using (status = 'published' or "vendedorId" = auth.uid()::text or public.is_admin());
+using (
+  public.is_admin()
+  or "vendedorId" = auth.uid()::text
+  or (status = 'published' and type in ('VIDEO', 'VIEW'))
+);
 
 drop policy if exists "products_insert_own_verified_photographer" on public.products;
 create policy "products_insert_own_verified_photographer"

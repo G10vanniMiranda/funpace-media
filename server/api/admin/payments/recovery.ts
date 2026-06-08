@@ -336,8 +336,12 @@ async function reprocessOrder(orderId: string, actor: any) {
 }
 
 async function manuallyReleaseOrder(orderId: string, reason: string, actor: any) {
-  if (!reason || reason.length < 8) {
-    throw new Error('Informe um motivo/comprovante externo para liberacao manual.');
+  const role = String(actor?.app_metadata?.role || '').toLowerCase();
+  if (role !== 'super_admin') {
+    throw new Error('A liberacao manual exige permissao de super_admin.');
+  }
+  if (!reason || reason.length < 20) {
+    throw new Error('Informe um motivo/comprovante externo detalhado para liberacao manual.');
   }
 
   const context = await loadOrderContext(orderId);

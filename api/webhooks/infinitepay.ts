@@ -24,8 +24,9 @@ async function getRawBody(req: any) {
 
 async function isWebhookAuthorized(req: any) {
   const secret = process.env.INFINITEPAY_WEBHOOK_SECRET || process.env.INFINITEPAY_WEBHOOK_TOKEN || '';
-  if (!secret) return true;
-  if (process.env.INFINITEPAY_WEBHOOK_REQUIRE_AUTH !== 'true') return true;
+  const requireAuth = process.env.NODE_ENV === 'production' || process.env.INFINITEPAY_WEBHOOK_REQUIRE_AUTH === 'true';
+  if (!requireAuth) return true;
+  if (!secret) return false;
 
   const direct = String(
     req.headers?.['x-webhook-secret'] ||

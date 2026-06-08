@@ -99,6 +99,11 @@ export default async function handler(req: any, res: any) {
     if (!['pending', 'paid', 'failed', 'cancelled', 'canceled', 'refused', 'refunded'].includes(status)) {
       return res.status(400).json({ error: 'Status de pedido invalido.' });
     }
+    if (status === 'paid') {
+      return res.status(409).json({
+        error: 'Use a recuperacao de pagamento para liberar pedido pago. A alteracao direta para pago foi bloqueada por seguranca.',
+      });
+    }
 
     const [existing] = await supabaseRequest<any[]>(
       `/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=*`,

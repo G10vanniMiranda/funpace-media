@@ -2259,7 +2259,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             uploadBatchId,
             fileName: uploadFile.name,
             storagePath: uploadedFile.path,
-            reused: uploadedFile.reused,
+            reused: 'reused' in uploadedFile ? uploadedFile.reused : false,
           });
           let thumbnailFile: File | null = null;
           try {
@@ -2287,7 +2287,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               uploadBatchId,
               fileName: thumbnailFile?.name,
               storagePath: uploadedThumbnail.path,
-              reused: uploadedThumbnail.reused,
+              reused: 'reused' in uploadedThumbnail ? uploadedThumbnail.reused : false,
             });
           }
 

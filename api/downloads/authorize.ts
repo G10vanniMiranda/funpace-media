@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'node:stream';
 import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
 
@@ -214,6 +214,10 @@ function signDownloadPayload(payload: Record<string, unknown>) {
   return `${body}.${signature}`;
 }
 
+function hashDownloadToken(token: string) {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 function verifyDownloadToken(token: string) {
   const [body, signature] = String(token || '').split('.');
   if (!body || !signature) throw new Error('Token de download inválido.');
@@ -228,13 +232,43 @@ function verifyDownloadToken(token: string) {
   }
 
   const payload = JSON.parse(base64UrlDecode(body));
-  if (!payload?.orderId || !payload?.orderItemId || !payload?.exp) {
+  if (!payload?.orderId || !payload?.orderItemId || !payload?.exp || !payload?.jti) {
     throw new Error('Token de download incompleto.');
   }
   if (Number(payload.exp) <= Date.now()) {
     throw new Error('Link temporário expirado. Clique em baixar novamente.');
   }
-  return payload as { orderId: string; orderItemId: string; userId: string; email: string };
+  return payload as { orderId: string; orderItemId: string; userId: string; email: string; jti: string; exp: number };
+}
+
+async function storeDownloadToken(token: string, payload: { orderId: string; orderItemId: string; userId: string; email: string; exp: number }) {
+  await supabaseRequest('/rest/v1/download_tokens', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      tokenHash: hashDownloadToken(token),
+      orderId: payload.orderId,
+      orderItemId: payload.orderItemId,
+      userId: payload.userId,
+      email: payload.email,
+      expiresAt: new Date(payload.exp).toISOString(),
+    }),
+  });
+}
+
+async function consumeDownloadToken(token: string, payload: { orderId: string; orderItemId: string }) {
+  const rows = await supabaseRequest<any[]>(
+    `/rest/v1/download_tokens?tokenHash=eq.${encodeURIComponent(hashDownloadToken(token))}&orderId=eq.${encodeURIComponent(payload.orderId)}&orderItemId=eq.${encodeURIComponent(payload.orderItemId)}&consumedAt=is.null&expiresAt=gt.${encodeURIComponent(new Date().toISOString())}&select=id`,
+    {
+      method: 'PATCH',
+      headers: { Prefer: 'return=representation' },
+      body: JSON.stringify({ consumedAt: new Date().toISOString() }),
+    },
+  ).catch(() => []);
+
+  if (!rows[0]) {
+    throw Object.assign(new Error('Link temporario ja utilizado ou expirado. Clique em baixar novamente.'), { statusCode: 403 });
+  }
 }
 
 function safeFilename(name: string, fallback: string) {
@@ -386,8 +420,28 @@ async function recordDownload(req: any, order: any, item: any) {
   });
 }
 
+async function recordSecurityLog(req: any, action: string, metadata: Record<string, unknown>) {
+  await supabaseRequest('/rest/v1/admin_activity_logs', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      action,
+      targetType: 'download',
+      targetId: metadata.orderId || metadata.orderItemId || null,
+      metadata: {
+        ...metadata,
+        userAgent: String(req.headers?.['user-agent'] || '').slice(0, 500),
+        ip: String(req.headers?.['x-forwarded-for'] || req.socket?.remoteAddress || '').split(',')[0].trim() || null,
+      },
+    }),
+  }).catch((error) => {
+    console.error('Nao foi possivel registrar log de seguranca:', error);
+  });
+}
+
 async function proxyDownload(req: any, res: any, token: string, inline: boolean) {
   const payload = verifyDownloadToken(token);
+  await consumeDownloadToken(token, payload);
   const { order, item, sourceUrl } = await loadAuthorizedDownload({
     orderId: payload.orderId,
     orderItemId: payload.orderItemId,
@@ -423,7 +477,7 @@ async function proxyDownload(req: any, res: any, token: string, inline: boolean)
 function renderSavePage(req: any, res: any, token: string) {
   const baseUrl = safeReturnPath(req);
   const inlineUrl = `${baseUrl}?token=${encodeURIComponent(token)}&mode=inline`;
-  const downloadUrl = `${baseUrl}?token=${encodeURIComponent(token)}&mode=download`;
+  const downloadUrl = inlineUrl;
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Cache-Control', 'private, no-store, max-age=0');
@@ -469,6 +523,11 @@ export default async function handler(req: any, res: any) {
       return await proxyDownload(req, res, token, mode === 'inline');
     } catch (error: any) {
       const status = error?.statusCode || (/expirado|token/i.test(error?.message || '') ? 403 : 500);
+      await recordSecurityLog(req, 'security_download_denied', {
+        reason: error?.message || 'download_failed',
+        status,
+        mode: String(req.query?.mode || 'download'),
+      });
       return res.status(status).json({ error: error?.message || 'Não foi possível baixar o arquivo.' });
     }
   }
@@ -494,13 +553,17 @@ export default async function handler(req: any, res: any) {
       userId: authUser.id,
       email: authUser.email,
     });
-    const token = signDownloadPayload({
+    const expiresAt = Date.now() + Number(process.env.DOWNLOAD_LINK_TTL_SECONDS || 300) * 1000;
+    const tokenPayload = {
       orderId,
       orderItemId,
       userId: authUser.id,
       email: authUser.email || '',
-      exp: Date.now() + Number(process.env.DOWNLOAD_LINK_TTL_SECONDS || 300) * 1000,
-    });
+      jti: randomUUID(),
+      exp: expiresAt,
+    };
+    const token = signDownloadPayload(tokenPayload);
+    await storeDownloadToken(token, tokenPayload);
     const baseUrl = safeReturnPath(req);
     const filename = filenameForItem(item);
 
@@ -508,7 +571,7 @@ export default async function handler(req: any, res: any) {
       url: `${baseUrl}?token=${encodeURIComponent(token)}&mode=download`,
       downloadUrl: `${baseUrl}?token=${encodeURIComponent(token)}&mode=download`,
       inlineUrl: `${baseUrl}?token=${encodeURIComponent(token)}&mode=inline`,
-      saveUrl: `${baseUrl}?token=${encodeURIComponent(token)}&mode=save`,
+      saveUrl: `${baseUrl}?token=${encodeURIComponent(token)}&mode=inline`,
       filename,
       orderId: order.id,
       orderItemId: item.id,

@@ -239,32 +239,36 @@ function mediaPathKey(value?: string | null) {
 
 async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; type?: string }>(
   items: T[],
-  options: { protectImageOriginals?: boolean } = {},
+  options: { protectImageOriginals?: boolean; protectOriginals?: boolean; allowOriginals?: boolean } = {},
 ): Promise<T[]> {
   if (isMockMode || items.length === 0) return items;
-  const shouldProtectImageOriginal = (item: T) => options.protectImageOriginals && item.type === 'IMG';
+  const shouldProtectOriginal = (item: T) => Boolean(!options.allowOriginals || options.protectOriginals || (options.protectImageOriginals && item.type === 'IMG'));
 
   const withPublicFallback = () => items.map((item) => ({
     ...item,
-    url: shouldProtectImageOriginal(item) ? '' : createPublicMediaUrl(item.url),
+    url: shouldProtectOriginal(item) ? '' : createPublicMediaUrl(item.url),
     thumbnailUrl: item.thumbnailUrl ? createPublicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl,
   }));
 
   const paths = Array.from(new Set(items.flatMap((item) => {
     const thumbnail = mediaPathKey(item.thumbnailUrl);
-    const shouldSignOriginal = !shouldProtectImageOriginal(item) && (item.type === 'VIDEO' || item.type === 'VIEW' || !thumbnail);
+    const shouldSignOriginal = !shouldProtectOriginal(item) && (item.type === 'VIDEO' || item.type === 'VIEW' || !thumbnail);
     return [
       thumbnail,
       shouldSignOriginal ? mediaPathKey(item.url) : '',
     ];
   }).filter(Boolean)));
 
-  if (paths.length === 0) return options.protectImageOriginals ? withPublicFallback() : items;
+  if (paths.length === 0) return withPublicFallback();
 
   try {
+    const accessToken = await getCurrentAccessToken().catch(() => null);
     const response = await fetch(apiUrl('/api/media/sign'), {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+      },
       body: JSON.stringify({ paths }),
     });
 
@@ -279,7 +283,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
 
     return items.map((item) => ({
       ...item,
-      url: shouldProtectImageOriginal(item) ? '' : item.url && urls[item.url] ? urls[item.url] : item.url,
+      url: shouldProtectOriginal(item) ? '' : item.url && urls[item.url] ? urls[item.url] : item.url,
       thumbnailUrl: item.thumbnailUrl && urls[item.thumbnailUrl] ? urls[item.thumbnailUrl] : item.thumbnailUrl,
     }));
   } catch (error) {
@@ -524,7 +528,7 @@ async function attachOrderItems(orders: SupabaseRow<Order>[], useAuth: boolean):
     itemsByOrderId.set(item.orderId, orderItems);
   }
 
-  const signedItems = await signMediaUrls(items);
+  const signedItems = await signMediaUrls(items, { protectOriginals: true });
   const signedItemsByOrderId = new Map<string, OrderItem[]>();
 
   for (const item of signedItems) {
@@ -551,7 +555,7 @@ export const productService = {
       order: 'createdAt.desc',
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
-    return signMediaUrls(products, { protectImageOriginals: true });
+    return signMediaUrls(products, { protectOriginals: true });
   },
 
   async getAdminProducts(count = 1000): Promise<Product[]> {
@@ -578,7 +582,7 @@ export const productService = {
       status: 'eq.published',
     });
     const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
-    return signMediaUrls(products, { protectImageOriginals: true });
+    return signMediaUrls(products, { protectOriginals: true });
   },
 
   async recordFaceSearchConsent(sessionId: string) {
@@ -619,7 +623,7 @@ export const productService = {
       throw new Error('Não foi possível realizar a busca facial. Tente novamente em alguns instantes.');
     }
     const matches = Array.isArray(payload.matches) ? payload.matches : [];
-    const signed = await signMediaUrls(matches.map((match) => match.product), { protectImageOriginals: true });
+    const signed = await signMediaUrls(matches.map((match) => match.product), { protectOriginals: true });
     return signed.map((product, index) => ({ product, similarity: Number(matches[index]?.similarity || 0) }));
   },
 
@@ -670,7 +674,7 @@ export const productService = {
       order: 'createdAt.desc',
     });
     const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
-    return signMediaUrls(products, { protectImageOriginals: true });
+    return signMediaUrls(products, { protectOriginals: true });
   },
 
   async getPublishedProductsByEvent(eventId: string, eventName: string, photographerId?: string | null, count = 5000): Promise<Product[]> {
@@ -694,7 +698,7 @@ export const productService = {
     if (photographerId) eventIdParams.set('vendedorId', `eq.${photographerId}`);
 
     const byEventId = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${eventIdParams.toString()}`, count);
-    if (byEventId.length > 0) return signMediaUrls(byEventId, { protectImageOriginals: true });
+    if (byEventId.length > 0) return signMediaUrls(byEventId, { protectOriginals: true });
 
     const legacyParams = new URLSearchParams({
       select: '*',
@@ -704,7 +708,7 @@ export const productService = {
     });
     if (photographerId) legacyParams.set('vendedorId', `eq.${photographerId}`);
     const legacyProducts = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${legacyParams.toString()}`, count);
-    return signMediaUrls(legacyProducts, { protectImageOriginals: true });
+    return signMediaUrls(legacyProducts, { protectOriginals: true });
   },
 
   async addProduct(product: Omit<Product, 'id'>): Promise<string> {

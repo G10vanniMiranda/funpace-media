@@ -47,6 +47,20 @@ function getShortcutAttempt(event: KeyboardEvent): ContentProtectionAttempt {
   return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'u' ? 'view_source' : 'keyboard_devtools';
 }
 
+function isTouchOrMobileViewport() {
+  if (typeof window === 'undefined') return false;
+  const coarsePointer = window.matchMedia?.('(pointer: coarse)').matches;
+  const smallViewport = window.innerWidth <= 900;
+  const touchDevice = navigator.maxTouchPoints > 0;
+  return Boolean(coarsePointer || touchDevice || smallViewport);
+}
+
+function shouldRunDevtoolsDetection() {
+  if (typeof window === 'undefined') return false;
+  if (isTouchOrMobileViewport()) return false;
+  return window.innerWidth >= 1024 && window.innerHeight >= 600;
+}
+
 export function getContentProtectionMessage(type: ContentProtectionAttempt) {
   return type === 'context_menu' ? rightClickMessage : protectedMessage;
 }
@@ -60,6 +74,7 @@ export function useContentProtection({ enabled = true, scope = 'public-gallery' 
   const reportAttempt = React.useCallback((input: ReportInput) => {
     if (!enabled) return;
 
+    console.log('Proteção acionada por:', input.type, input.metadata || {});
     const message = input.message || getContentProtectionMessage(input.type);
     setNotice(message);
 
@@ -117,11 +132,21 @@ export function useContentProtection({ enabled = true, scope = 'public-gallery' 
 
   React.useEffect(() => {
     if (!enabled) return;
+    if (!shouldRunDevtoolsDetection()) {
+      setDevtoolsOpen(false);
+      devtoolsWasOpen.current = false;
+      return;
+    }
 
     const interval = window.setInterval(() => {
+      if (!shouldRunDevtoolsDetection()) {
+        setDevtoolsOpen(false);
+        devtoolsWasOpen.current = false;
+        return;
+      }
       const widthGap = Math.abs(window.outerWidth - window.innerWidth);
       const heightGap = Math.abs(window.outerHeight - window.innerHeight);
-      const opened = widthGap > 180 || heightGap > 180;
+      const opened = widthGap > 260 || heightGap > 260;
       setDevtoolsOpen(opened);
 
       if (opened && !devtoolsWasOpen.current) {

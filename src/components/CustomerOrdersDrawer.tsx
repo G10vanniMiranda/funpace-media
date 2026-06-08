@@ -241,7 +241,7 @@ export function CustomerOrdersDrawer({
 
   const downloadPaidOrder = async (order: Order) => {
     try {
-      const items = (order.items ?? []).filter((item) => item.url && !hiddenItemIds.has(item.id));
+      const items = (order.items ?? []).filter((item) => !hiddenItemIds.has(item.id));
       for (const item of items) {
         const authorized = await authorizeDownload(order.id, item.id);
         triggerBrowserDownload(authorized.downloadUrl);
@@ -498,7 +498,7 @@ export function CustomerOrdersDrawer({
                             <div className="text-right flex flex-col items-end gap-2">
                               <p className="font-display text-sm">R$ {Number(item.price).toFixed(2)}</p>
                               {item.type === 'IMG' ? <ImageIcon className="w-3 h-3 ml-auto text-gray-400" /> : <Video className="w-3 h-3 ml-auto text-gray-400" />}
-                              {order.status === 'paid' && item.url && (
+                              {order.status === 'paid' && (
                                 <>
                                   <button
                                     type="button"
@@ -741,7 +741,6 @@ export function CustomerOrdersPage({
   const downloadPaidOrder = async (order: Order) => {
     try {
       for (const item of order.items ?? []) {
-        if (!item.url) continue;
         const authorized = await authorizeDownload(order.id, item.id);
         triggerBrowserDownload(authorized.downloadUrl);
         await new Promise((resolve) => window.setTimeout(resolve, 250));
@@ -1007,7 +1006,7 @@ export function CustomerOrdersPage({
                             <p className="font-display text-lg mt-1">{formatCurrency(Number(item.price))}</p>
                           </div>
                           <div className="col-span-2 flex flex-wrap gap-2 md:col-span-1 md:justify-end">
-                            {order.status === 'paid' && item.url && (
+                            {order.status === 'paid' && (
                               <>
                                 <button type="button" onClick={() => openPaidItem(order, item)} className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 border border-slate-200 font-mono text-[9px] uppercase hover:bg-gray-50 transition-colors cursor-pointer">
                                   Abrir

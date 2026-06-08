@@ -76,17 +76,17 @@ export function isValidAuthEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
 }
 
-function authErrorMessage(raw: string, fallback = 'Nao foi possivel concluir a autenticacao.') {
+function authErrorMessage(raw: string, fallback = 'Não foi possível concluir a autenticação.') {
   const upper = raw.toUpperCase();
 
   if (upper.includes('INVALID_EMAIL') || upper.includes('INVALID EMAIL') || upper.includes('EMAIL ADDRESS IS INVALID')) {
-    return 'E-mail invalido. Confira se digitou no formato nome@provedor.com.';
+    return 'E-mail inválido. Confira se digitou no formato nome@provedor.com.';
   }
   if (upper.includes('USER_ALREADY_REGISTERED') || upper.includes('USER ALREADY REGISTERED') || upper.includes('ALREADY REGISTERED')) {
-    return 'Este e-mail ja possui conta. Use Entrar ou recupere a senha.';
+    return 'Este e-mail já possui conta. Use Entrar ou recupere a senha.';
   }
   if (upper.includes('EMAIL_NOT_CONFIRMED') || upper.includes('NOT CONFIRMED')) {
-    return 'E-mail ainda nao confirmado. Verifique sua caixa de entrada e spam, ou reenvie a confirmacao.';
+    return 'E-mail ainda não confirmado. Verifique sua caixa de entrada e spam, ou reenvie a confirmação.';
   }
   if (upper.includes('WEAK_PASSWORD') || upper.includes('PASSWORD') && upper.includes('6')) {
     return 'Senha muito curta. Use pelo menos 6 caracteres.';
@@ -95,10 +95,10 @@ function authErrorMessage(raw: string, fallback = 'Nao foi possivel concluir a a
     return 'Muitas tentativas com este e-mail. Aguarde alguns minutos e tente novamente.';
   }
   if (upper.includes('SIGNUP') && upper.includes('DISABLED')) {
-    return 'Cadastro por e-mail esta desativado no Supabase. Ative Authentication > Providers > Email.';
+    return 'Cadastro por e-mail está desativado no Supabase. Ative Authentication > Providers > Email.';
   }
   if (upper.includes('SMTP') || upper.includes('EMAIL PROVIDER')) {
-    return 'Falha no envio do e-mail de confirmacao. Verifique o SMTP do Supabase.';
+    return 'Falha no envio do e-mail de confirmação. Verifique o SMTP do Supabase.';
   }
 
   return raw || fallback;
@@ -122,7 +122,7 @@ function recordAuthDiagnostic(input: { action: string; email?: string; status: '
 
 function assertSupabaseConfig() {
   if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    throw new Error('Supabase nao configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.');
+    throw new Error('Supabase não configurado. Defina NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY.');
   }
 }
 
@@ -165,7 +165,7 @@ async function refreshStoredSession(force = false): Promise<SupabaseSession | nu
   if (!session.refresh_token) {
     setStoredSession(null);
     window.dispatchEvent(new Event('supabase-auth-changed'));
-    throw new Error('Sessao expirada. Entre novamente para continuar.');
+    throw new Error('Sessão expirada. Entre novamente para continuar.');
   }
 
   assertSupabaseConfig();
@@ -182,7 +182,7 @@ async function refreshStoredSession(force = false): Promise<SupabaseSession | nu
   if (!response.ok) {
     setStoredSession(null);
     window.dispatchEvent(new Event('supabase-auth-changed'));
-    throw new Error('Sessao expirada. Entre novamente para continuar.');
+    throw new Error('Sessão expirada. Entre novamente para continuar.');
   }
 
   const refreshed = await response.json() as SupabaseSession;
@@ -199,7 +199,7 @@ async function getAuthToken(useAuth: boolean) {
   const session = getStoredSession();
   if (!useAuth) return supabaseConfig.anonKey;
   if (!session?.access_token) {
-    throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
+    throw new Error('Sessão de fotógrafo ausente. Entre novamente no painel para enviar arquivos.');
   }
   return (await refreshStoredSession())?.access_token ?? supabaseConfig.anonKey;
 }
@@ -330,7 +330,7 @@ async function supabaseFetch<T>(path: string, init: RequestInit = {}, useAuth = 
         msgUpper.includes('EMAIL NOT CONFIRMED') ||
         msgUpper.includes('NOT CONFIRMED')
       ) {
-        throw new Error('E-mail nao confirmado. Verifique sua caixa de entrada e SPAM para confirmar, ou use Google para entrar.');
+        throw new Error('E-mail não confirmado. Verifique sua caixa de entrada e o spam para confirmar, ou use Google para entrar.');
       }
 
       if (msg) throw new Error(authErrorMessage(msg));
@@ -439,7 +439,7 @@ async function exchangeOAuthCodeForSession(code: string) {
   sessionStorage.removeItem('funpace:oauth-code-verifier');
 
   if (!codeVerifier) {
-    throw new Error('Sessao OAuth expirada. Tente entrar com Google novamente.');
+    throw new Error('Sessão OAuth expirada. Tente entrar com Google novamente.');
   }
 
   const response = await fetch(`${supabaseConfig.url}/auth/v1/token?grant_type=pkce`, {
@@ -495,12 +495,12 @@ export const validateGoogleAuth = async () => {
       ? await response.json().catch(() => ({}))
       : {};
   } catch (error) {
-    console.warn('Nao foi possivel validar Google OAuth no backend; continuando pelo Supabase.', error);
+    console.warn('Não foi possível validar Google OAuth no backend; continuando pelo Supabase.', error);
     return true;
   }
 
   if (response.status === 404 || response.status === 405) {
-    console.warn('Endpoint /api/auth/google/status indisponivel; continuando pelo Supabase.');
+    console.warn('Endpoint /api/auth/google/status indisponível; continuando pelo Supabase.');
     return true;
   }
 
@@ -512,10 +512,10 @@ export const validateGoogleAuth = async () => {
 
     throw new Error(
       providerDisabled
-        ? 'Login com Google ainda nao esta habilitado no Supabase. Ative o provider Google em Authentication > Providers.'
+        ? 'Login com Google ainda não está habilitado no Supabase. Ative o provider Google em Authentication > Providers.'
         : redirectMismatch
           ? `Google OAuth precisa autorizar a URL de callback: ${payload?.redirectUri || 'confira o redirect URI no Google Cloud.'}`
-          : payload?.error || 'Nao foi possivel validar o login com Google.',
+          : payload?.error || 'Não foi possível validar o login com Google.',
     );
   }
 
@@ -554,7 +554,7 @@ export const handleOAuthCallbackFromUrl = async () => {
     const session = await exchangeOAuthCodeForSession(query.code);
     if (!session?.access_token || !session?.user) {
       clearOAuthParamsFromUrl();
-      throw new Error('Supabase nao retornou uma sessao valida no login com Google.');
+    throw new Error('Supabase não retornou uma sessão válida no login com Google.');
     }
 
     setStoredSession(session);
@@ -574,7 +574,7 @@ export const handleOAuthCallbackFromUrl = async () => {
 
   if (!isJwtLikeToken(parsed.access_token)) {
     clearOAuthParamsFromUrl();
-    throw new Error('Retorno OAuth invalido: o Supabase nao retornou um access_token JWT valido.');
+    throw new Error('Retorno OAuth inválido: o Supabase não retornou um access_token JWT válido.');
   }
 
   const expiresAt = parsed.expires_at
@@ -612,7 +612,7 @@ export const completePasswordSetupFromUrl = async () => {
   }
 
   if (!isJwtLikeToken(parsed.access_token)) {
-    throw new Error('Link de definicao de senha invalido. Solicite um novo convite.');
+    throw new Error('Link de definição de senha inválido. Solicite um novo convite.');
   }
 
   const expiresAt = parsed.expires_at
@@ -654,7 +654,7 @@ export const updateCurrentUserPassword = async (password: string) => {
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || 'Nao foi possivel atualizar a senha.');
+    throw new Error(message || 'Não foi possível atualizar a senha.');
   }
 
   const payload = await response.json() as SupabaseAuthUser | { user?: SupabaseAuthUser };
@@ -697,7 +697,7 @@ export const updateCurrentUserProfile = async (input: { name?: string; avatarUrl
 
   if (!response.ok) {
     const message = await response.text();
-    throw new Error(message || 'Nao foi possivel atualizar seu perfil.');
+    throw new Error(message || 'Não foi possível atualizar seu perfil.');
   }
 
   const payload = await response.json() as SupabaseAuthUser | { user?: SupabaseAuthUser };
@@ -715,7 +715,7 @@ export const requestPasswordReset = async (email: string) => {
   assertSupabaseConfig();
   const normalizedEmail = normalizeAuthEmail(email);
   if (!isValidAuthEmail(normalizedEmail)) {
-    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+    throw new Error('E-mail inválido. Confira se digitou no formato nome@provedor.com.');
   }
   const redirectTo = `${window.location.origin}/minha-conta`;
   await supabaseFetch('/auth/v1/recover', {
@@ -727,7 +727,7 @@ export const requestPasswordReset = async (email: string) => {
 export const loginWithEmail = async (email: string, password: string) => {
   const normalizedEmail = normalizeAuthEmail(email);
   if (!isValidAuthEmail(normalizedEmail)) {
-    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+    throw new Error('E-mail inválido. Confira se digitou no formato nome@provedor.com.');
   }
   if (!password) throw new Error('Informe sua senha.');
 
@@ -744,7 +744,7 @@ export const loginWithEmail = async (email: string, password: string) => {
 export const registerWithEmail = async (email: string, password: string, name: string, cpf?: string, phone?: string | null, instagram?: string | null) => {
   const normalizedEmail = normalizeAuthEmail(email);
   if (!isValidAuthEmail(normalizedEmail)) {
-    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+    throw new Error('E-mail inválido. Confira se digitou no formato nome@provedor.com.');
   }
   if (!password || password.length < 6) {
     throw new Error('Senha muito curta. Use pelo menos 6 caracteres.');
@@ -778,7 +778,7 @@ export const resendSignupConfirmation = async (email: string) => {
   assertSupabaseConfig();
   const normalizedEmail = normalizeAuthEmail(email);
   if (!isValidAuthEmail(normalizedEmail)) {
-    throw new Error('E-mail invalido. Confira se digitou no formato nome@provedor.com.');
+    throw new Error('E-mail inválido. Confira se digitou no formato nome@provedor.com.');
   }
 
   await supabaseFetch('/auth/v1/resend', {

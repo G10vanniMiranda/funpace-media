@@ -22,14 +22,14 @@ export async function indexPhotoHandler(req: any, res: any) {
   const contentType = String(req.headers?.['content-type'] || '').toLowerCase();
   const authUser = await getAuthenticatedUser(req);
 
-  if (!authUser?.id) return res.status(401).json({ error: 'Autenticacao de fotografo necessaria.' });
+  if (!authUser?.id) return res.status(401).json({ error: 'Autenticação de fotógrafo necessária.' });
   if (!isUuid(photoId) || !isUuid(eventId)) return res.status(400).json({ error: 'photoId ou eventId invalido.' });
 
   const photo = await getOwnedPhoto(photoId, authUser.id);
-  if (!photo || photo.type !== 'IMG') return res.status(404).json({ error: 'Foto nao encontrada para este fotografo.' });
-  if (photo.eventId !== eventId) return res.status(409).json({ error: 'A foto nao pertence ao evento informado.' });
+  if (!photo || photo.type !== 'IMG') return res.status(404).json({ error: 'Foto não encontrada para este fotógrafo.' });
+  if (photo.eventId !== eventId) return res.status(409).json({ error: 'A foto não pertence ao evento informado.' });
   const event = await getEvent(eventId);
-  if (!event?.id || event.photographerId !== authUser.id) return res.status(403).json({ error: 'Evento nao pertence a este fotografo.' });
+  if (!event?.id || event.photographerId !== authUser.id) return res.status(403).json({ error: 'Evento não pertence a este fotógrafo.' });
 
   try {
     const buffer = await readRequestBuffer(req);
@@ -52,7 +52,7 @@ export async function indexPhotoHandler(req: any, res: any) {
     await updatePhotoFaceStatus(photoId, records.length > 0 ? 'indexed' : 'no_face');
     return res.status(200).json({ status: records.length > 0 ? 'indexed' : 'no_face', facesIndexed: records.length });
   } catch (error: any) {
-    const response = faceError(error, 'Nao foi possivel indexar a foto.');
+    const response = faceError(error, 'Não foi possível indexar a foto.');
     await updatePhotoFaceStatus(photoId, response.statusCode === 422 ? 'no_face' : 'failed', response.message).catch(() => undefined);
     console.error('[aws-rekognition] index:error', { photoId, eventId, name: error?.name, message: error?.message });
     return res.status(response.statusCode).json({ error: response.message });
@@ -76,7 +76,7 @@ export async function searchFaceHandler(req: any, res: any) {
     }
     validateImage(buffer, contentType);
     const event = await getEvent(eventId);
-    if (!event?.id || event.isPublished === false) return res.status(404).json({ error: 'Evento nao encontrado.' });
+    if (!event?.id || event.isPublished === false) return res.status(404).json({ error: 'Evento não encontrado.' });
 
     selfieKey = `face-search/selfies/${eventId}/${randomUUID()}`;
     const object = await uploadPrivateImage({ key: selfieKey, buffer, contentType, metadata: { eventId, temporary: 'true' } });
@@ -88,7 +88,7 @@ export async function searchFaceHandler(req: any, res: any) {
     console.info('[aws-rekognition] face:found', { eventId, count: matches.length, processingMs: Date.now() - startedAt });
     return res.status(200).json({ matches });
   } catch (error: any) {
-    const response = faceError(error, 'Nao foi possivel buscar fotos por rosto.');
+    const response = faceError(error, 'Não foi possível buscar fotos por rosto.');
     console.error('[aws-rekognition] search:error', { name: error?.name, message: error?.message });
     return res.status(response.statusCode).json({ error: response.message });
   } finally {
@@ -97,7 +97,7 @@ export async function searchFaceHandler(req: any, res: any) {
 }
 
 export async function faceConsentHandler(req: any, res: any) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     const body = await readJsonBody(req);
@@ -106,7 +106,7 @@ export async function faceConsentHandler(req: any, res: any) {
     if (!/^[a-zA-Z0-9._:-]{16,128}$/.test(sessionId)) {
       return res.status(400).json({ error: 'sessionId invalido.' });
     }
-    if (!accepted) return res.status(400).json({ error: 'Consentimento nao aceito.' });
+    if (!accepted) return res.status(400).json({ error: 'Consentimento não aceito.' });
 
     const authUser = await getAuthenticatedUser(req).catch(() => null);
     const acceptedAt = await createFaceSearchConsent({
@@ -128,10 +128,10 @@ export async function faceConsentHandler(req: any, res: any) {
     if (/face_search_consents|schema cache|relation .* does not exist|PGRST20/i.test(rawMessage)) {
       console.error('[face-consent] schema-missing', { message: rawMessage });
       return res.status(503).json({
-        error: 'Tabela de consentimento facial nao aplicada. Execute npm run supabase:schema:apply e publique o backend novamente.',
+        error: 'Tabela de consentimento facial não aplicada. Execute npm run supabase:schema:apply e publique o backend novamente.',
       });
     }
-    const response = faceError(error, 'Nao foi possivel registrar o consentimento.');
+    const response = faceError(error, 'Não foi possível registrar o consentimento.');
     console.error('[face-consent] error', { name: error?.name, message: error?.message });
     return res.status(response.statusCode).json({ error: response.message });
   }
@@ -141,7 +141,7 @@ export async function testFaceHandler(req: any, res: any) {
   const secret = process.env.OPERATIONS_SECRET || process.env.CRON_SECRET || '';
   const bearer = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
   if (process.env.NODE_ENV === 'production' && (!secret || bearer !== secret)) {
-    return res.status(401).json({ error: 'Nao autorizado.' });
+    return res.status(401).json({ error: 'Não autorizado.' });
   }
   let stage = 'configuration';
   try {
@@ -189,7 +189,7 @@ export async function backfillFaceHandler(req: any, res: any) {
     const result = await runFaceBackfill();
     return res.status(200).json(result);
   } catch (error: any) {
-    const message = String(error?.message || 'Nao foi possivel executar o backfill facial.');
+    const message = String(error?.message || 'Não foi possível executar o backfill facial.');
     console.error('[face-backfill] batch:error', { name: error?.name, message });
     return res.status(500).json({ error: message });
   }

@@ -30,11 +30,11 @@ export default function handler(req: any, res: any) {
   const secret = process.env.CRON_SECRET || process.env.OPERATIONS_SECRET || '';
   const bearer = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
   if (secret && bearer !== secret) {
-    return res.status(401).json({ error: 'Nao autorizado.' });
+    return res.status(401).json({ error: 'Não autorizado.' });
   }
 
   if (route === 'checkout-debug') return checkoutDebugHandler(req, res);
   if (route === 'payments-reconcile') return paymentsReconcileHandler(req, res);
 
-  return res.status(404).json({ error: 'Rota operacional nao encontrada.' });
+  return res.status(404).json({ error: 'Rota operacional não encontrada.' });
 }

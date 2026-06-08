@@ -6,7 +6,7 @@ import { Navbar } from '../components/Navbar';
 const buyerQuestions = [
   {
     question: 'Como encontro minhas fotos?',
-    answer: 'Escolha o evento na vitrine e navegue pelas fotos publicadas. Quando a busca facial estiver ativa, voce tambem podera enviar uma selfie para localizar imagens relacionadas.',
+    answer: 'Escolha o evento na vitrine e navegue pelas fotos publicadas. Quando a busca facial estiver ativa, você também poderá enviar uma selfie para localizar imagens relacionadas.',
   },
   {
     question: 'Quando o download fica liberado?',
@@ -14,22 +14,22 @@ const buyerQuestions = [
   },
   {
     question: 'Posso comprar fotos de eventos diferentes?',
-    answer: 'Sim. O carrinho aceita midias publicadas na plataforma. Antes do pagamento, confira os itens e o valor total no checkout.',
+    answer: 'Sim. O carrinho aceita mídias publicadas na plataforma. Antes do pagamento, confira os itens e o valor total no checkout.',
   },
 ];
 
 const photographerQuestions = [
   {
-    question: 'Como viro fotografo parceiro?',
-    answer: 'Crie sua conta, solicite acesso como fotografo e aguarde a aprovacao do admin. Depois disso, o painel de publicacao fica disponivel.',
+    question: 'Como viro fotógrafo parceiro?',
+    answer: 'Crie sua conta, solicite acesso como fotógrafo e aguarde a aprovação do administrador. Depois disso, o painel de publicação fica disponível.',
   },
   {
     question: 'Como publico uma cobertura?',
-    answer: 'No painel do fotografo, envie as midias e preencha evento, ponto, numero de peito quando aplicavel e preco.',
+    answer: 'No painel do fotógrafo, envie as mídias e preencha evento, ponto, número de peito quando aplicável e preço.',
   },
   {
     question: 'Como recebo pelas vendas?',
-    answer: 'As vendas pagas aparecem no painel. O saque e solicitado via Pix, respeitando as regras de saldo disponivel da plataforma.',
+    answer: 'As vendas pagas aparecem no painel. O saque é solicitado via Pix, respeitando as regras de saldo disponível da plataforma.',
   },
 ];
 
@@ -66,7 +66,7 @@ export function Faq() {
               Duvidas frequentes
             </h1>
             <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
-              Respostas rapidas para quem compra fotos e para fotografos que publicam coberturas na Funpace.
+              Respostas rápidas para quem compra fotos e para fotógrafos que publicam coberturas na Funpace.
             </p>
           </div>
 
@@ -78,7 +78,7 @@ export function Faq() {
             />
             <FaqGroup
               icon={UserRound}
-              title="Fotografos"
+              title="Fotógrafos"
               questions={photographerQuestions}
             />
           </div>

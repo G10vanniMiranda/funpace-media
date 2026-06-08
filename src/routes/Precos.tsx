@@ -31,13 +31,13 @@ export function Precos() {
           <div className="grid gap-8 lg:grid-cols-[1fr_420px] lg:items-start">
             <div className="bg-white brutal-border brutal-shadow p-6 md:p-10">
               <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
-                Precos
+                Preços
               </p>
               <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
                 Regras claras para vender e comprar
               </h1>
               <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
-                A Funpace organiza a venda digital por evento. O fotografo define o preco da midia e acompanha as vendas confirmadas no painel.
+                A Funpace organiza a venda digital por evento. O fotógrafo define o preço da mídia e acompanha as vendas confirmadas no painel.
               </p>
             </div>
 
@@ -47,8 +47,8 @@ export function Precos() {
               </p>
               <div className="space-y-5">
                 {[
-                  { icon: BadgeDollarSign, label: 'Preco da midia', value: 'Definido pelo fotografo' },
-                  { icon: Percent, label: 'Comissao', value: 'Configurada no admin' },
+                  { icon: BadgeDollarSign, label: 'Preço da mídia', value: 'Definido pelo fotógrafo' },
+                  { icon: Percent, label: 'Comissão', value: 'Configurada pelo administrador' },
                   { icon: Wallet, label: 'Saque', value: 'Solicitado via Pix' },
                 ].map((item) => (
                   <div key={item.label} className="flex items-start gap-4 border-t border-white/10 pt-5 first:border-t-0 first:pt-0">
@@ -75,12 +75,12 @@ export function Precos() {
               {
                 icon: CreditCard,
                 title: 'Pagamento',
-                text: 'Os pagamentos sao processados pela InfinitePay. A liberacao automatica acontece apos confirmacao do provedor.',
+                text: 'Os pagamentos são processados pela InfinitePay. A liberação automática acontece após a confirmação do provedor.',
               },
               {
                 icon: Wallet,
-                title: 'Para fotografos',
-                text: 'As vendas pagas entram no painel do fotografo. O saldo disponivel considera comissao e regras de liberacao da plataforma.',
+                title: 'Para fotógrafos',
+                text: 'As vendas pagas entram no painel do fotógrafo. O saldo disponível considera comissão e regras de liberação da plataforma.',
               },
             ].map((item) => (
               <article key={item.title} className="bg-white brutal-border brutal-shadow-hover p-6">

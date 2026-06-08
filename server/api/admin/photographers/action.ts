@@ -30,7 +30,7 @@ function getSupabaseConfig() {
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     serviceRoleKey;
 
-  if (!supabaseUrl || !serviceRoleKey) throw new Error('Supabase Service Role nao configurado.');
+  if (!supabaseUrl || !serviceRoleKey) throw new Error('Supabase Service Role não configurado.');
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), serviceRoleKey, anonKey };
 }
 
@@ -92,20 +92,20 @@ export default async function handler(req: any, res: any) {
   setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
   if (req.method !== 'PATCH' && req.method !== 'DELETE') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   try {
     const adminUser = await getAuthenticatedAdminUser(req);
-    if (!adminUser) return res.status(403).json({ error: 'Apenas administradores podem alterar fotografos.' });
+    if (!adminUser) return res.status(403).json({ error: 'Apenas administradores podem alterar fotógrafos.' });
 
     const { id, action } = getRouteInput(req);
-    if (!id) return res.status(400).json({ error: 'ID do fotografo e obrigatorio.' });
+    if (!id) return res.status(400).json({ error: 'ID do fotógrafo é obrigatório.' });
 
     const [existing] = await supabaseRequest<any[]>(
       `/rest/v1/photographers?id=eq.${encodeURIComponent(id)}&select=id,name,email,verified,blockedAt&limit=1`,
     );
-    if (!existing) return res.status(404).json({ error: 'Fotografo nao encontrado.' });
+    if (!existing) return res.status(404).json({ error: 'Fotógrafo não encontrado.' });
 
     if (req.method === 'DELETE') {
       await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(id)}`, {
@@ -115,12 +115,12 @@ export default async function handler(req: any, res: any) {
       return res.json({
         ok: true,
         deletedId: id,
-        message: 'Fotografo excluido com sucesso.',
+        message: 'Fotógrafo excluído com sucesso.',
       });
     }
 
     if (action !== 'disable' && action !== 'reactivate') {
-      return res.status(400).json({ error: 'Acao invalida para fotografo.' });
+      return res.status(400).json({ error: 'Ação inválida para fotógrafo.' });
     }
 
     const patch = action === 'disable'
@@ -135,15 +135,15 @@ export default async function handler(req: any, res: any) {
         body: JSON.stringify(patch),
       },
     );
-    if (!photographer) return res.status(404).json({ error: 'Fotografo nao encontrado.' });
+    if (!photographer) return res.status(404).json({ error: 'Fotógrafo não encontrado.' });
 
     return res.json({
       ok: true,
       photographer,
-      message: action === 'disable' ? 'Fotografo desativado com sucesso.' : 'Fotografo reativado com sucesso.',
+      message: action === 'disable' ? 'Fotógrafo desativado com sucesso.' : 'Fotógrafo reativado com sucesso.',
     });
   } catch (error: any) {
-    console.error('Erro ao alterar fotografo pelo admin:', error);
-    return res.status(500).json({ error: error?.message || 'Nao foi possivel concluir a operacao.' });
+    console.error('Erro ao alterar fotógrafo pelo admin:', error);
+    return res.status(500).json({ error: error?.message || 'Não foi possível concluir a operação.' });
   }
 }

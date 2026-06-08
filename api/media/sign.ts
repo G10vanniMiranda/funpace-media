@@ -70,7 +70,7 @@ function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
-  if (!supabaseUrl) throw new Error('SUPABASE_URL nao configurado.');
+  if (!supabaseUrl) throw new Error('SUPABASE_URL não configurado.');
 
   return {
     supabaseUrl: supabaseUrl.replace(/\/+$/, ''),
@@ -80,7 +80,7 @@ function getSupabaseConfig() {
 
 function assertMediaBucketConfigured() {
   if (!mediaBucket) {
-    throw new Error('MEDIA_BUCKET nao configurado no servidor.');
+    throw new Error('MEDIA_BUCKET não configurado no servidor.');
   }
 }
 
@@ -105,7 +105,7 @@ export default async function handler(req: any, res: any) {
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   try {
@@ -122,7 +122,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ urls: Object.fromEntries(entries) });
   } catch (error: any) {
-    const safe = publicError(error, 'Nao foi possivel assinar midias.');
+    const safe = publicError(error, 'Não foi possível assinar mídias.');
     return res.status(safe.statusCode).json({ error: safe.message });
   }
 }

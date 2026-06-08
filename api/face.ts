@@ -33,5 +33,5 @@ export default async function handler(req: any, res: any) {
   if (route === 'index' && req.method === 'POST') return indexPhotoHandler(req, res);
   if (route === 'backfill' && req.method === 'POST') return backfillFaceHandler(req, res);
   if (route === 'test' && req.method === 'GET') return testFaceHandler(req, res);
-  return res.status(405).json({ error: 'Metodo nao permitido.' });
+  return res.status(405).json({ error: 'Método não permitido.' });
 }

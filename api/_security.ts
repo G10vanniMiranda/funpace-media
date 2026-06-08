@@ -78,7 +78,7 @@ export function rejectUntrustedBrowserOrigin(req: any, res: any) {
   const method = String(req.method || '').toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   if (isTrustedBrowserOrigin(req)) return false;
-  res.status(403).json({ error: 'Origem nao autorizada.' });
+  res.status(403).json({ error: 'Origem não autorizada.' });
   return true;
 }
 

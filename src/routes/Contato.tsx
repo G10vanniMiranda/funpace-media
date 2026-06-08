@@ -57,7 +57,7 @@ export function Contato() {
                 Precisa de ajuda?
               </h1>
               <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
-                Envie sua duvida sobre compra, pagamento, download, cadastro de fotografo ou publicacao de eventos.
+                Envie sua dúvida sobre compra, pagamento, download, cadastro de fotógrafo ou publicação de eventos.
               </p>
 
               <form
@@ -89,9 +89,9 @@ export function Contato() {
                   <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Assunto</span>
                   <select name="subject" className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm uppercase outline-none focus:bg-white">
                     <option>Compra ou pagamento</option>
-                    <option>Download de midia</option>
-                    <option>Cadastro de fotografo</option>
-                    <option>Publicacao de evento</option>
+                    <option>Download de mídia</option>
+                    <option>Cadastro de fotógrafo</option>
+                    <option>Publicação de evento</option>
                     <option>Outro assunto</option>
                   </select>
                 </label>
@@ -122,20 +122,20 @@ export function Contato() {
                   title: 'WhatsApp',
                   text: 'Atendimento para compras, pagamentos e suporte geral.',
                   action: FUNPACE_WHATSAPP_DISPLAY,
-                  href: buildWhatsappUrl('Ola, Funpace. Preciso de atendimento.'),
+                  href: buildWhatsappUrl('Olá, Funpace. Preciso de atendimento.'),
                 },
                 {
                   icon: MessageCircle,
                   title: 'Compradores',
-                  text: 'Informe o email da compra e o pedido, se tiver.',
+                  text: 'Informe o e-mail da compra e o pedido, se tiver.',
                   action: 'Minha Conta',
                   href: '',
                 },
                 {
                   icon: UserRound,
-                  title: 'Fotografos',
+                  title: 'Fotógrafos',
                   text: 'Para envio, cadastro e vendas, acesse o painel.',
-                  action: 'Painel do Fotografo',
+                  action: 'Painel do Fotógrafo',
                   href: '',
                 },
               ].map((item) => (

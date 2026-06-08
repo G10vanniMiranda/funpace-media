@@ -238,7 +238,7 @@ function getTimestamp(value?: string | null) {
 
 function formatCreatedOrderLabel(value?: string | null) {
   const timestamp = getTimestamp(value);
-  if (!timestamp) return 'Criacao nao registrada';
+  if (!timestamp) return 'Criação não registrada';
 
   return new Intl.DateTimeFormat('pt-BR', {
     day: '2-digit',
@@ -258,14 +258,14 @@ function formatEventSaveError(error: unknown) {
   }
 
   if (normalized.includes('bucket event-covers')) {
-    return 'Nao foi possivel enviar a capa do evento. Tente novamente ou salve o evento sem capa.';
+    return 'Não foi possível enviar a capa do evento. Tente novamente ou salve o evento sem capa.';
   }
 
   if (normalized.includes('covermediaid') || normalized.includes('schema cache')) {
-    return 'Nao foi possivel salvar a capa selecionada. Tente novamente em alguns instantes.';
+    return 'Não foi possível salvar a capa selecionada. Tente novamente em alguns instantes.';
   }
 
-  return 'Nao foi possivel salvar o evento. Verifique os dados e tente novamente.';
+  return 'Não foi possível salvar o evento. Verifique os dados e tente novamente.';
 }
 
 function formatFileSize(bytes: number) {
@@ -754,7 +754,7 @@ function isMissingLocalUploadFileError(message: string) {
 
 function getMissingLocalUploadFileMessage(file?: File) {
   const fileName = file?.name ? ` (${file.name})` : '';
-  return `Nao foi possivel localizar o arquivo local${fileName} durante a publicacao. Verifique se a foto ainda existe no dispositivo ou armazenamento em nuvem, deixe o arquivo disponivel offline, selecione a foto novamente e tente publicar.`;
+  return `Não foi possível localizar o arquivo local${fileName} durante a publicação. Verifique se a foto ainda existe no dispositivo ou armazenamento em nuvem, deixe o arquivo disponível offline, selecione a foto novamente e tente publicar.`;
 }
 
 function getUploadStageLabel(stage: UploadPublishStage) {
@@ -764,7 +764,7 @@ function getUploadStageLabel(stage: UploadPublishStage) {
     'preparo-arquivo': 'leitura e preparo do arquivo',
     'hash-original': 'calculo de hash do arquivo original',
     'duplicidade-conteudo': 'verificacao de conteudo duplicado',
-    'upload-original': 'upload da midia original',
+    'upload-original': 'upload da mídia original',
     preview: 'geracao de preview',
     'hash-preview': 'calculo de hash do preview',
     'upload-preview': 'upload do preview',
@@ -780,7 +780,7 @@ async function assertUploadFileReadable(file: File) {
     await file.slice(0, Math.min(file.size || 1, 1024 * 1024)).arrayBuffer();
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error || '');
-    throw new Error(isMissingLocalUploadFileError(detail) ? getMissingLocalUploadFileMessage(file) : detail || 'Nao foi possivel ler o arquivo selecionado.');
+    throw new Error(isMissingLocalUploadFileError(detail) ? getMissingLocalUploadFileMessage(file) : detail || 'Não foi possível ler o arquivo selecionado.');
   }
 }
 
@@ -789,7 +789,7 @@ function validateProfileImageFile(file: File, kind: ProfileImageKind) {
   const label = kind === 'avatar' ? 'foto de perfil' : 'banner de capa';
 
   if (!profileImageTypes.has(file.type.toLowerCase())) {
-    throw new Error(`Formato invalido para ${label}. Envie JPG, JPEG, PNG ou WEBP.`);
+    throw new Error(`Formato inválido para ${label}. Envie JPG, JPEG, PNG ou WEBP.`);
   }
 
   if (file.size > limit) {
@@ -799,7 +799,7 @@ function validateProfileImageFile(file: File, kind: ProfileImageKind) {
 
 function validateEventCoverFile(file: File) {
   if (!profileImageTypes.has(file.type.toLowerCase())) {
-    throw new Error('Formato invalido para capa do evento. Envie JPG, JPEG, PNG ou WEBP.');
+    throw new Error('Formato inválido para capa do evento. Envie JPG, JPEG, PNG ou WEBP.');
   }
 
   if (file.size > profileCoverMaxBytes) {
@@ -824,7 +824,7 @@ async function prepareProfileImageForUpload(file: File, kind: ProfileImageKind):
       const context = canvas.getContext('2d');
 
       if (!context) {
-        reject(new Error('Nao foi possivel preparar a imagem neste navegador.'));
+        reject(new Error('Não foi possível preparar a imagem neste navegador.'));
         return;
       }
 
@@ -849,7 +849,7 @@ async function prepareProfileImageForUpload(file: File, kind: ProfileImageKind):
 
       canvas.toBlob((blob) => {
         if (!blob) {
-          reject(new Error('Nao foi possivel comprimir a imagem.'));
+          reject(new Error('Não foi possível comprimir a imagem.'));
           return;
         }
 
@@ -860,7 +860,7 @@ async function prepareProfileImageForUpload(file: File, kind: ProfileImageKind):
 
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Nao foi possivel ler a imagem selecionada.'));
+      reject(new Error('Não foi possível ler a imagem selecionada.'));
     };
 
     image.src = objectUrl;
@@ -885,7 +885,7 @@ async function prepareEventCoverForUpload(file: File): Promise<File> {
       const context = canvas.getContext('2d');
 
       if (!context) {
-        reject(new Error('Nao foi possivel preparar a capa neste navegador.'));
+        reject(new Error('Não foi possível preparar a capa neste navegador.'));
         return;
       }
 
@@ -909,7 +909,7 @@ async function prepareEventCoverForUpload(file: File): Promise<File> {
       context.drawImage(image, sourceX, sourceY, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
       canvas.toBlob((blob) => {
         if (!blob) {
-          reject(new Error('Nao foi possivel comprimir a capa do evento.'));
+          reject(new Error('Não foi possível comprimir a capa do evento.'));
           return;
         }
 
@@ -922,7 +922,7 @@ async function prepareEventCoverForUpload(file: File): Promise<File> {
 
     image.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      reject(new Error('Nao foi possivel ler a capa selecionada.'));
+      reject(new Error('Não foi possível ler a capa selecionada.'));
     };
 
     image.src = objectUrl;
@@ -1139,7 +1139,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setProfileSaveSuccess('Perfil publico atualizado.');
     } catch (error) {
       console.error('Erro ao salvar perfil publico:', error);
-      setProfileSaveError(error instanceof Error ? error.message : 'Nao foi possivel salvar o perfil publico.');
+      setProfileSaveError(error instanceof Error ? error.message : 'Não foi possível salvar o perfil público.');
     } finally {
       setIsSavingProfile(false);
     }
@@ -1161,7 +1161,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     } catch (error) {
       setProfileImageErrors((current) => ({
         ...current,
-        [kind]: error instanceof Error ? error.message : 'Nao foi possivel selecionar a imagem.',
+        [kind]: error instanceof Error ? error.message : 'Não foi possível selecionar a imagem.',
       }));
     }
   };
@@ -1585,7 +1585,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setWithdrawalError('');
 
     if (dashboardMetrics.availableBalance <= 0) {
-      setWithdrawalError('Nao ha saldo disponivel para saque.');
+      setWithdrawalError('Não há saldo disponível para saque.');
       return;
     }
 
@@ -1610,7 +1610,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setWithdrawalPixKey(photographer.cpf ?? '');
     } catch (error: any) {
       console.error('Erro ao solicitar saque:', error);
-      setWithdrawalError(error?.message || 'Nao foi possivel solicitar o saque.');
+      setWithdrawalError(error?.message || 'Não foi possível solicitar o saque.');
     } finally {
       setIsRequestingWithdrawal(false);
     }
@@ -1781,7 +1781,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       });
       setEventForm((current) => ({ ...current, coverMediaId: '' }));
     } catch (error) {
-      setEventCoverError(error instanceof Error ? error.message : 'Nao foi possivel selecionar a capa.');
+      setEventCoverError(error instanceof Error ? error.message : 'Não foi possível selecionar a capa.');
     }
   };
 
@@ -1810,15 +1810,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const updated = await eventService.updateEvent(eventItem.id, { isPublished: eventItem.isPublished === false });
       setAvailableEvents((current) => current.map((item) => (item.id === updated.id ? updated : item)));
     } catch (error) {
-      console.error('Erro ao alterar publicacao do evento:', error);
-      alert('Nao foi possivel alterar a publicacao do evento.');
+      console.error('Erro ao alterar publicação do evento:', error);
+      alert('Não foi possível alterar a publicação do evento.');
     }
   };
 
   const handleRemoveEvent = async (eventItem: Event) => {
     const hasProducts = products.some((product) => product.event === eventItem.name);
     const shouldRemove = window.confirm(hasProducts
-      ? 'Este evento possui produtos vinculados. Remover o evento nao remove as fotos, mas elas ficam com o nome atual no catalogo. Continuar?'
+      ? 'Este evento possui produtos vinculados. Remover o evento não remove as fotos, mas elas ficam com o nome atual no catálogo. Continuar?'
       : 'Remover este evento?');
     if (!shouldRemove) return;
 
@@ -1828,7 +1828,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       if (selectedEventId === eventItem.id) setSelectedEventId('');
     } catch (error) {
       console.error('Erro ao remover evento:', error);
-      alert('Nao foi possivel remover o evento.');
+      alert('Não foi possível remover o evento.');
     }
   };
 
@@ -1843,7 +1843,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     const acceptedFiles = files.filter((file) => !getSelectionBlockReason(file));
 
     if (blockedReasons.length > 0) {
-      alert(`Alguns arquivos nao foram adicionados:\n\n${blockedReasons.slice(0, 5).join('\n')}${blockedReasons.length > 5 ? `\n...e mais ${blockedReasons.length - 5} arquivo(s).` : ''}`);
+      alert(`Alguns arquivos não foram adicionados:\n\n${blockedReasons.slice(0, 5).join('\n')}${blockedReasons.length > 5 ? `\n...e mais ${blockedReasons.length - 5} arquivo(s).` : ''}`);
     }
 
     if (acceptedFiles.length === 0) return;
@@ -1991,7 +1991,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
 
     if (!Number.isFinite(normalizedPrice) || normalizedPrice <= 0) {
-      alert('Informe um preco valido.');
+      alert('Informe um preço válido.');
       return;
     }
 
@@ -2020,7 +2020,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const handleRemoveProduct = async (product: Product) => {
-    const shouldRemove = window.confirm('Remover este produto? Ele nao aparecera mais no painel nem na vitrine.');
+    const shouldRemove = window.confirm('Remover este produto? Ele não aparecerá mais no painel nem na vitrine.');
     if (!shouldRemove) return;
 
     setIsPublishing(true);
@@ -2064,7 +2064,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const handleBulkRemoveProducts = async () => {
     if (selectedProducts.length === 0) return;
 
-    const shouldRemove = window.confirm(`Remover ${selectedProducts.length} produto(s) da vitrine? Eles nao aparecerao para clientes.`);
+    const shouldRemove = window.confirm(`Remover ${selectedProducts.length} produto(s) da vitrine? Eles não aparecerão para clientes.`);
     if (!shouldRemove) return;
 
     setIsBulkRemovingProducts(true);
@@ -2120,7 +2120,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     if (invalidFileIndex >= 0) {
       setPreviewIndex(invalidFileIndex);
-      alert(`Preencha descricao e preco valido para o arquivo ${invalidFileIndex + 1}.`);
+      alert(`Preencha descrição e preço válido para o arquivo ${invalidFileIndex + 1}.`);
       return;
     }
 
@@ -2129,7 +2129,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     try {
       const currentUser = getCurrentUser();
       if (!isMockMode && currentUser?.id && currentUser.id !== photographer.id) {
-        alert('Sessao do fotografo nao sincronizada com o cadastro aprovado. Saia do painel, entre novamente e tente publicar de novo.');
+        alert('Sessão do fotógrafo não sincronizada com o cadastro aprovado. Saia do painel, entre novamente e tente publicar de novo.');
         return;
       }
 
@@ -2186,7 +2186,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             });
 
             if (duplicateAction === 'cancel') {
-              throw new Error('Upload cancelado pelo fotografo ao detectar arquivo duplicado.');
+              throw new Error('Upload cancelado pelo fotógrafo ao detectar arquivo duplicado.');
             }
 
             if (duplicateAction === 'copy') {
@@ -2266,14 +2266,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             uploadStage = 'preview';
             thumbnailFile = await generateMediaThumbnail(uploadFile);
           } catch (thumbnailError) {
-            console.warn(`Preview nao gerado para ${item.name}:`, thumbnailError);
+            console.warn(`Preview não gerado para ${item.name}:`, thumbnailError);
           }
           if (!thumbnailFile) {
             previewWarnings.push({
               name: item.name,
               message: uploadFile.type.startsWith('video')
-                ? 'Preview do video nao foi gerado; o card usara fallback visual ate o reparo.'
-                : 'Preview da foto nao foi gerado; o card usara a midia original protegida como fallback.',
+                ? 'Preview do vídeo não foi gerado; o card usará fallback visual até o reparo.'
+                : 'Preview da foto não foi gerado; o card usará a mídia original protegida como fallback.',
             });
           }
           uploadStage = 'hash-preview';
@@ -2403,7 +2403,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       if (publishedCount === 0 && failedUploads.length > 0) {
         const firstFailure = failedUploads[0];
-        throw new Error(`Nao foi possivel localizar alguns arquivos durante a publicacao. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
+        throw new Error(`Não foi possível localizar alguns arquivos durante a publicação. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
       }
 
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
@@ -2420,16 +2420,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) dos arquivos publicados ficaram com fallback visual.`
           : '';
-        alert(`Upload parcial concluido.\n\nPublicadas: ${publishedCount} fotos\nFalharam: ${failedUploads.length} fotos\nDuplicadas ignoradas: ${skippedDuplicateCount}\n${previewWarningText ? `${previewWarningText}\n` : ''}\nOs arquivos com falha ficaram selecionados para tentar novamente.\nPrimeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
+        alert(`Upload parcial concluído.\n\nPublicadas: ${publishedCount} fotos\nFalharam: ${failedUploads.length} fotos\nDuplicadas ignoradas: ${skippedDuplicateCount}\n${previewWarningText ? `${previewWarningText}\n` : ''}\nOs arquivos com falha ficaram selecionados para tentar novamente.\nPrimeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);
         setShowUploadModal(false);
         const previewWarningText = previewWarnings.length > 0
-          ? ` ${previewWarnings.length} preview(s) nao foram gerados e ficaram com fallback visual.`
+          ? ` ${previewWarnings.length} preview(s) não foram gerados e ficaram com fallback visual.`
           : '';
         alert(skippedDuplicateCount > 0
-          ? `Upload concluido: ${publishedCount} publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
+          ? `Upload concluído: ${publishedCount} publicado(s), ${replacedCount} substituído(s), ${copiedCount} cópia(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
           : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s).${previewWarningText}`);
       }
     } catch (error) {
@@ -2625,7 +2625,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <div className="p-4 border-b border-white/10">
                     <p className="font-sans font-black text-sm uppercase text-white">Notificacoes</p>
                     <p className="font-mono text-[10px] uppercase text-gray-500">
-                      {photographerNotifications.length} item(ns) do painel
+                      {photographerNotifications.length === 1 ? '1 item do painel' : `${photographerNotifications.length} itens do painel`}
                     </p>
                   </div>
                   <div className="max-h-80 overflow-y-auto">
@@ -2814,7 +2814,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       {(upcomingEvents.length ? upcomingEvents : [
                         { id: 'event-1', title: 'Ensaio Externo', date: '27 MAI, 2026', time: '16:00' },
                         { id: 'event-2', title: 'Casamento', date: '01 JUN, 2026', time: '14:00' },
-                        { id: 'event-3', title: 'Aniversario', date: '05 JUN, 2026', time: '18:00' },
+                        { id: 'event-3', title: 'Aniversário', date: '05 JUN, 2026', time: '18:00' },
                       ]).map((event) => (
                         <div key={event.id} className="p-4 flex items-center gap-3">
                           <div className="w-10 h-10 rounded bg-brutal-accent/15 border border-brutal-accent/20 flex items-center justify-center">
@@ -2850,7 +2850,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-3">Eventos</p>
                     <h3 className="font-sans font-black text-2xl uppercase text-white leading-none">Organize sua operacao</h3>
                     <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500 mt-3">
-                      Crie paginas por prova, defina publicacao e escolha uma capa para destacar o catalogo.
+                      Crie páginas por prova, defina a publicação e escolha uma capa para destacar o catálogo.
                     </p>
                   </div>
 
@@ -2890,8 +2890,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div className="bg-[#0d131c] border border-white/10">
                   <div className="p-5 border-b border-white/10 flex items-center justify-between gap-4">
                     <div>
-                      <h3 className="font-sans font-black text-base uppercase text-white">Eventos do fotografo</h3>
-                      <p className="font-mono text-[10px] uppercase text-gray-500">{availableEvents.length} evento(s) cadastrados</p>
+                      <h3 className="font-sans font-black text-base uppercase text-white">Eventos do fotógrafo</h3>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">{availableEvents.length === 1 ? '1 evento cadastrado' : `${availableEvents.length} eventos cadastrados`}</p>
                     </div>
                     <CalendarDays className="w-5 h-5 text-gray-500" />
                   </div>
@@ -3015,7 +3015,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Rascunhos</p>
                   <p className="font-sans font-black text-3xl text-gray-300">{visibleProductStats.drafts}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Aguardando publicacao</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Aguardando publicação</p>
                 </div>
               </div>
 
@@ -3067,8 +3067,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </h3>
                   <p className="font-mono text-[10px] uppercase text-gray-500">
                     {selectedProductEventName
-                      ? `${scopedFilteredProducts.length} produto(s) neste evento`
-                      : `${productEventCards.length} evento(s) com ${filteredProducts.length} midia(s)`}
+                      ? `${scopedFilteredProducts.length === 1 ? '1 produto' : `${scopedFilteredProducts.length} produtos`} neste evento`
+                      : `${productEventCards.length === 1 ? '1 evento' : `${productEventCards.length} eventos`} com ${filteredProducts.length === 1 ? '1 mídia' : `${filteredProducts.length} mídias`}`}
                   </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-3">
@@ -3205,10 +3205,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                               </h4>
                               <div className="mt-5 pt-4 border-t border-gray-100 flex flex-col gap-3">
                                 <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
-                                  {eventItem.items} midias
+                                  {eventItem.items === 1 ? '1 mídia' : `${eventItem.items} mídias`}
                                 </p>
                                 <p className="font-mono text-[9px] uppercase tracking-widest text-gray-400">
-                                  {eventItem.createdAtLabel === 'Criacao nao registrada' ? eventItem.createdAtLabel : `Criado em ${eventItem.createdAtLabel}`}
+                                  {eventItem.createdAtLabel === 'Criação não registrada' ? eventItem.createdAtLabel : `Criado em ${eventItem.createdAtLabel}`}
                                 </p>
                                 <div className="flex flex-wrap items-center justify-between gap-3">
                                   <button
@@ -3323,7 +3323,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3 p-4 bg-[#0b1016] border border-white/10">
                         <div>
                           <p className="font-sans font-black text-sm uppercase text-white truncate">{eventName}</p>
-                          <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">{groupProducts.length} produto(s) neste evento</p>
+                          <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">{groupProducts.length === 1 ? '1 produto neste evento' : `${groupProducts.length} produtos neste evento`}</p>
                         </div>
                         <div className="text-right">
                           {eventName !== 'Geral' && availableEvents.find((eventItem) => eventItem.name === eventName) && (
@@ -3417,7 +3417,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   {selectedProductEventName && visibleGroupedProducts.length === 0 && (
                     <div className="bg-[#0d131c] border border-white/10 p-10 text-center">
                       <Search className="w-10 h-10 text-gray-600 mx-auto mb-4" />
-                      <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhuma midia neste filtro</h3>
+                      <h3 className="font-sans font-black text-xl uppercase text-white mb-2">Nenhuma mídia neste filtro</h3>
                       <p className="font-mono text-xs uppercase text-gray-500">Limpe a busca ou ajuste os filtros para ver os produtos deste evento.</p>
                     </div>
                   )}
@@ -3504,7 +3504,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <ProfileImageUploader
                     kind="avatar"
                     label="Foto de perfil"
-                    description="JPG, PNG ou WEBP ate 5 MB. A imagem sera recortada em 512x512."
+                    description="JPG, PNG ou WEBP até 5 MB. A imagem será recortada em 512x512."
                     actionLabel="Selecionar Foto"
                     previewUrl={pendingProfileImages.avatar?.previewUrl || profileForm.avatar}
                     error={profileImageErrors.avatar}
@@ -3515,7 +3515,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <ProfileImageUploader
                     kind="cover"
                     label="Banner de capa"
-                    description="JPG, PNG ou WEBP ate 15 MB. A imagem sera otimizada em formato panoramico."
+                    description="JPG, PNG ou WEBP até 15 MB. A imagem será otimizada em formato panorâmico."
                     actionLabel="Selecionar Banner"
                     previewUrl={pendingProfileImages.cover?.previewUrl || profileForm.coverPhoto}
                     error={profileImageErrors.cover}
@@ -3578,7 +3578,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     )}
                   </div>
                   <h3 className="font-sans font-black text-2xl text-white mt-4">{profileForm.displayName || profileForm.name}</h3>
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-2">{profileForm.city || 'Cidade nao informada'}</p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-2">{profileForm.city || 'Cidade não informada'}</p>
                   <div className="grid grid-cols-3 gap-2 mt-5">
                     <div className="bg-[#080d14] border border-white/10 p-3">
                       <p className="font-sans font-black text-2xl text-white">{availableEvents.length}</p>
@@ -3610,7 +3610,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div>
                   <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-400/10 border border-green-400/20 text-green-300 font-mono text-[10px] uppercase tracking-widest mb-5">
                     <DollarSign className="w-3.5 h-3.5" />
-                    Carteira do fotografo
+                    Carteira do fotógrafo
                   </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saldo disponivel para repasse</p>
                   <p className="font-sans font-black text-5xl md:text-6xl text-brutal-accent leading-none">
@@ -3645,7 +3645,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </button>
                   <div className="border border-white/10 bg-[#05080d] px-4 py-3">
                     <p className="font-mono text-center text-[10px] text-gray-500 uppercase tracking-widest leading-relaxed">
-                      Vendas recentes liberam apos 7 dias
+                      Vendas recentes liberam após 7 dias
                     </p>
                   </div>
                 </div>
@@ -3682,7 +3682,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Ja pago</p>
                   <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidWithdrawalTotal)}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Historico recebido</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Histórico recebido</p>
                 </div>
               </div>
 
@@ -3690,7 +3690,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div className="bg-[#0d131c] border border-white/10">
                   <div className="p-5 border-b border-white/10 flex items-center justify-between">
                     <div>
-                      <h3 className="font-sans font-black text-base uppercase text-white">Historico Financeiro</h3>
+                      <h3 className="font-sans font-black text-base uppercase text-white">Histórico financeiro</h3>
                       <p className="font-mono text-[10px] uppercase text-gray-500">Vendas confirmadas e solicitacoes de saque</p>
                     </div>
                     <DollarSign className="w-5 h-5 text-gray-500" />
@@ -3760,7 +3760,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     />
                   </div>
                   <p className="font-mono text-sm text-gray-400 leading-relaxed">
-                    Voce atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(periodMetrics.monthlyGoal)}</span>
+                    Você atingiu <span className="font-bold text-white">{monthlyGoalPercent}%</span> da sua meta de <span className="font-bold text-white">{formatCurrency(periodMetrics.monthlyGoal)}</span>
                   </p>
                   <p className="font-mono text-[10px] uppercase text-gray-500 tracking-widest mt-3">
                     Receita do periodo no mes atual: {formatCurrency(periodMetrics.monthlyEarnings)}
@@ -3906,7 +3906,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   {eventForm.id ? 'Atualizar Evento' : 'Criar Evento'}
                 </h3>
                 <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
-                  Eventos organizam uploads, capas, precos e publicacao.
+                  Eventos organizam uploads, capas, preços e publicação.
                 </p>
               </div>
 
@@ -3982,7 +3982,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       value={eventForm.description}
                       onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
                       rows={3}
-                      placeholder="Resumo para equipe e publicacao"
+                      placeholder="Resumo para equipe e publicação"
                       className="w-full px-4 py-3 bg-[#05080d] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm uppercase outline-none focus:border-brutal-accent transition-colors resize-none"
                     />
                   </div>
@@ -3993,8 +3993,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <div>
                       <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Capa do evento</label>
                       <p className="font-mono text-[10px] uppercase text-gray-600">
-                        Escolha uma foto ja enviada ou envie uma capa personalizada.
-                        Use imagens horizontais em 16:9 para melhor resultado. Sugestao: 1920x1080.
+                        Escolha uma foto já enviada ou envie uma capa personalizada.
+                        Use imagens horizontais em 16:9 para melhor resultado. Sugestão: 1920x1080.
                       </p>
                     </div>
                     {(eventForm.coverImage || pendingEventCover) && (
@@ -4054,7 +4054,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <ProfileImageUploader
                         kind="cover"
                         label="Enviar nova capa"
-                        description="JPG, PNG ou WEBP ate 15 MB. Capas acima de 5 MB serao otimizadas em WebP ate 1920px."
+                        description="JPG, PNG ou WEBP até 15 MB. Capas acima de 5 MB serão otimizadas em WebP até 1920px."
                         actionLabel="Enviar Nova Capa"
                         previewUrl={pendingEventCover?.previewUrl || ''}
                         error={eventCoverError}
@@ -4075,7 +4075,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         <div>
                           <p className="font-mono text-[10px] uppercase font-bold text-gray-500">Escolher foto do evento</p>
                           <p className="font-mono text-[10px] uppercase text-gray-600">
-                            {eventCoverCandidates.length} foto(s) encontrada(s) para "{eventForm.name || 'evento sem nome'}".
+                            {eventCoverCandidates.length === 1 ? '1 foto encontrada' : `${eventCoverCandidates.length} fotos encontradas`} para "{eventForm.name || 'evento sem nome'}".
                           </p>
                         </div>
                       </div>
@@ -4196,7 +4196,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2">Repasse financeiro</p>
                 <h3 className="font-display text-4xl uppercase tracking-tighter">Solicitar Saque</h3>
                 <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">
-                  A solicitacao fica pendente para processamento manual pela equipe Funpace.
+                  A solicitação fica pendente para processamento manual pela equipe Funpace.
                 </p>
               </div>
 
@@ -4412,11 +4412,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       Nome duplicado
                     </div>
                     <h3 id="duplicate-upload-title" className="font-sans font-black text-2xl md:text-4xl uppercase tracking-normal">
-                      Arquivo ja existe neste evento
+                      Arquivo já existe neste evento
                     </h3>
                     <p className="mt-2 font-mono text-[10px] md:text-xs uppercase tracking-widest text-gray-500">
                       Evento: {duplicateConflict.eventName}
-                      {duplicateConflict.remainingCount > 0 ? ` - ${duplicateConflict.remainingCount} arquivo(s) restante(s) no lote` : ''}
+                      {duplicateConflict.remainingCount > 0 ? ` - ${duplicateConflict.remainingCount === 1 ? '1 arquivo restante' : `${duplicateConflict.remainingCount} arquivos restantes`} no lote` : ''}
                     </p>
                   </div>
                   <button
@@ -4557,7 +4557,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                   <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Enviar Capturas</h3>
                   <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
-                    Fotos sao comprimidas automaticamente. Videos precisam estar ate {formatFileSize(clientUploadMaxBytes)}.
+                    Fotos são comprimidas automaticamente. Vídeos precisam ter até {formatFileSize(clientUploadMaxBytes)}.
                   </p>
                 </div>
 
@@ -4608,7 +4608,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </button>
                       </div>
                       <p className="font-mono text-[10px] uppercase text-gray-600">
-                        Voce ainda pode ajustar o valor individual de cada captura abaixo.
+                        Você ainda pode ajustar o valor individual de cada captura abaixo.
                       </p>
                     </div>
 
@@ -4631,7 +4631,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
                         {isPreparingFiles
                           ? `${filePrepareProgress.done} de ${filePrepareProgress.total} arquivo(s) carregados para revisao.`
-                          : `${selectedFiles.length} arquivo(s) carregados. Voce ja pode publicar.`}
+                          : `${selectedFiles.length === 1 ? '1 arquivo carregado' : `${selectedFiles.length} arquivos carregados`}. Você já pode publicar.`}
                       </p>
                     </div>
                     <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
@@ -4664,7 +4664,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                 value={item.description}
                                 onClick={(event) => event.stopPropagation()}
                                 onChange={(event) => updateSelectedFile(idx, { description: event.target.value })}
-                                placeholder="Descricao desta foto"
+                                placeholder="Descrição desta foto"
                                 className="w-full h-9 px-2 bg-[#05080d] border border-white/10 text-white placeholder:text-gray-600 font-mono text-[10px] uppercase outline-none focus:border-brutal-accent"
                               />
                               <div className="grid grid-cols-[1fr_112px] gap-2">

@@ -66,7 +66,7 @@ export function PhotoGrid({
       setCopiedId(photo.id);
       window.setTimeout(() => setCopiedId((current) => current === photo.id ? null : current), 1800);
     } catch {
-      window.prompt('Copie o link da midia:', url);
+      window.prompt('Copie o link da mídia:', url);
     }
   };
 

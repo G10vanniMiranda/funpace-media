@@ -51,7 +51,7 @@ function getBodyValue(body: any, names: string[]) {
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase Service Role nao configurado.');
+  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase Service Role não configurado.');
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), supabaseKey };
 }
 
@@ -79,7 +79,7 @@ async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise
 
 function getInfinitePayHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;
-  if (!handle) throw new Error('INFINITEPAY_HANDLE nao configurado.');
+  if (!handle) throw new Error('INFINITEPAY_HANDLE não configurado.');
   return handle;
 }
 
@@ -224,7 +224,7 @@ export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
   if (rateLimit(req, res, { keyPrefix: 'checkout-confirm', windowMs: 60 * 1000, max: 60 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
@@ -235,16 +235,16 @@ export default async function handler(req: any, res: any) {
     const captureMethod = getBodyValue(body, ['capture_method', 'captureMethod', 'payment_method', 'paymentMethod']);
 
     if (!isUuid(orderId)) {
-      return res.status(400).json({ paid: false, error: 'Pedido invalido.' });
+      return res.status(400).json({ paid: false, error: 'Pedido inválido.' });
     }
 
     const orders = await supabaseRequest<any[]>(
       `/rest/v1/orders?select=id,status,paymentProvider,paymentExternalId,checkoutUrl&id=eq.${encodeURIComponent(orderId)}&limit=1`,
     );
     const order = orders[0];
-    if (!order) return res.status(404).json({ paid: false, error: 'Pedido nao encontrado.' });
+    if (!order) return res.status(404).json({ paid: false, error: 'Pedido não encontrado.' });
     if (order.paymentProvider !== 'infinitepay') {
-      return res.status(409).json({ paid: false, error: 'Pedido nao pertence ao provedor InfinitePay.' });
+      return res.status(409).json({ paid: false, error: 'Pedido não pertence ao provedor InfinitePay.' });
     }
 
     if (order.status === 'paid') {
@@ -264,7 +264,7 @@ export default async function handler(req: any, res: any) {
       });
       return res.status(409).json({
         paid: false,
-        message: 'Pagamento ainda nao confirmado.',
+        message: 'Pagamento ainda não confirmado.',
         reason: 'missing_confirmation_params',
       });
     }
@@ -283,7 +283,7 @@ export default async function handler(req: any, res: any) {
     await recordPaymentEvent({ orderId, status, payload: rawResponse });
 
     if (status !== 'paid') {
-      return res.status(409).json({ paid: false, message: 'Pagamento ainda nao confirmado.', status });
+      return res.status(409).json({ paid: false, message: 'Pagamento ainda não confirmado.', status });
     }
 
     await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paymentProvider=eq.infinitepay&status=in.(pending,failed,cancelled,canceled,refused)`, {
@@ -300,7 +300,7 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({ paid: true, confirmedBy: 'payment_check' });
   } catch (error: any) {
     console.error('confirm:infinitepay_failed', error);
-    const safe = publicError(error, 'Nao foi possivel confirmar o pagamento.');
+    const safe = publicError(error, 'Não foi possível confirmar o pagamento.');
     return res.status(safe.statusCode).json({
       paid: false,
       error: safe.message,

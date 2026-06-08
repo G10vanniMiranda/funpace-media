@@ -24,7 +24,7 @@ type StoredConsent = {
 
 function validateSelfie(file: File) {
   if (!allowedTypes.has(file.type.toLowerCase())) {
-    return 'Formato invalido. Envie uma selfie JPG ou PNG.';
+    return 'Formato inválido. Envie uma selfie JPG ou PNG.';
   }
   if (file.size > maxSelfieBytes) {
     return 'Imagem muito grande. Envie uma selfie de ate 8 MB.';
@@ -156,7 +156,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
 
   const openCamera = React.useCallback(async () => {
     if (!navigator.mediaDevices?.getUserMedia) {
-      setError('Seu navegador nao oferece suporte a camera. Use a opcao de carregar foto.');
+      setError('Seu navegador não oferece suporte à câmera. Use a opção de carregar foto.');
       return;
     }
     setError('');
@@ -241,7 +241,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
         openCamera().catch(() => undefined);
       }, 80);
     } catch (consentError) {
-      setError(consentError instanceof Error ? consentError.message : 'Nao foi possivel registrar o consentimento.');
+      setError(consentError instanceof Error ? consentError.message : 'Não foi possível registrar o consentimento.');
     } finally {
       setIsCameraLoading(false);
     }
@@ -253,7 +253,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     try {
       const video = videoRef.current;
       if (!video || !streamRef.current) {
-        setError('Camera nao esta aberta. Toque em tirar novamente e permita o acesso.');
+        setError('Câmera não está aberta. Toque em tirar novamente e permita o acesso.');
         return;
       }
 
@@ -271,7 +271,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       const width = video.videoWidth || trackSettings.width || Math.round(rect.width);
       const height = video.videoHeight || trackSettings.height || Math.round(rect.height);
       if (!width || !height) {
-        setError('Camera ainda nao esta pronta. Tente novamente em alguns instantes.');
+        setError('Câmera ainda não está pronta. Tente novamente em alguns instantes.');
         return;
       }
 
@@ -280,7 +280,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       canvas.height = height;
       const context = canvas.getContext('2d');
       if (!context) {
-        setError('Nao foi possivel capturar a selfie neste navegador.');
+        setError('Não foi possível capturar a selfie neste navegador.');
         return;
       }
 
@@ -288,7 +288,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       const blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9));
       console.log('Blob criado', blob);
       if (!blob || blob.size === 0) {
-        setError('Nao foi possivel gerar a selfie. Tente novamente.');
+        setError('Não foi possível gerar a selfie. Tente novamente.');
         return;
       }
 
@@ -296,7 +296,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       setCapturedSelfie(blob);
     } catch (captureError) {
       console.error('[face-search] selfie:capture-error', captureError);
-      setError('Nao foi possivel capturar a selfie neste navegador. Tente carregar uma foto da galeria.');
+      setError('Não foi possível capturar a selfie neste navegador. Tente carregar uma foto da galeria.');
     } finally {
       setIsCapturing(false);
     }
@@ -329,7 +329,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       }
       onClose();
     } catch (searchError) {
-      const message = searchError instanceof Error ? searchError.message : 'Nao foi possivel buscar suas fotos.';
+      const message = searchError instanceof Error ? searchError.message : 'Não foi possível buscar suas fotos.';
       if (/permiss[aã]o|consentimento/i.test(message)) {
         clearStoredConsent();
         setConsent(null);
@@ -394,13 +394,13 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                     <p className="mb-3 text-center font-display text-xl uppercase text-brutal-accent">Como usamos sua imagem:</p>
                     <ul className="space-y-2">
                       <li>Sua foto sera utilizada exclusivamente para localizar suas fotos atraves do reconhecimento facial.</li>
-                      <li>Nao compartilhamos sua imagem com terceiros.</li>
-                      <li>Caso a opcao de armazenamento nao seja marcada, a selfie sera removida apos o processamento.</li>
-                      <li>O usuario podera solicitar a exclusao dos dados a qualquer momento.</li>
+                      <li>Não compartilhamos sua imagem com terceiros.</li>
+                      <li>Caso a opção de armazenamento não seja marcada, a selfie será removida após o processamento.</li>
+                      <li>O usuário poderá solicitar a exclusão dos dados a qualquer momento.</li>
                     </ul>
                   </div>
                   <p className="mt-5 font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">
-                    Leia nossa <a href="/privacidade" className="font-bold text-brutal-black underline hover:text-brutal-accent">Politica de Privacidade</a> e nossos <a href="/termos" className="font-bold text-brutal-black underline hover:text-brutal-accent">Termos de Uso</a>.
+                    Leia nossa <a href="/privacidade" className="font-bold text-brutal-black underline hover:text-brutal-accent">Política de Privacidade</a> e nossos <a href="/termos" className="font-bold text-brutal-black underline hover:text-brutal-accent">Termos de Uso</a>.
                   </p>
                   {error && (
                     <div role="alert" className="mt-5 border-2 border-red-500 bg-red-50 p-3 font-mono text-[10px] uppercase leading-relaxed text-red-700">
@@ -507,7 +507,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                 <div className="space-y-4 font-mono text-[11px] uppercase leading-relaxed text-gray-600">
                   <p className="font-bold text-brutal-black">Para melhores resultados:</p>
                   <p>Use uma foto nitida, de frente e bem iluminada.</p>
-                  <p>Evite oculos escuros, capacete ou outras pessoas na imagem.</p>
+                  <p>Evite óculos escuros, capacete ou outras pessoas na imagem.</p>
                   <div className="flex items-start gap-2 border-t-2 border-dashed border-gray-200 pt-4 text-gray-500">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brutal-accent" />
                     <span>A selfie e usada somente durante a busca e removida apos o processamento.</span>

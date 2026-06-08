@@ -6,23 +6,23 @@ import { Navbar } from '../components/Navbar';
 const sections = [
   {
     title: 'Uso da plataforma',
-    text: 'A Funpace Media conecta compradores e fotografos para venda de midias digitais de eventos esportivos. O usuario deve usar a plataforma de forma licita e fornecer dados corretos no cadastro e checkout.',
+    text: 'A Funpace Media conecta compradores e fotógrafos para venda de mídias digitais de eventos esportivos. O usuário deve usar a plataforma de forma lícita e fornecer dados corretos no cadastro e checkout.',
   },
   {
-    title: 'Compra e liberacao',
-    text: 'Os arquivos digitais sao liberados apos confirmacao do pagamento pelo provedor. Pedidos pendentes podem levar alguns instantes para atualizar automaticamente.',
+    title: 'Compra e liberação',
+    text: 'Os arquivos digitais são liberados após a confirmação do pagamento pelo provedor. Pedidos pendentes podem levar alguns instantes para atualizar automaticamente.',
   },
   {
-    title: 'Direitos das midias',
-    text: 'As fotos e videos publicados pertencem aos fotografos ou responsaveis pela cobertura. A compra concede acesso ao download pessoal, sem transferencia de autoria.',
+    title: 'Direitos das mídias',
+    text: 'As fotos e vídeos publicados pertencem aos fotógrafos ou responsáveis pela cobertura. A compra concede acesso ao download pessoal, sem transferência de autoria.',
   },
   {
-    title: 'Responsabilidade do fotografo',
-    text: 'O fotografo parceiro e responsavel pela origem, qualidade, classificacao e informacoes das midias publicadas, incluindo evento, ponto, preco e dados de venda.',
+    title: 'Responsabilidade do fotógrafo',
+    text: 'O fotógrafo parceiro é responsável pela origem, qualidade, classificação e informações das mídias publicadas, incluindo evento, ponto, preço e dados de venda.',
   },
   {
-    title: 'Alteracoes',
-    text: 'Estes termos podem ser atualizados para refletir mudancas operacionais, legais ou de produto. A versao publicada nesta pagina e a referencia vigente.',
+    title: 'Alterações',
+    text: 'Estes termos podem ser atualizados para refletir mudanças operacionais, legais ou de produto. A versão publicada nesta página é a referência vigente.',
   },
 ];
 
@@ -56,10 +56,10 @@ export function Termos() {
               Legal
             </p>
             <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
-              Termos de servico
+              Termos de serviço
             </h1>
             <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
-              Regras gerais de uso da Funpace Media para compradores, fotografos e visitantes.
+              Regras gerais de uso da Funpace Media para compradores, fotógrafos e visitantes.
             </p>
           </div>
 

@@ -133,10 +133,10 @@ export function normalizePhotographerUsername(value: string) {
 export function validatePhotographerUsername(value: string) {
   const username = normalizePhotographerUsername(value);
   if (!/^[a-z0-9-]{2,80}$/.test(username)) {
-    throw new Error('Use apenas letras, numeros e hifen na URL publica.');
+    throw new Error('Use apenas letras, números e hífen na URL pública.');
   }
   if (reservedPublicSlugs.has(username)) {
-    throw new Error('Esta URL publica e reservada pelo sistema.');
+    throw new Error('Esta URL pública é reservada pelo sistema.');
   }
   return username;
 }
@@ -269,7 +269,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
     });
 
     if (response.status === 404 || response.status === 405) {
-      console.warn('/api/media/sign indisponivel neste deploy; usando URLs originais das midias.');
+      console.warn('/api/media/sign indisponível neste deploy; usando URLs originais das mídias.');
       return withPublicFallback();
     }
 
@@ -283,7 +283,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
       thumbnailUrl: item.thumbnailUrl && urls[item.thumbnailUrl] ? urls[item.thumbnailUrl] : item.thumbnailUrl,
     }));
   } catch (error) {
-    console.error('Erro ao assinar URLs de midia:', error);
+    console.error('Erro ao assinar URLs de mídia:', error);
     return withPublicFallback();
   }
 }
@@ -291,7 +291,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
 async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?: string; uploadBatchId?: string }) {
   let accessToken = await getCurrentAccessToken();
   if (!accessToken) {
-    throw new Error('Sessao de fotografo ausente. Entre novamente no painel para enviar arquivos.');
+    throw new Error('Sessão de fotógrafo ausente. Entre novamente no painel para enviar arquivos.');
   }
 
   const uploadUrl = apiUrl('/api/media/upload');
@@ -320,9 +320,9 @@ async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?:
       const limitMb = Math.round(clientUploadLimitBytes / 1024 / 1024);
       const likelyProxyDrop = /failed to fetch|networkerror|load failed/i.test(detail);
       const diagnostic = likelyProxyDrop
-        ? `O navegador nao recebeu resposta HTTP da API. Isso costuma acontecer quando o proxy/Nginx ativo encerra o upload antes do backend, por limite de corpo ou timeout. Confira o server block ativo de api.funpace.media com client_max_body_size ${limitMb}m, proxy_read_timeout/proxy_send_timeout altos, proxy_request_buffering off e reinicie/reload do Nginx e do backend.`
+        ? `O navegador não recebeu resposta HTTP da API. Isso costuma acontecer quando o proxy/Nginx ativo encerra o upload antes do backend, por limite de corpo ou timeout. Confira o server block ativo de api.funpace.media com client_max_body_size ${limitMb}m, proxy_read_timeout/proxy_send_timeout altos, proxy_request_buffering off e reinicie/reload do Nginx e do backend.`
         : `Verifique o limite do proxy/Nginx, timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=${limitMb}mb.`;
-      throw new Error(`Nao foi possivel concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. ${diagnostic} Detalhe: ${detail || 'falha de rede'}`);
+      throw new Error(`Não foi possível concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. ${diagnostic} Detalhe: ${detail || 'falha de rede'}`);
     }
 
     const raw = await response.text();
@@ -410,12 +410,12 @@ function withMediaCacheVersion(url: string, version = Date.now()) {
 
 async function uploadSupabaseStorageObject(bucket: string, path: string, file: File) {
   if (!supabaseConfig.url || !supabaseConfig.anonKey) {
-    throw new Error('Supabase Storage nao configurado.');
+    throw new Error('Supabase Storage não configurado.');
   }
 
   const accessToken = await getCurrentAccessToken();
   if (!accessToken) {
-    throw new Error('Sessao de fotografo ausente. Entre novamente para atualizar o perfil.');
+    throw new Error('Sessão de fotógrafo ausente. Entre novamente para atualizar o perfil.');
   }
 
   const response = await fetch(`${supabaseConfig.url.replace(/\/+$/, '')}/storage/v1/object/${bucket}/${encodeURI(path)}`, {
@@ -444,7 +444,7 @@ async function uploadSupabaseStorageObject(bucket: string, path: string, file: F
       const bucketHint = bucket === 'event-covers'
         ? 'Crie o bucket event-covers no Supabase Storage e aplique scripts/fix-event-cover-schema.sql.'
         : 'Crie os buckets photographer-avatars e photographer-covers no Supabase Storage.';
-      throw new Error(`Bucket ${bucket} nao encontrado. ${bucketHint}`);
+      throw new Error(`Bucket ${bucket} não encontrado. ${bucketHint}`);
     }
     if (/row-level security|violates row-level security/i.test(message)) {
       const policyHint = bucket === 'event-covers'
@@ -465,7 +465,7 @@ async function uploadSupabaseStorageObject(bucket: string, path: string, file: F
 async function uploadPhotographerProfileImage(kind: 'avatar' | 'cover', file: File) {
   const accessToken = await getCurrentAccessToken();
   if (!accessToken) {
-    throw new Error('Sessao de fotografo ausente. Entre novamente para atualizar o perfil.');
+    throw new Error('Sessão de fotógrafo ausente. Entre novamente para atualizar o perfil.');
   }
 
   const response = await fetch(apiUrl('/api/photographers/profile-image'), {
@@ -492,7 +492,7 @@ async function uploadPhotographerProfileImage(kind: 'avatar' | 'cover', file: Fi
   }
 
   if (!payload?.publicUrl) {
-    throw new Error('Upload concluido, mas o Storage nao retornou URL publica.');
+    throw new Error('Upload concluído, mas o Storage não retornou URL pública.');
   }
 
   return payload as { path: string; publicUrl: string };
@@ -597,9 +597,9 @@ export const productService = {
     if (!response.ok) {
       const message = String(payload.error || raw || '');
       if (response.status === 404 || /Cannot POST \/api\/face\/consent/i.test(message)) {
-        throw new Error('Backend de consentimento ainda nao publicado. Reinicie/deploye a API com a rota /api/face/consent.');
+        throw new Error('Backend de consentimento ainda não publicado. Publique a API com a rota /api/face/consent.');
       }
-      throw new Error(message || 'Nao foi possivel registrar o consentimento.');
+      throw new Error(message || 'Não foi possível registrar o consentimento.');
     }
     return payload;
   },
@@ -612,11 +612,11 @@ export const productService = {
     const response = await fetch(apiUrl('/api/face/search'), { method: 'POST', body: formData });
     const payload = await response.json().catch(() => ({})) as Partial<FaceSearchResponse> & { error?: string };
     if (!response.ok) {
-      if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de ate 8 MB.');
-      if (response.status === 415) throw new Error('Formato invalido. Envie uma selfie JPG ou PNG.');
+      if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de até 8 MB.');
+      if (response.status === 415) throw new Error('Formato inválido. Envie uma selfie JPG ou PNG.');
       if (response.status === 422) throw new Error('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.');
-      if (response.status === 403) throw new Error('Permissao para uso de imagem necessaria para realizar a busca facial.');
-      throw new Error('Nao foi possivel realizar a busca facial. Tente novamente em alguns instantes.');
+      if (response.status === 403) throw new Error('Permissão para uso de imagem necessária para realizar a busca facial.');
+      throw new Error('Não foi possível realizar a busca facial. Tente novamente em alguns instantes.');
     }
     const matches = Array.isArray(payload.matches) ? payload.matches : [];
     const signed = await signMediaUrls(matches.map((match) => match.product), { protectImageOriginals: true });
@@ -626,7 +626,7 @@ export const productService = {
   async indexProductFace(photoId: string, eventId: string, file: File) {
     if (isMockMode || !file.type.startsWith('image/')) return { status: 'disabled', facesIndexed: 0 };
     const accessToken = await getCurrentAccessToken();
-    if (!accessToken) throw new Error('Sessao de fotografo ausente para indexacao facial.');
+    if (!accessToken) throw new Error('Sessão de fotógrafo ausente para indexação facial.');
     const response = await fetch(apiUrl('/api/face/index'), {
       method: 'POST',
       headers: {
@@ -638,7 +638,7 @@ export const productService = {
       body: file,
     });
     const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.error || `Indexacao facial falhou com HTTP ${response.status}.`);
+    if (!response.ok) throw new Error(payload?.error || `Indexação facial falhou com HTTP ${response.status}.`);
     return payload as { status: string; facesIndexed: number };
   },
 
@@ -720,7 +720,7 @@ export const productService = {
         ...product,
         status: product.status ?? 'published',
         faceIndexStatus: product.type === 'IMG' ? product.faceIndexStatus ?? 'pending' : 'disabled',
-        faceIndexError: product.type === 'IMG' ? product.faceIndexError ?? null : 'Midia nao suportada pelo backfill facial.',
+        faceIndexError: product.type === 'IMG' ? product.faceIndexError ?? null : 'Mídia não suportada pelo backfill facial.',
         faceIndexedAt: product.type === 'IMG' ? product.faceIndexedAt ?? null : null,
         createdAt: new Date().toISOString(),
       },
@@ -794,7 +794,7 @@ export const productService = {
   async updateProduct(id: string, product: Pick<Product, 'name' | 'price' | 'event' | 'checkpoint' | 'bib' | 'status'>): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
-      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      if (!existingProduct) throw new Error('Produto não encontrado.');
 
       const updatedProduct = { ...existingProduct, ...product };
       mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
@@ -808,14 +808,14 @@ export const productService = {
       true,
     );
 
-    if (!updated) throw new Error('Produto nao encontrado.');
+    if (!updated) throw new Error('Produto não encontrado.');
     return updated;
   },
 
   async replaceProductMedia(id: string, changes: Partial<Pick<Product, 'name' | 'price' | 'url' | 'type' | 'event' | 'eventId' | 'checkpoint' | 'bib' | 'thumbnailUrl' | 'watermarkUrl' | 'storagePath' | 'fileHash' | 'fileSize' | 'originalFileName' | 'thumbnailHash' | 'uploadBatchId' | 'status'>>): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
-      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      if (!existingProduct) throw new Error('Produto não encontrado.');
       const updatedProduct = { ...existingProduct, ...changes, updatedAt: new Date().toISOString() } as Product;
       mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
       return updatedProduct;
@@ -828,7 +828,7 @@ export const productService = {
         ...changes,
         ...(changes.type ? {
           faceIndexStatus: changes.type === 'IMG' ? 'pending' : 'disabled',
-          faceIndexError: changes.type === 'IMG' ? null : 'Midia nao suportada pelo backfill facial.',
+          faceIndexError: changes.type === 'IMG' ? null : 'Mídia não suportada pelo backfill facial.',
           faceIndexedAt: null,
         } : {}),
         updatedAt: new Date().toISOString(),
@@ -836,7 +836,7 @@ export const productService = {
       true,
     );
 
-    if (!updated) throw new Error('Produto nao encontrado.');
+    if (!updated) throw new Error('Produto não encontrado.');
     return updated;
   },
 
@@ -858,7 +858,7 @@ export const productService = {
 
         if (response.ok) return;
       } catch (error) {
-        console.warn('Endpoint de auditoria de upload indisponivel, tentando Supabase direto:', error);
+        console.warn('Endpoint de auditoria de upload indisponível, tentando Supabase direto:', error);
       }
     }
 
@@ -871,7 +871,7 @@ export const productService = {
       metadata: input.metadata,
       createdAt: new Date().toISOString(),
     }, true).catch((error) => {
-      console.warn('Nao foi possivel registrar auditoria de upload duplicado:', error);
+      console.warn('Não foi possível registrar auditoria de upload duplicado:', error);
     });
   },
 
@@ -909,7 +909,7 @@ export const productService = {
   async updateProductThumbnail(id: string, thumbnailUrl: string): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
-      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      if (!existingProduct) throw new Error('Produto não encontrado.');
 
       const updatedProduct = { ...existingProduct, thumbnailUrl };
       mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
@@ -923,14 +923,14 @@ export const productService = {
       true,
     );
 
-    if (!updated) throw new Error('Produto nao encontrado.');
+    if (!updated) throw new Error('Produto não encontrado.');
     return updated;
   },
 
   async updateProductStatus(id: string, status: NonNullable<Product['status']>): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
-      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      if (!existingProduct) throw new Error('Produto não encontrado.');
       const updatedProduct = { ...existingProduct, status };
       mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
       return updatedProduct;
@@ -943,14 +943,14 @@ export const productService = {
       true,
     );
 
-    if (!updated) throw new Error('Produto nao encontrado.');
+    if (!updated) throw new Error('Produto não encontrado.');
     return updated;
   },
 
   async removeProduct(id: string): Promise<Product> {
     if (isMockMode) {
       const existingProduct = mockProducts.find((item) => item.id === id);
-      if (!existingProduct) throw new Error('Produto nao encontrado.');
+      if (!existingProduct) throw new Error('Produto não encontrado.');
 
       const updatedProduct = { ...existingProduct, status: 'removed' as const };
       mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
@@ -964,7 +964,7 @@ export const productService = {
       true,
     );
 
-    if (!updated) throw new Error('Produto nao encontrado.');
+    if (!updated) throw new Error('Produto não encontrado.');
     return updated;
   },
 
@@ -1038,11 +1038,11 @@ export const orderService = {
 
   async updateOrderStatus(id: string, status: Order['status']): Promise<Order> {
     if (isMockMode) {
-      throw new Error('Atualizacao manual de pedido esta disponivel apenas no modo producao.');
+      throw new Error('Atualização manual de pedido está disponível apenas no modo produção.');
     }
 
     const accessToken = await getCurrentAccessToken();
-    if (!accessToken) throw new Error('Sessao admin expirada.');
+    if (!accessToken) throw new Error('Sessão admin expirada.');
 
     const response = await fetch('/api/admin/orders/status', {
       method: 'PATCH',
@@ -1056,7 +1056,7 @@ export const orderService = {
 
     if (!response.ok) throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
     const updated = payload?.order as Order | undefined;
-    if (!updated) throw new Error('Pedido nao encontrado.');
+    if (!updated) throw new Error('Pedido não encontrado.');
     return updated;
   },
 };
@@ -1272,7 +1272,7 @@ export const eventService = {
         return created;
       }
       if (isDuplicateSlugError(error)) {
-        throw new Error('Ja existe um evento com este nome e data. Tente salvar novamente ou ajuste o nome do evento.');
+        throw new Error('Já existe um evento com este nome e data. Tente salvar novamente ou ajuste o nome do evento.');
       }
       throw error;
     }
@@ -1281,7 +1281,7 @@ export const eventService = {
   async uploadEventCover(photographerId: string, file: File) {
     const allowedTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
     if (!allowedTypes.has(String(file.type || '').toLowerCase())) {
-      throw new Error('Formato invalido para capa do evento. Envie JPG, PNG ou WEBP.');
+      throw new Error('Formato inválido para capa do evento. Envie JPG, PNG ou WEBP.');
     }
     if (file.size > 15 * 1024 * 1024) {
       throw new Error('Capa do evento muito grande. O limite e 15 MB.');
@@ -1322,7 +1322,7 @@ export const eventService = {
     if (isMockMode) {
       const events = loadLocalEvents();
       const existing = events.find((event) => event.id === id);
-      if (!existing) throw new Error('Evento nao encontrado.');
+      if (!existing) throw new Error('Evento não encontrado.');
       const updated = {
         ...existing,
         ...input,
@@ -1342,7 +1342,7 @@ export const eventService = {
       `/rest/v1/events?${currentParams.toString()}`,
       true,
     );
-    if (!existing) throw new Error('Evento nao encontrado.');
+    if (!existing) throw new Error('Evento não encontrado.');
 
     const payload = {
       ...input,
@@ -1373,7 +1373,7 @@ export const eventService = {
     }
     const [updated] = updatedRows;
 
-    if (!updated) throw new Error('Evento nao encontrado.');
+    if (!updated) throw new Error('Evento não encontrado.');
     return updated;
   },
 
@@ -1433,14 +1433,14 @@ function createCheckoutClientError(input: { response: Response; data: any; raw: 
   const isPlatformCrash = /FUNCTION_INVOCATION_FAILED|A server error has occurred|Internal Server Error/i.test(detail);
 
   if (isPlatformCrash) {
-    return new Error(`Nao foi possivel iniciar o pagamento. Tente novamente em alguns minutos.${requestId}`);
+    return new Error(`Não foi possível iniciar o pagamento. Tente novamente em alguns minutos.${requestId}`);
   }
 
   if (detail) {
-    return new Error(`Nao foi possivel iniciar o pagamento: ${detail}${requestId}`);
+    return new Error(`Não foi possível iniciar o pagamento: ${detail}${requestId}`);
   }
 
-  return new Error(`Nao foi possivel iniciar o pagamento. HTTP ${input.response.status}.${requestId}`);
+  return new Error(`Não foi possível iniciar o pagamento. HTTP ${input.response.status}.${requestId}`);
 }
 
 export const paymentService = {
@@ -1540,7 +1540,7 @@ export const customerAccountService = {
 
 async function supabaseFetchNoContent(path: string, init: RequestInit) {
   const accessToken = await getCurrentAccessToken();
-  if (!accessToken) throw new Error('Sessao expirada. Entre novamente.');
+  if (!accessToken) throw new Error('Sessão expirada. Entre novamente.');
   const baseUrl = import.meta.env.VITE_SUPABASE_URL || '';
   const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || '';
   const response = await fetch(`${String(baseUrl).replace(/\/+$/, '')}${path}`, {
@@ -1697,7 +1697,7 @@ export const photographerDashboardService = {
               id: item?.id ?? transaction.orderItemId ?? transaction.id,
               orderId: transaction.orderId ?? '',
               productId: item?.productId ?? product?.id ?? '',
-              name: item?.name ?? product?.name ?? 'Midia vendida',
+              name: item?.name ?? product?.name ?? 'Mídia vendida',
               type: item?.type ?? product?.type ?? 'IMG',
               price: Number(transaction.grossAmount || item?.price || product?.price || 0),
               url: item?.url ?? product?.url ?? '',
@@ -1772,7 +1772,7 @@ export const photographerDashboardService = {
         };
       }
     } catch (error) {
-      console.warn('Transacoes do fotografo indisponiveis; usando fallback por pedidos.', error);
+      console.warn('Transações do fotógrafo indisponíveis; usando fallback por pedidos.', error);
     }
 
     const params = new URLSearchParams({
@@ -1920,7 +1920,7 @@ export const platformSettingsService = {
       true,
     );
 
-    if (!settings) throw new Error('Configuracoes da plataforma nao encontradas.');
+    if (!settings) throw new Error('Configurações da plataforma não encontradas.');
     return {
       ...settings,
       supportEmail: settings.supportEmail || FUNPACE_CONTACT_EMAIL,
@@ -1948,7 +1948,7 @@ export const platformSettingsService = {
       true,
     );
 
-    if (!updated) throw new Error('Configuracoes da plataforma nao encontradas.');
+    if (!updated) throw new Error('Configurações da plataforma não encontradas.');
     return updated;
   },
 
@@ -2027,13 +2027,13 @@ export const withdrawalService = {
       true,
     );
 
-    if (!created) throw new Error('Nao foi possivel criar a solicitacao de saque.');
+    if (!created) throw new Error('Não foi possível criar a solicitação de saque.');
     return created;
   },
 
   async updateWithdrawalStatus(id: string, status: WithdrawalRequest['status'], note?: string): Promise<WithdrawalRequest> {
     if (isMockMode) {
-      throw new Error('Atualizacao de saque esta disponivel apenas no modo producao.');
+      throw new Error('Atualização de saque está disponível apenas no modo produção.');
     }
 
     const params = new URLSearchParams({ id: `eq.${id}` });
@@ -2047,7 +2047,7 @@ export const withdrawalService = {
       true,
     );
 
-    if (!updated) throw new Error('Solicitacao de saque nao encontrada.');
+    if (!updated) throw new Error('Solicitação de saque não encontrada.');
     return updated;
   },
 };
@@ -2155,7 +2155,7 @@ export const photographerService = {
 
     const user = getCurrentUser();
     if (!user?.id || !user.email) {
-      throw new Error('Para solicitar cadastro de fotografo, crie uma conta ou entre com Supabase Auth.');
+      throw new Error('Para solicitar cadastro de fotógrafo, crie uma conta ou entre com Supabase Auth.');
     }
 
     const [created] = await supabaseRest.post<SupabaseRow<Photographer>[]>(
@@ -2191,7 +2191,7 @@ export const photographerService = {
   ): Promise<Photographer> {
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);
-      if (!existing) throw new Error('Fotografo nao encontrado.');
+      if (!existing) throw new Error('Fotógrafo não encontrado.');
       const updated = { ...existing, ...changes } as Photographer;
       mockPhotographers = mockPhotographers.map((photographer) => (photographer.id === id ? updated : photographer));
       return updated;
@@ -2204,14 +2204,14 @@ export const photographerService = {
       true,
     );
 
-    if (!updated) throw new Error('Fotografo nao encontrado.');
+    if (!updated) throw new Error('Fotógrafo não encontrado.');
     return updated;
   },
 
   async setPhotographerAdminStatus(id: string, action: 'disable' | 'reactivate'): Promise<Photographer> {
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);
-      if (!existing) throw new Error('Fotografo nao encontrado.');
+      if (!existing) throw new Error('Fotógrafo não encontrado.');
       const updated = {
         ...existing,
         verified: action === 'reactivate',
@@ -2222,7 +2222,7 @@ export const photographerService = {
     }
 
     const token = await getCurrentAccessToken();
-    if (!token) throw new Error('Sessao admin expirada. Entre novamente.');
+    if (!token) throw new Error('Sessão admin expirada. Entre novamente.');
 
     const response = await fetch(apiUrl(`/api/admin/photographers/${encodeURIComponent(id)}/${action}`), {
       method: 'PATCH',
@@ -2233,10 +2233,10 @@ export const photographerService = {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload?.error || payload?.message || 'Nao foi possivel atualizar o fotografo.');
+      throw new Error(payload?.error || payload?.message || 'Não foi possível atualizar o fotógrafo.');
     }
 
-    if (!payload?.photographer) throw new Error('Fotografo nao encontrado.');
+    if (!payload?.photographer) throw new Error('Fotógrafo não encontrado.');
     return payload.photographer as Photographer;
   },
 
@@ -2247,7 +2247,7 @@ export const photographerService = {
     }
 
     const token = await getCurrentAccessToken();
-    if (!token) throw new Error('Sessao admin expirada. Entre novamente.');
+    if (!token) throw new Error('Sessão admin expirada. Entre novamente.');
 
     const response = await fetch(apiUrl(`/api/admin/photographers/${encodeURIComponent(id)}`), {
       method: 'DELETE',
@@ -2257,7 +2257,7 @@ export const photographerService = {
     });
     const payload = await response.json().catch(() => ({}));
     if (!response.ok) {
-      throw new Error(payload?.error || payload?.message || 'Nao foi possivel excluir o fotografo.');
+      throw new Error(payload?.error || payload?.message || 'Não foi possível excluir o fotógrafo.');
     }
   },
 
@@ -2275,7 +2275,7 @@ export const photographerService = {
 
     if (isMockMode) {
       const existing = mockPhotographers.find((photographer) => photographer.id === id);
-      if (!existing) throw new Error('Fotografo nao encontrado.');
+      if (!existing) throw new Error('Fotógrafo não encontrado.');
       const updated = { ...existing, ...payload } as Photographer;
       mockPhotographers = mockPhotographers.map((photographer) => (photographer.id === id ? updated : photographer));
       return updated;
@@ -2288,7 +2288,7 @@ export const photographerService = {
       true,
     );
 
-    if (!updated) throw new Error('Fotografo nao encontrado.');
+    if (!updated) throw new Error('Fotógrafo não encontrado.');
     return updated;
   },
 
@@ -2344,7 +2344,7 @@ export const adminService = {
     }
 
     const accessToken = await getCurrentAccessToken();
-    if (!accessToken) throw new Error('Sessao admin ausente.');
+    if (!accessToken) throw new Error('Sessão admin ausente.');
 
     const response = await fetch('/api/admin/snapshot', {
       headers: {
@@ -2409,7 +2409,7 @@ export const adminService = {
     if (isMockMode) return { issues: [], summary: {} };
 
     const accessToken = await getCurrentAccessToken();
-    if (!accessToken) throw new Error('Sessao admin expirada.');
+    if (!accessToken) throw new Error('Sessão admin expirada.');
 
     const response = await fetch('/api/admin/payments/recovery', {
       headers: { Authorization: `Bearer ${accessToken}` },
@@ -2423,10 +2423,10 @@ export const adminService = {
   },
 
   async recoverPayment(input: { orderId: string; action: 'reprocess' | 'manual_release' | 'fulfill'; reason?: string }) {
-    if (isMockMode) throw new Error('Recuperacao de pagamento esta disponivel apenas no modo producao.');
+    if (isMockMode) throw new Error('Recuperação de pagamento está disponível apenas no modo produção.');
 
     const accessToken = await getCurrentAccessToken();
-    if (!accessToken) throw new Error('Sessao admin expirada.');
+    if (!accessToken) throw new Error('Sessão admin expirada.');
 
     const response = await fetch('/api/admin/payments/recovery', {
       method: 'POST',
@@ -2472,13 +2472,13 @@ export const adminService = {
       true,
     );
 
-    if (!created) throw new Error('Nao foi possivel criar o cupom.');
+    if (!created) throw new Error('Não foi possível criar o cupom.');
     return created;
   },
 
   async updateCoupon(id: string, changes: Partial<Pick<Coupon, 'code' | 'type' | 'value' | 'maxUses' | 'startsAt' | 'expiresAt' | 'isActive'>>): Promise<Coupon> {
     if (isMockMode) {
-      throw new Error('Atualizacao de cupom esta disponivel apenas no modo producao.');
+      throw new Error('Atualização de cupom está disponível apenas no modo produção.');
     }
 
     const params = new URLSearchParams({ id: `eq.${id}` });
@@ -2488,7 +2488,7 @@ export const adminService = {
       true,
     );
 
-    if (!updated) throw new Error('Cupom nao encontrado.');
+    if (!updated) throw new Error('Cupom não encontrado.');
     return updated;
   },
 
@@ -2516,7 +2516,7 @@ export const adminService = {
       metadata: input.metadata ?? {},
       createdAt: new Date().toISOString(),
     }, true).catch((error) => {
-      console.error('Nao foi possivel registrar log admin:', error);
+      console.error('Não foi possível registrar log admin:', error);
     });
   },
 };

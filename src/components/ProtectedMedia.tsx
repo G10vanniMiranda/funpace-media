@@ -140,7 +140,7 @@ export function ProtectedMedia({
       </div>
 
       <div className="protected-media__print-warning hidden">
-        Midia protegida. Use o download autorizado apos a compra.
+        Mídia protegida. Use o download autorizado após a compra.
       </div>
     </div>
   );

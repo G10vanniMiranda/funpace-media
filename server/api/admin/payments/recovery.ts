@@ -35,7 +35,7 @@ function getSupabaseConfig() {
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     serviceRoleKey;
 
-  if (!supabaseUrl || !serviceRoleKey) throw new Error('Supabase Service Role nao configurado.');
+  if (!supabaseUrl || !serviceRoleKey) throw new Error('Supabase Service Role não configurado.');
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), serviceRoleKey, anonKey };
 }
 
@@ -182,7 +182,7 @@ async function recordAdminLog(input: {
       metadata: input.metadata,
     }),
   }).catch((error) => {
-    console.error('Nao foi possivel registrar log admin de pagamento:', error);
+    console.error('Não foi possível registrar log admin de pagamento:', error);
   });
 }
 
@@ -247,7 +247,7 @@ async function listIssues() {
 
 async function reprocessOrder(orderId: string, actor: any) {
   const context = await loadOrderContext(orderId);
-  if (!context.order) throw new Error('Pedido nao encontrado.');
+  if (!context.order) throw new Error('Pedido não encontrado.');
 
   const identifiers = extractPaymentIdentifiers(
     context.order,
@@ -268,7 +268,7 @@ async function reprocessOrder(orderId: string, actor: any) {
         hasSlug: Boolean(identifiers.slug),
       },
     });
-    throw new Error('Nao ha transaction_nsu e slug suficientes para consultar a InfinitePay. Use liberacao manual somente com comprovante externo.');
+    throw new Error('Não há transaction_nsu e slug suficientes para consultar a InfinitePay. Use liberação manual somente com comprovante externo.');
   }
 
   const checked = await infinitePayProvider.checkPayment({
@@ -341,8 +341,8 @@ async function manuallyReleaseOrder(orderId: string, reason: string, actor: any)
   }
 
   const context = await loadOrderContext(orderId);
-  if (!context.order) throw new Error('Pedido nao encontrado.');
-  if (context.items.length === 0) throw new Error('Pedido sem itens; nao ha downloads para liberar.');
+  if (!context.order) throw new Error('Pedido não encontrado.');
+  if (context.items.length === 0) throw new Error('Pedido sem itens; não há downloads para liberar.');
 
   const providerPaymentId = context.order.paymentExternalId || `manual:${orderId}`;
   await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paymentProvider=eq.infinitepay`, {
@@ -393,7 +393,7 @@ async function manuallyReleaseOrder(orderId: string, reason: string, actor: any)
 
 async function fulfillOnly(orderId: string, actor: any) {
   const context = await loadOrderContext(orderId);
-  if (!context.order) throw new Error('Pedido nao encontrado.');
+  if (!context.order) throw new Error('Pedido não encontrado.');
   if (context.order.status !== 'paid') throw new Error('Apenas pedidos pagos podem ter fulfillment reexecutado.');
 
   await fulfillPaidOrder(orderId);
@@ -414,7 +414,7 @@ export default async function handler(req: any, res: any) {
 
   try {
     const adminUser = await getAuthenticatedAdminUser(req);
-    if (!adminUser) return res.status(403).json({ error: 'Acesso admin nao autorizado.' });
+    if (!adminUser) return res.status(403).json({ error: 'Acesso admin não autorizado.' });
 
     if (req.method === 'GET') {
       const issues = await listIssues();
@@ -429,7 +429,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
+    if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
     const body = getJsonBody(req);
     const action = String(body.action || '').trim();
@@ -454,7 +454,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(400).json({ error: 'Acao invalida.' });
   } catch (error: any) {
-    const message = error?.message || 'Erro na recuperacao de pagamento.';
+    const message = error?.message || 'Erro na recuperação de pagamento.';
     const status = /transaction_nsu|slug|comprovante|Apenas pedidos pagos/i.test(message) ? 409 : 500;
     return res.status(status).json({ error: message });
   }

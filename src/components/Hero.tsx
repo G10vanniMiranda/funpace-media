@@ -84,7 +84,7 @@ export function Hero({
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 type="text"
-                placeholder="Buscar fotografo, evento, cidade ou numero de peito"
+                placeholder="Buscar fotógrafo, evento, cidade ou número de peito"
                 value={eventQuery}
                 onChange={(event) => onEventQueryChange(event.target.value)}
                 className="w-full h-14 pl-12 pr-4 bg-gray-100 brutal-border font-mono text-base md:text-lg focus:outline-none focus:ring-0 focus:bg-white transition-colors uppercase placeholder:text-gray-400 placeholder:normal-case placeholder:font-mono"
@@ -104,7 +104,7 @@ export function Hero({
               ) : hasResults ? (
                 <div className="grid gap-4 p-3 sm:p-4">
                   {searchResults.photographers.length > 0 && (
-                    <SearchGroup title="Fotografos">
+                    <SearchGroup title="Fotógrafos">
                       {searchResults.photographers.map(({ photographer, eventCount, photoCount }) => {
                         const displayName = photographer.displayName || photographer.name;
                         const profilePhoto = photographer.profilePhoto || photographer.avatar;

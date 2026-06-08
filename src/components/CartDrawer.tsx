@@ -65,7 +65,7 @@ export function CartDrawer({
         <div className="p-6 border-b-4 border-brutal-black flex items-center justify-between bg-brutal-white">
           <div>
             <h2 className="font-display text-3xl">SEU CARRINHO</h2>
-            <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">Midias digitais</p>
+            <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">Mídias digitais</p>
           </div>
           <button
             onClick={onClose}
@@ -80,8 +80,8 @@ export function CartDrawer({
           {cartItems.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
               <span className="font-display text-6xl mb-4 opacity-20">0</span>
-              <p className="font-mono uppercase tracking-widest text-lg">O carrinho esta vazio</p>
-              <p className="font-mono text-sm mt-2 max-w-50">Encontre fotos e videos para adicionar.</p>
+              <p className="font-mono uppercase tracking-widest text-lg">O carrinho está vazio</p>
+              <p className="font-mono text-sm mt-2 max-w-50">Encontre fotos e vídeos para adicionar.</p>
             </div>
           ) : (
             <div className="flex flex-col gap-4">

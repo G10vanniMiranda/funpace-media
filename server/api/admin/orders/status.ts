@@ -32,7 +32,7 @@ function getSupabaseConfig() {
     process.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
     serviceRoleKey;
 
-  if (!supabaseUrl || !serviceRoleKey) throw new Error('Supabase Service Role nao configurado.');
+  if (!supabaseUrl || !serviceRoleKey) throw new Error('Supabase Service Role não configurado.');
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), serviceRoleKey, anonKey };
 }
 
@@ -86,11 +86,11 @@ function getJsonBody(req: any) {
 export default async function handler(req: any, res: any) {
   setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'PATCH') return res.status(405).json({ error: 'Metodo nao permitido.' });
+  if (req.method !== 'PATCH') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     const adminUser = await getAuthenticatedAdminUser(req);
-    if (!adminUser) return res.status(403).json({ error: 'Acesso admin nao autorizado.' });
+    if (!adminUser) return res.status(403).json({ error: 'Acesso admin não autorizado.' });
 
     const body = getJsonBody(req);
     const orderId = String(body.orderId || '').trim();
@@ -103,7 +103,7 @@ export default async function handler(req: any, res: any) {
     const [existing] = await supabaseRequest<any[]>(
       `/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&select=*`,
     );
-    if (!existing) return res.status(404).json({ error: 'Pedido nao encontrado.' });
+    if (!existing) return res.status(404).json({ error: 'Pedido não encontrado.' });
 
     const manualPaymentId = `manual:${orderId}`;
     const orderPatch: Record<string, any> = { status, updatedAt: new Date().toISOString() };
@@ -122,7 +122,7 @@ export default async function handler(req: any, res: any) {
       },
     );
 
-    if (!updated) return res.status(404).json({ error: 'Pedido nao encontrado.' });
+    if (!updated) return res.status(404).json({ error: 'Pedido não encontrado.' });
 
     if (status === 'paid') {
       await recordPayment({
@@ -169,7 +169,7 @@ export default async function handler(req: any, res: any) {
           status,
           updatedAt: new Date().toISOString(),
         }),
-      }).catch((error) => console.error('Nao foi possivel sincronizar pagamentos do pedido:', error));
+      }).catch((error) => console.error('Não foi possível sincronizar pagamentos do pedido:', error));
 
       if (existing.status === 'paid') {
         const items = await supabaseRequest<any[]>(
@@ -179,13 +179,13 @@ export default async function handler(req: any, res: any) {
         await supabaseRequest(`/rest/v1/download_access?orderId=eq.${encodeURIComponent(orderId)}`, {
           method: 'DELETE',
           headers: { Prefer: 'return=minimal' },
-        }).catch((error) => console.error('Nao foi possivel remover download_access do pedido:', error));
+        }).catch((error) => console.error('Não foi possível remover download_access do pedido:', error));
 
         await supabaseRequest(`/rest/v1/photographer_transactions?orderId=eq.${encodeURIComponent(orderId)}`, {
           method: 'PATCH',
           headers: { Prefer: 'return=minimal' },
           body: JSON.stringify({ status: 'cancelled' }),
-        }).catch((error) => console.error('Nao foi possivel cancelar transacoes do fotografo:', error));
+        }).catch((error) => console.error('Não foi possível cancelar transações do fotógrafo:', error));
 
         for (const item of items) {
           const rows = await supabaseRequest<any[]>(
@@ -215,7 +215,7 @@ export default async function handler(req: any, res: any) {
             actorEmail: adminUser.email,
           },
         }),
-      }).catch((error) => console.error('Nao foi possivel registrar evento de status admin:', error));
+      }).catch((error) => console.error('Não foi possível registrar evento de status admin:', error));
     }
 
     return res.status(200).json({ order: updated });

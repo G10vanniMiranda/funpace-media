@@ -80,7 +80,7 @@ export function PagamentoSucesso() {
 
       if (!order) {
         setStatus('pending');
-        setMessage('Recebemos o retorno do checkout, mas nao identificamos o pedido. A liberacao acontecera quando a InfinitePay confirmar o pagamento.');
+        setMessage('Recebemos o retorno do checkout, mas não identificamos o pedido. A liberação acontecerá quando a InfinitePay confirmar o pagamento.');
         return;
       }
 
@@ -106,17 +106,17 @@ export function PagamentoSucesso() {
 
         if (!response.ok) {
           setStatus(isPendingConfirmation(response.status, payload) ? 'pending' : 'error');
-          setMessage(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
+          setMessage(payload?.error || payload?.message || 'Pagamento ainda não confirmado.');
           return;
         }
 
         setStatus('paid');
-        setMessage('Pagamento confirmado. Seus arquivos digitais ja estao liberados na sua conta.');
+        setMessage('Pagamento confirmado. Seus arquivos digitais já estão liberados na sua conta.');
         navigate(buildCustomerOrdersPath(order, 'paid'), { replace: true });
       } catch (error) {
         console.error('Erro ao confirmar pagamento:', error);
         setStatus('pending');
-        setMessage('Pagamento ainda nao confirmado. A liberacao acontecera quando a InfinitePay confirmar.');
+        setMessage('Pagamento ainda não confirmado. A liberação acontecerá quando a InfinitePay confirmar.');
       }
     }
 

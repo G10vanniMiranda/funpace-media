@@ -16,7 +16,7 @@ function getSupabaseConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY nao configurado.');
+    throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configurado.');
   }
 
   return {
@@ -70,8 +70,8 @@ function cleanProviderErrorMessage(raw: string, fallback: string) {
 }
 
 async function getExternalBucketStorageStats() {
-  if (!externalBucketToken) throw new Error('BUCKET_API_TOKEN nao configurado no servidor.');
-  if (!mediaBucket) throw new Error('MEDIA_BUCKET nao configurado no servidor.');
+  if (!externalBucketToken) throw new Error('BUCKET_API_TOKEN não configurado no servidor.');
+  if (!mediaBucket) throw new Error('MEDIA_BUCKET não configurado no servidor.');
 
   const response = await fetch(`${externalBucketApiBaseUrl}/files?bucket=${encodeURIComponent(mediaBucket)}`, {
     headers: {
@@ -117,7 +117,7 @@ async function getExternalBucketStorageStats() {
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   try {
@@ -132,6 +132,6 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json(await getExternalBucketStorageStats());
   } catch (error: any) {
-    return res.status(500).json({ error: error?.message || 'Nao foi possivel consultar storage.' });
+    return res.status(500).json({ error: error?.message || 'Não foi possível consultar o storage.' });
   }
 }

@@ -128,7 +128,7 @@ async function authorizeDownload(orderId: string, orderItemId: string): Promise<
 
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.url) {
-    throw new Error(payload?.error || payload?.message || `Nao foi possivel autorizar o download. HTTP ${response.status}`);
+    throw new Error(payload?.error || payload?.message || `Não foi possível autorizar o download. HTTP ${response.status}`);
   }
   return {
     downloadUrl: String(payload.downloadUrl || payload.url),
@@ -219,7 +219,7 @@ export function CustomerOrdersDrawer({
         setOrders(customerOrders);
       } catch (err) {
         console.error('Erro ao carregar compras:', err);
-        setError('Nao foi possivel carregar suas compras.');
+        setError('Não foi possível carregar suas compras.');
       } finally {
         setIsLoading(false);
       }
@@ -249,7 +249,7 @@ export function CustomerOrdersDrawer({
       }
     } catch (error) {
       console.error('Erro ao baixar pedido:', error);
-      alert(error instanceof Error ? error.message : 'Não foi possivel baixar o pedido.');
+      alert(error instanceof Error ? error.message : 'Não foi possível baixar o pedido.');
     }
   };
 
@@ -259,7 +259,7 @@ export function CustomerOrdersDrawer({
       triggerBrowserDownload(authorized.downloadUrl);
     } catch (error) {
       console.error('Erro ao baixar arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Não foi possivel baixar o arquivo.');
+      alert(error instanceof Error ? error.message : 'Não foi possível baixar o arquivo.');
     }
   };
 
@@ -269,7 +269,7 @@ export function CustomerOrdersDrawer({
       window.location.assign(authorized.saveUrl);
     } catch (error) {
       console.error('Erro ao abrir arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Não foi possivel abrir o arquivo.');
+      alert(error instanceof Error ? error.message : 'Não foi possível abrir o arquivo.');
     }
   };
 
@@ -542,7 +542,7 @@ export function CustomerOrdersDrawer({
                                 type="button"
                                 onClick={() => hideItem(item.id)}
                                 className="inline-flex items-center gap-2 bg-white text-brutal-black px-2 py-1 brutal-border-thin font-mono text-[9px] uppercase hover:bg-red-50 hover:text-red-600 transition-colors cursor-pointer"
-                                title="Remover da lista (nao apaga do sistema)"
+                                title="Remover da lista (não apaga do sistema)"
                               >
                                 Remover
                                 <Trash2 className="w-3 h-3" />
@@ -683,7 +683,7 @@ export function CustomerOrdersPage({
       setOrders(customerOrders);
     } catch (err) {
       console.error('Erro ao carregar compras:', err);
-      setError('Nao foi possivel carregar suas compras.');
+      setError('Não foi possível carregar suas compras.');
     } finally {
       setIsLoading(false);
     }
@@ -724,7 +724,7 @@ export function CustomerOrdersPage({
       triggerBrowserDownload(authorized.downloadUrl);
     } catch (error) {
       console.error('Erro ao baixar arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o arquivo.');
+      alert(error instanceof Error ? error.message : 'Não foi possível baixar o arquivo.');
     }
   };
 
@@ -734,7 +734,7 @@ export function CustomerOrdersPage({
       window.location.assign(authorized.saveUrl);
     } catch (error) {
       console.error('Erro ao abrir arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel abrir o arquivo.');
+      alert(error instanceof Error ? error.message : 'Não foi possível abrir o arquivo.');
     }
   };
 
@@ -748,7 +748,7 @@ export function CustomerOrdersPage({
       }
     } catch (error) {
       console.error('Erro ao baixar pedido:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel baixar o pedido.');
+      alert(error instanceof Error ? error.message : 'Não foi possível baixar o pedido.');
     }
   };
 
@@ -785,7 +785,7 @@ export function CustomerOrdersPage({
               <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">Painel do cliente</p>
               <h1 className="font-display text-[clamp(2.4rem,7vw,4.75rem)] uppercase leading-[0.9] tracking-normal">Minha area</h1>
               <p className="mt-4 max-w-2xl font-mono text-xs uppercase leading-relaxed text-slate-400">
-                Compras, downloads autorizados, recibos e midias salvas em um so lugar.
+                Compras, downloads autorizados, recibos e mídias salvas em um só lugar.
               </p>
             </div>
 
@@ -825,7 +825,7 @@ export function CustomerOrdersPage({
             </p>
             <p className="mt-2 font-mono text-xs uppercase leading-relaxed">
               {paymentStatus === 'paid'
-                ? 'Seu pedido esta liberado. Baixe os arquivos ou copie o recibo abaixo.'
+                ? 'Seu pedido está liberado. Baixe os arquivos ou copie o recibo abaixo.'
                 : paymentStatus === 'pending'
                   ? 'Estamos aguardando a confirmacao da operadora. Voce pode atualizar o status em alguns instantes.'
                   : 'O pedido continua disponivel para uma nova tentativa de pagamento.'}

@@ -87,7 +87,7 @@ async function authorizeDownload(orderId: string, orderItemId: string): Promise<
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.url) {
-    throw new Error(payload?.error || 'Nao foi possivel liberar o download.');
+    throw new Error(payload?.error || 'Não foi possível liberar o download.');
   }
   return {
     downloadUrl: String(payload.downloadUrl || payload.url),
@@ -142,7 +142,7 @@ export function CustomerAccountPage({
       setOrders(customerOrders);
       setRemoteFavorites(favorites);
     } catch (error: any) {
-      showToast(error?.message || 'Nao foi possivel carregar sua conta.', 'error');
+      showToast(error?.message || 'Não foi possível carregar sua conta.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +183,7 @@ export function CustomerAccountPage({
       await customerAccountService.upsertCustomerProfile({ name: name.trim(), avatarUrl: avatarUrl.trim() || null });
       showToast('Perfil atualizado.', 'success');
     } catch (error: any) {
-      showToast(error?.message || 'Nao foi possivel atualizar o perfil.', 'error');
+      showToast(error?.message || 'Não foi possível atualizar o perfil.', 'error');
     } finally {
       setIsSavingProfile(false);
     }
@@ -199,7 +199,7 @@ export function CustomerAccountPage({
       setPassword('');
       showToast('Senha atualizada.', 'success');
     } catch (error: any) {
-      showToast(error?.message || 'Nao foi possivel atualizar a senha.', 'error');
+      showToast(error?.message || 'Não foi possível atualizar a senha.', 'error');
     }
   };
 
@@ -211,7 +211,7 @@ export function CustomerAccountPage({
       triggerBrowserDownload(authorized.downloadUrl);
       showToast('Download iniciado.', 'success');
     } catch (error: any) {
-      const message = error?.message || 'Download nao autorizado.';
+      const message = error?.message || 'Download não autorizado.';
       setDownloadError({ orderId: order.id, itemId: item.id, message });
       showToast(message, 'error');
     } finally {
@@ -226,7 +226,7 @@ export function CustomerAccountPage({
       const authorized = await authorizeDownload(order.id, item.id);
       window.location.assign(authorized.saveUrl);
     } catch (error: any) {
-      const message = error?.message || 'Nao foi possivel abrir a imagem.';
+      const message = error?.message || 'Não foi possível abrir a imagem.';
       setDownloadError({ orderId: order.id, itemId: item.id, message });
       showToast(message, 'error');
     } finally {
@@ -247,10 +247,10 @@ export function CustomerAccountPage({
         <div className="mx-auto max-w-7xl px-4 py-8 md:px-6 md:py-10">
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent">Area do cliente</p>
+              <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent">Área do cliente</p>
               <h1 className="mt-2 font-display text-5xl uppercase leading-none md:text-7xl">Minha Conta</h1>
               <p className="mt-3 max-w-2xl font-mono text-xs uppercase leading-relaxed text-slate-500">
-                Pedidos, downloads, favoritos e dados da conta em um unico lugar.
+                Pedidos, downloads, favoritos e dados da conta em um único lugar.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -316,7 +316,7 @@ export function CustomerAccountPage({
 
                   <div className="mt-4 space-y-3">
                     {filteredOrders.length === 0 ? (
-                      <EmptyState title="Nenhum pedido encontrado" text="Ajuste filtros ou continue comprando para montar seu historico." />
+                      <EmptyState title="Nenhum pedido encontrado" text="Ajuste os filtros ou continue comprando para montar seu histórico." />
                     ) : filteredOrders.slice(0, 12).map((order) => (
                       <article key={order.id} className={`border bg-slate-50 p-4 ${highlightedOrderId === order.id ? 'border-brutal-accent ring-4 ring-brutal-accent/20' : 'border-slate-200'}`}>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
@@ -375,7 +375,7 @@ export function CustomerAccountPage({
                         ) : (
                           <p className="mt-3 inline-flex items-center gap-2 font-mono text-[10px] uppercase text-slate-500">
                             <Clock3 className="w-3 h-3" />
-                            {order.status === 'pending' ? 'Aguardando confirmacao do pagamento' : 'Pedido sem download liberado'}
+                            {order.status === 'pending' ? 'Aguardando confirmação do pagamento' : 'Pedido sem download liberado'}
                           </p>
                         )}
                       </article>
@@ -411,7 +411,7 @@ export function CustomerAccountPage({
                   </div>
                 </Panel>
 
-                <Panel title="Seguranca" icon={<Lock className="w-5 h-5" />}>
+                <Panel title="Segurança" icon={<Lock className="w-5 h-5" />}>
                   <div className="space-y-3">
                     <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="NOVA SENHA" className="h-11 w-full border border-slate-200 bg-white px-3 font-mono text-xs uppercase outline-none focus:border-brutal-accent" />
                     <button type="button" onClick={savePassword} className="min-h-11 w-full bg-white text-brutal-black border border-slate-200 font-mono text-[10px] uppercase hover:border-brutal-accent inline-flex items-center justify-center gap-2">
@@ -448,7 +448,7 @@ export function CustomerAccountPage({
 
                 <Panel title="Eventos recentes" icon={<Camera className="w-5 h-5" />}>
                   {recentEvents.length === 0 ? (
-                    <EmptyState title="Sem eventos" text="Seu historico de eventos aparece apos as compras." compact />
+                    <EmptyState title="Sem eventos" text="Seu histórico de eventos aparece após as compras." compact />
                   ) : (
                     <div className="space-y-2">
                       {recentEvents.map((eventName) => (

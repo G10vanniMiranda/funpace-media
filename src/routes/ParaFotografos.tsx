@@ -31,7 +31,7 @@ export function ParaFotografos() {
           <div className="grid gap-8 lg:grid-cols-[1fr_420px] lg:items-start">
             <div className="bg-white brutal-border brutal-shadow p-6 md:p-10">
               <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
-                Para fotografos
+                Para fotógrafos
               </p>
               <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
                 Venda suas fotos de corrida
@@ -50,12 +50,12 @@ export function ParaFotografos() {
 
             <aside className="bg-brutal-black text-white brutal-border brutal-shadow p-6 md:p-8">
               <p className="font-mono text-[10px] uppercase tracking-[0.28em] text-gray-400 mb-4">
-                Fluxo do fotografo
+                Fluxo do fotógrafo
               </p>
               <div className="space-y-5">
                 {[
-                  { icon: CheckCircle2, title: 'Cadastro aprovado', text: 'Solicite acesso e aguarde validacao do admin.' },
-                  { icon: Upload, title: 'Envie as midias', text: 'Publique fotos e videos com evento, ponto e preco.' },
+                  { icon: CheckCircle2, title: 'Cadastro aprovado', text: 'Solicite acesso e aguarde a validação do administrador.' },
+                  { icon: Upload, title: 'Envie as mídias', text: 'Publique fotos e vídeos com evento, ponto e preço.' },
                   { icon: Wallet, title: 'Receba pelas vendas', text: 'Acompanhe pedidos pagos e solicite saque Pix.' },
                 ].map((item) => (
                   <div key={item.title} className="flex gap-4 border-t border-white/10 pt-5 first:border-t-0 first:pt-0">

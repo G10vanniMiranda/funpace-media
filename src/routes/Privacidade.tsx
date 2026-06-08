@@ -7,22 +7,22 @@ const sections = [
   {
     icon: Database,
     title: 'Dados coletados',
-    text: 'Podemos coletar dados de conta, contato, compra, pagamento, eventos acessados e informacoes necessarias para liberar downloads e operar o marketplace.',
+    text: 'Podemos coletar dados de conta, contato, compra, pagamento, eventos acessados e informações necessárias para liberar downloads e operar o marketplace.',
   },
   {
     icon: Eye,
-    title: 'Uso das informacoes',
-    text: 'Os dados sao usados para autenticar usuarios, processar pedidos, liberar arquivos, apoiar fotografos, melhorar a experiencia e responder solicitacoes de suporte.',
+    title: 'Uso das informações',
+    text: 'Os dados são usados para autenticar usuários, processar pedidos, liberar arquivos, apoiar fotógrafos, melhorar a experiência e responder solicitações de suporte.',
   },
   {
     icon: Lock,
-    title: 'Protecao e acesso',
-    text: 'A plataforma usa controles de acesso para restringir informacoes sensiveis. Arquivos digitais podem usar URLs assinadas ou regras de permissao conforme a configuracao.',
+    title: 'Proteção e acesso',
+    text: 'A plataforma usa controles de acesso para restringir informações sensíveis. Arquivos digitais podem usar URLs assinadas ou regras de permissão conforme a configuração.',
   },
   {
     icon: Shield,
-    title: 'Privacidade em midias',
-    text: 'Fotos e videos sao publicados por fotografos parceiros. Caso exista uma solicitacao relacionada a imagem, entre em contato informando evento e detalhes da midia.',
+    title: 'Privacidade em mídias',
+    text: 'Fotos e vídeos são publicados por fotógrafos parceiros. Caso exista uma solicitação relacionada à imagem, entre em contato informando evento e detalhes da mídia.',
   },
 ];
 
@@ -56,10 +56,10 @@ export function Privacidade() {
               Legal
             </p>
             <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
-              Politica de privacidade
+              Política de privacidade
             </h1>
             <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
-              Como a Funpace Media trata dados de compradores, fotografos e visitantes durante o uso da plataforma.
+              Como a Funpace Media trata dados de compradores, fotógrafos e visitantes durante o uso da plataforma.
             </p>
           </div>
 

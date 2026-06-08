@@ -342,9 +342,9 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
   const maxPreviewSide = 960;
 
   const response = await fetch(sourceUrl, { mode: 'cors' }).catch((error) => {
-    throw new Error(`Nao foi possivel acessar a midia. Verifique CORS/URL publica. ${error?.message || ''}`.trim());
+    throw new Error(`Não foi possível acessar a mídia. Verifique CORS/URL pública. ${error?.message || ''}`.trim());
   });
-  if (!response.ok) throw new Error('Nao foi possivel baixar a midia para gerar preview.');
+  if (!response.ok) throw new Error('Não foi possível baixar a mídia para gerar preview.');
   const blob = await response.blob();
   const objectUrl = URL.createObjectURL(blob);
 
@@ -370,7 +370,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
           context.drawImage(image, 0, 0, width, height);
           canvas.toBlob((thumbBlob) => {
             if (!thumbBlob) {
-              reject(new Error('Nao foi possivel gerar preview.'));
+              reject(new Error('Não foi possível gerar preview.'));
               return;
             }
             resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' }));
@@ -413,7 +413,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
         context.drawImage(video, 0, 0, canvas.width, canvas.height);
         canvas.toBlob((thumbBlob) => {
           if (!thumbBlob) {
-            finish(() => reject(new Error('Nao foi possivel gerar preview.')));
+            finish(() => reject(new Error('Não foi possível gerar preview.')));
             return;
           }
           finish(() => resolve(new File([thumbBlob], `${product.id}-preview.jpg`, { type: 'image/jpeg' })));
@@ -443,7 +443,7 @@ async function createThumbnailFromMedia(product: Product): Promise<File> {
       video.setAttribute('playsinline', '');
       video.setAttribute('webkit-playsinline', '');
       video.src = objectUrl;
-      video.onerror = () => finish(() => reject(new Error('Video invalido.')));
+      video.onerror = () => finish(() => reject(new Error('Vídeo inválido.')));
       video.onloadedmetadata = seekAndCapture;
       video.onloadeddata = () => {
         if (!seekRequested) seekAndCapture();
@@ -869,7 +869,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     if (pendingPhotographers.length > 0) {
       notifications.push({
         id: 'pending-photographers',
-        title: `${pendingPhotographers.length} fotografo(s) pendente(s)`,
+        title: pendingPhotographers.length === 1 ? '1 fotógrafo pendente' : `${pendingPhotographers.length} fotógrafos pendentes`,
         detail: 'Aguardando aprovacao de cadastro',
         tab: 'photographers',
       });
@@ -961,7 +961,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       ...events.map((eventItem) => ({
         id: eventItem.id,
         name: eventItem.name,
-        location: eventItem.location || 'Local nao informado',
+        location: eventItem.location || 'Local não informado',
         checkpoint: eventItem.checkpoint || 'Ponto padrao',
         date: eventItem.date,
         status: eventItem.status,
@@ -976,7 +976,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         .map((eventItem) => ({
           id: `media-${normalizeEventKey(eventItem.name)}`,
           name: eventItem.name,
-          location: 'Criado pelas midias publicadas',
+          location: 'Criado pelas mídias publicadas',
           checkpoint: eventItem.checkpoint,
           date: eventItem.date,
           status: 'active' as const,
@@ -1065,7 +1065,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         id: `p:${p.id}`,
         kind: 'photographer',
         at,
-        title: `Novo Fotografo cadastrado: ${p.name}`,
+        title: `Novo fotógrafo cadastrado: ${p.name}`,
         meta: `${timeAgo(at)} • Sistema`,
       });
     }
@@ -1099,7 +1099,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         kind: 'order',
         at,
         title: `${label}: Pedido #${o.id.slice(0, 8)}`,
-        meta: `${timeAgo(at)} - ${formatCurrency(Number(o.total || 0))} - ${o.items?.length ?? 0} item(ns)`,
+        meta: `${timeAgo(at)} - ${formatCurrency(Number(o.total || 0))} - ${(o.items?.length ?? 0) === 1 ? '1 item' : `${o.items?.length ?? 0} itens`}`,
       });
     }
 
@@ -1220,7 +1220,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         const payload = await response.json().catch(() => ({}));
 
         if (!response.ok) {
-          throw new Error(payload?.error || 'Nao foi possivel consultar storage.');
+          throw new Error(payload?.error || 'Não foi possível consultar o storage.');
         }
 
         setStorageStats(payload as StorageStats);
@@ -1280,7 +1280,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     try {
       const token = await getCurrentAccessToken();
       if (!token) {
-        throw new Error('Sessao admin expirada. Entre novamente para convidar fotografos.');
+        throw new Error('Sessão admin expirada. Entre novamente para convidar fotógrafos.');
       }
 
       const response = await fetch('/api/admin/photographers/invite', {
@@ -1299,7 +1299,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
       if (!response.ok) {
         const errorPayload = await response.json().catch(() => ({}));
-        throw new Error(errorPayload?.error || errorPayload?.message || 'Erro ao convidar fotografo.');
+        throw new Error(errorPayload?.error || errorPayload?.message || 'Erro ao convidar fotógrafo.');
       }
 
       const payload = await response.json().catch(() => ({}));
@@ -1307,10 +1307,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       onRefresh();
       setShowAddModal(false);
       setNewPhotographer({ name: '', email: '', instagram: '', bio: '' });
-      alert(payload?.message || "Fotografo cadastrado e convite de senha enviado por email.");
+      alert(payload?.message || "Fotógrafo cadastrado e convite de senha enviado por e-mail.");
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : "Erro ao cadastrar fotografo.");
+      alert(error instanceof Error ? error.message : "Erro ao cadastrar fotógrafo.");
     } finally {
       setIsSubmitting(false);
     }
@@ -1390,11 +1390,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       setEvents((current) => [created, ...current]);
       resetEventForm();
       alert(created.id.startsWith('local-event-')
-        ? 'Evento salvo localmente. A tabela public.events ainda precisa ser criada no Supabase para sincronizar entre usuarios.'
+        ? 'Evento salvo localmente. A tabela public.events ainda precisa ser criada no Supabase para sincronizar entre usuários.'
         : 'Evento criado com sucesso.');
     } catch (error) {
       console.error('Erro ao salvar evento:', error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel salvar o evento.');
+      alert(error instanceof Error ? error.message : 'Não foi possível salvar o evento.');
     } finally {
       setIsCreatingEvent(false);
     }
@@ -1419,7 +1419,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
     const cpfDigits = onlyCpfDigits(editForm.cpf);
     if (cpfDigits && !isValidCpf(cpfDigits)) {
-      alert('CPF invalido.');
+      alert('CPF inválido.');
       return;
     }
 
@@ -1427,7 +1427,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     try {
       const instagram = normalizeInstagramInput(editForm.instagram);
       if (instagram && !/^@[a-z0-9._]{1,29}$/.test(instagram)) {
-        alert('Instagram invalido. Use apenas letras, numeros, ponto ou underline.');
+        alert('Instagram inválido. Use apenas letras, números, ponto ou underline.');
         return;
       }
 
@@ -1441,10 +1441,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       } as any);
       await onRefresh();
       setEditingPhotographer(null);
-      alert('Fotografo atualizado com sucesso.');
+      alert('Fotógrafo atualizado com sucesso.');
     } catch (error) {
       console.error(error);
-      alert('Erro ao atualizar fotografo.');
+      alert('Erro ao atualizar fotógrafo.');
     } finally {
       setIsUpdatingPhotographer(false);
     }
@@ -1454,7 +1454,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     const slug = photographer.username || photographer.slug;
     setOpenMenuPhotographerId(null);
     if (!slug) {
-      setPhotographerFeedback({ type: 'error', message: 'Este fotografo ainda nao possui URL publica configurada.' });
+      setPhotographerFeedback({ type: 'error', message: 'Este fotógrafo ainda não possui URL pública configurada.' });
       return;
     }
     window.open(`/${slug}`, '_blank', 'noopener,noreferrer');
@@ -1481,12 +1481,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     try {
       if (type === 'delete') {
         await photographerService.deletePhotographerAdmin(photographer.id);
-        setPhotographerFeedback({ type: 'success', message: 'Fotografo excluido com sucesso.' });
+        setPhotographerFeedback({ type: 'success', message: 'Fotógrafo excluído com sucesso.' });
       } else {
         await photographerService.setPhotographerAdminStatus(photographer.id, type);
         setPhotographerFeedback({
           type: 'success',
-          message: type === 'disable' ? 'Fotografo desativado com sucesso.' : 'Fotografo reativado com sucesso.',
+          message: type === 'disable' ? 'Fotógrafo desativado com sucesso.' : 'Fotógrafo reativado com sucesso.',
         });
       }
       setPhotographerActionDialog(null);
@@ -1495,7 +1495,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       console.error(error);
       setPhotographerFeedback({
         type: 'error',
-        message: error instanceof Error ? error.message : 'Nao foi possivel concluir a operacao.',
+        message: error instanceof Error ? error.message : 'Não foi possível concluir a operação.',
       });
     } finally {
       setActingPhotographerId(null);
@@ -1532,7 +1532,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     const targets = productsMissingThumbnails.slice(0, 25);
     if (targets.length === 0) return;
 
-    const confirmed = window.confirm(`Gerar previews para ${targets.length} produto(s) sem thumbnail?`);
+    const confirmed = window.confirm(`Gerar previews para ${targets.length === 1 ? '1 produto' : `${targets.length} produtos`} sem thumbnail?`);
     if (!confirmed) return;
 
     setIsBackfillingThumbnails(true);
@@ -1557,7 +1557,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
       await onRefresh();
       alert(failed > 0
-        ? `Previews gerados: ${completed}. Falhas: ${failed}. Se falhar para midias externas, confira se a URL publica permite CORS.`
+        ? `Previews gerados: ${completed}. Falhas: ${failed}. Se falhar para mídias externas, confira se a URL pública permite CORS.`
         : `Previews gerados com sucesso: ${completed}.`);
     } finally {
       setIsBackfillingThumbnails(false);
@@ -1571,7 +1571,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
 
     if (settingsForm.withdrawalFee < 0) {
-      alert('A taxa de saque nao pode ser negativa.');
+      alert('A taxa de saque não pode ser negativa.');
       return;
     }
 
@@ -1615,7 +1615,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       await onRefresh();
     } catch (error) {
       console.error(error);
-      alert('Nao foi possivel atualizar a midia.');
+      alert('Não foi possível atualizar a mídia.');
     } finally {
       setUpdatingProductId(null);
     }
@@ -1639,7 +1639,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     } catch (error) {
       console.error(error);
       const message = error instanceof Error ? error.message : String(error || '');
-      alert(message || 'Nao foi possivel atualizar o pedido.');
+      alert(message || 'Não foi possível atualizar o pedido.');
     } finally {
       setUpdatingOrderId(null);
     }
@@ -1653,7 +1653,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       setPaymentRecoverySummary(result.summary);
     } catch (error) {
       console.error(error);
-      alert('Nao foi possivel auditar pagamentos.');
+      alert('Não foi possível auditar pagamentos.');
     } finally {
       setIsAuditingPayments(false);
     }
@@ -1677,7 +1677,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       await onRefresh();
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel recuperar o pagamento.');
+      alert(error instanceof Error ? error.message : 'Não foi possível recuperar o pagamento.');
     } finally {
       setRecoveringPaymentOrderId(null);
     }
@@ -1698,7 +1698,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       return;
     }
     if (couponForm.type === 'percent' && value > 100) {
-      alert('Cupom percentual nao pode passar de 100%.');
+      alert('Cupom percentual não pode passar de 100%.');
       return;
     }
 
@@ -1723,7 +1723,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       await onRefresh();
     } catch (error) {
       console.error(error);
-      alert(error instanceof Error ? error.message : 'Nao foi possivel criar o cupom.');
+      alert(error instanceof Error ? error.message : 'Não foi possível criar o cupom.');
     } finally {
       setIsCreatingCoupon(false);
     }
@@ -1742,7 +1742,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       await onRefresh();
     } catch (error) {
       console.error(error);
-      alert('Nao foi possivel atualizar o cupom.');
+      alert('Não foi possível atualizar o cupom.');
     } finally {
       setUpdatingCouponId(null);
     }
@@ -1759,15 +1759,15 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       eventReports.map((report) => ({
         label: report.event,
         value: report.revenue,
-        meta: `${report.ordersCount} pedido(s) - ${report.items} item(ns)`,
+        meta: `${report.ordersCount === 1 ? '1 pedido' : `${report.ordersCount} pedidos`} - ${report.items === 1 ? '1 item' : `${report.items} itens`}`,
       })),
     );
     const photographerChart = buildReportBarChart(
-      'Receita por fotografo',
+      'Receita por fotógrafo',
       photographerReports.map((report) => ({
         label: report.name,
         value: report.revenue,
-        meta: `${report.ordersCount} pedido(s) - ${report.items} item(ns)`,
+        meta: `${report.ordersCount === 1 ? '1 pedido' : `${report.ordersCount} pedidos`} - ${report.items === 1 ? '1 item' : `${report.items} itens`}`,
       })),
     );
 
@@ -1824,7 +1824,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         <div class="cover">
           <div class="brand">FunPace Media</div>
           <h1>Relatorio Administrativo</h1>
-          <p class="muted">Periodo analisado: ${htmlEscape(periodLabel)}<br/>Gerado em ${htmlEscape(generatedAt)}</p>
+          <p class="muted">Período analisado: ${htmlEscape(periodLabel)}<br/>Gerado em ${htmlEscape(generatedAt)}</p>
         </div>
 
         <div class="grid">
@@ -1839,9 +1839,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           <p>
             O periodo registrou <strong>${htmlEscape(formatReportNumber(periodMetrics.paidOrders))}</strong> pedido(s) pago(s),
             <strong>${htmlEscape(formatReportNumber(periodMetrics.pendingOrders))}</strong> pendente(s) e
-            <strong>${htmlEscape(formatReportNumber(periodMetrics.totalProducts))}</strong> produto(s) publicados/criados no intervalo.
-            ${topEvent ? `O evento com maior receita foi <strong>${htmlEscape(topEvent.event)}</strong>, com ${htmlEscape(formatCurrency(topEvent.revenue))}.` : 'Nao houve receita por evento no periodo.'}
-            ${topPhotographer ? `O fotografo com maior receita foi <strong>${htmlEscape(topPhotographer.name)}</strong>, com ${htmlEscape(formatCurrency(topPhotographer.revenue))}.` : ''}
+            <strong>${htmlEscape(formatReportNumber(periodMetrics.totalProducts))}</strong> produto(s) publicado(s)/criado(s) no intervalo.
+            ${topEvent ? `O evento com maior receita foi <strong>${htmlEscape(topEvent.event)}</strong>, com ${htmlEscape(formatCurrency(topEvent.revenue))}.` : 'Não houve receita por evento no período.'}
+            ${topPhotographer ? `O fotógrafo com maior receita foi <strong>${htmlEscape(topPhotographer.name)}</strong>, com ${htmlEscape(formatCurrency(topPhotographer.revenue))}.` : ''}
           </p>
         </div>
 
@@ -1850,7 +1850,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
         <div class="section">
           <h2>Pedidos do periodo</h2>
-          <p class="muted">Amostra com ate 60 registros mais recentes do periodo.</p>
+          <p class="muted">Amostra com até 60 registros mais recentes do período.</p>
           <table>
             <thead><tr><th>ID</th><th>Status</th><th>Comprador</th><th>Total</th><th>Data</th><th>Itens</th></tr></thead>
             <tbody>${orderRows || '<tr><td colspan="6">Sem pedidos no periodo.</td></tr>'}</tbody>
@@ -1984,7 +1984,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             <h2 className="font-sans font-black text-3xl md:text-4xl tracking-normal normal-case mb-2">
               {activeTab === 'overview' && 'Painel Administrativo'}
               {activeTab === 'users' && 'Gestão de Usuários'}
-              {activeTab === 'photographers' && 'Gestao de Fotografos'}
+              {activeTab === 'photographers' && 'Gestão de Fotógrafos'}
               {activeTab === 'events' && 'Eventos'}
               {activeTab === 'media' && 'Mídias Globais'}
               {activeTab === 'orders' && 'Pedidos'}
@@ -2028,7 +2028,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <div className="p-4 border-b border-white/10">
                       <p className="font-sans font-black text-sm uppercase text-white">Notificacoes</p>
                       <p className="font-mono text-[10px] uppercase text-gray-500">
-                        {adminNotifications.length} item(ns) requerem atencao
+                        {adminNotifications.length === 1 ? '1 item requer atenção' : `${adminNotifications.length} itens requerem atenção`}
                       </p>
                     </div>
                     <div className="max-h-80 overflow-y-auto">
@@ -2201,7 +2201,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
 
                 <div className="bg-[#0d131c] p-6 border border-white/10 space-y-6">
-                  <h3 className="font-sans font-black text-base uppercase">Manutencao de Midias</h3>
+                  <h3 className="font-sans font-black text-base uppercase">Manutenção de mídias</h3>
                   <div className="bg-[#080d14] border border-dashed border-white/20 p-5 flex flex-col md:items-center justify-between gap-4 text-center">
                     <div>
                       <p className="font-sans font-bold text-lg uppercase">
@@ -2209,8 +2209,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       </p>
                       <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">
                         {productsMissingThumbnails.length > 0
-                          ? `${productsMissingThumbnails.length} produto(s) ativo(s) sem thumbnail dedicado.`
-                          : 'Todos os produtos ativos ja possuem thumbnail ou nao precisam de reparo.'}
+                          ? `${productsMissingThumbnails.length === 1 ? '1 produto ativo' : `${productsMissingThumbnails.length} produtos ativos`} sem thumbnail dedicado.`
+                          : 'Todos os produtos ativos já possuem thumbnail ou não precisam de reparo.'}
                       </p>
                       {thumbnailBackfillProgress && (
                         <p className="font-mono text-[10px] uppercase text-brutal-accent mt-2">
@@ -2227,7 +2227,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </button>
                   </div>
                   <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
-                    Repara produtos antigos sem preview. Baixa a midia, gera thumbnail e salva no bucket. Processa ate 25 itens por vez.
+                    Repara produtos antigos sem preview. Baixa a mídia, gera thumbnail e salva no bucket. Processa até 25 itens por vez.
                   </p>
                 </div>
 
@@ -2283,8 +2283,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   }))}
                 />
                 <ReportCard
-                  title="Receita por Fotografo"
-                  emptyLabel="Nenhuma venda paga por fotografo."
+                  title="Receita por Fotógrafo"
+                  emptyLabel="Nenhuma venda paga por fotógrafo."
                   rows={photographerReports.map((report) => ({
                     id: report.photographerId,
                     title: report.name,
@@ -2330,7 +2330,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </div>
                   <div className="relative w-full md:w-80">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" />
-                    <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Buscar usuario" className="w-full h-11 pl-10 pr-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent" />
+                    <input value={userSearch} onChange={(event) => setUserSearch(event.target.value)} placeholder="Buscar usuário" className="w-full h-11 pl-10 pr-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent" />
                   </div>
                 </div>
                 <div className="overflow-x-auto">
@@ -2418,7 +2418,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     className="h-12 px-5 bg-brutal-accent text-white border border-brutal-accent flex items-center justify-center gap-2 font-sans text-xs font-black uppercase tracking-wide hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer"
                   >
                     <Plus className="w-5 h-5" />
-                    Novo Fotografo
+                    Novo Fotógrafo
                   </button>
                 </div>
               </div>
@@ -2446,7 +2446,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <div className="bg-[#0d131c] border border-white/10 overflow-visible relative">
                 <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-sans font-black text-base uppercase text-white">Fotografos</h3>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Fotógrafos</h3>
                     <p className="font-mono text-[10px] uppercase text-gray-500">{filteredPhotographers.length} resultado(s)</p>
                   </div>
                   {(photographerSearch || photographerStatusFilter !== 'all') && (
@@ -2514,7 +2514,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                 <p className="font-sans font-black text-sm uppercase text-white truncate max-w-70">{p.name || 'Sem nome'}</p>
                                 <p className="text-[10px] text-gray-400 lowercase truncate max-w-70">{p.email}</p>
                                 <p className={`text-[10px] lowercase truncate max-w-70 ${p.instagram ? 'text-brutal-accent' : 'text-gray-600'}`}>
-                                  {p.instagram || 'Instagram nao informado'}
+                                  {p.instagram || 'Instagram não informado'}
                                 </p>
                                 <p className="text-[9px] text-gray-600 uppercase truncate max-w-70">ID {p.id}</p>
                               </div>
@@ -2550,7 +2550,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                   type="button"
                                   onClick={() => setOpenMenuPhotographerId((current) => (current === p.id ? null : p.id))}
                                   className="p-2 border border-white/10 text-gray-300 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
-                                  aria-label="Opcoes do fotografo"
+                                  aria-label="Opções do fotógrafo"
                                 >
                                   <MoreVertical className="w-5 h-5" />
                                 </button>
@@ -2596,7 +2596,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                           className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-green-300 hover:bg-green-500/10 disabled:text-gray-500 cursor-pointer flex items-center gap-3"
                                         >
                                           <RefreshCw className="w-4 h-4" />
-                                          Reativar Fotografo
+                                          Reativar Fotógrafo
                                         </button>
                                       ) : (
                                         <button
@@ -2606,7 +2606,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                           className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-yellow-200 hover:bg-yellow-500/10 disabled:text-gray-500 cursor-pointer flex items-center gap-3"
                                         >
                                           <PauseCircle className="w-4 h-4" />
-                                          Desativar Fotografo
+                                          Desativar Fotógrafo
                                         </button>
                                       )}
                                       <button
@@ -2616,7 +2616,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                         className="w-full px-4 py-3 text-left font-mono text-[10px] uppercase tracking-widest text-red-300 hover:bg-red-500/10 disabled:text-gray-500 cursor-pointer flex items-center gap-3"
                                       >
                                         <Trash2 className="w-4 h-4" />
-                                        Excluir Fotografo
+                                        Excluir Fotógrafo
                                       </button>
                                     </motion.div>
                                   )}
@@ -2631,7 +2631,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         <tr>
                           <td colSpan={6} className="px-5 py-14 text-center">
                             <Users className="w-10 h-10 text-gray-600 mx-auto mb-4" />
-                            <p className="font-sans font-black text-sm uppercase text-white">Nenhum fotografo encontrado</p>
+                            <p className="font-sans font-black text-sm uppercase text-white">Nenhum fotógrafo encontrado</p>
                             <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Ajuste a busca ou limpe os filtros.</p>
                           </td>
                         </tr>
@@ -2671,7 +2671,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <div>
                     <h3 className="font-sans font-black text-base uppercase text-white">Eventos cadastrados</h3>
                     <p className="font-mono text-[10px] uppercase text-gray-500">
-                      {adminEventRows.length} evento(s) - {events.length} cadastrado(s), {mediaEvents.length} vindo(s) das midias
+                      {adminEventRows.length === 1 ? '1 evento' : `${adminEventRows.length} eventos`} - {events.length === 1 ? '1 cadastrado' : `${events.length} cadastrados`}, {mediaEvents.length === 1 ? '1 vindo das mídias' : `${mediaEvents.length} vindos das mídias`}
                     </p>
                   </div>
                   <button
@@ -2692,7 +2692,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       <div className="min-w-0">
                         <p className="font-sans font-black text-lg uppercase text-white truncate">{eventItem.name}</p>
                         <p className="font-mono text-[10px] uppercase text-gray-500 truncate">
-                          {eventItem.location || 'Local nao informado'} - {eventItem.checkpoint || 'Ponto padrao'}
+                          {eventItem.location || 'Local não informado'} - {eventItem.checkpoint || 'Ponto padrão'}
                         </p>
                         {eventItem.mediaLabel && (
                           <p className="font-mono text-[10px] uppercase text-gray-600 mt-1">{eventItem.mediaLabel}</p>
@@ -2735,7 +2735,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="p-5 border-b border-white/10 flex flex-col xl:flex-row gap-4 xl:items-center xl:justify-between">
                   <div><h3 className="font-sans font-black text-base uppercase">Fotos e videos</h3><p className="font-mono text-[10px] uppercase text-gray-500">{filteredMedia.length} resultado(s)</p></div>
                   <div className="flex flex-col md:flex-row gap-3">
-                    <input value={mediaSearch} onChange={(event) => setMediaSearch(event.target.value)} placeholder="Buscar por evento, fotografo, peito" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-80" />
+                    <input value={mediaSearch} onChange={(event) => setMediaSearch(event.target.value)} placeholder="Buscar por evento, fotógrafo ou peito" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-80" />
                     <select value={mediaStatusFilter} onChange={(event) => setMediaStatusFilter(event.target.value as typeof mediaStatusFilter)} className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent">
                       <option value="all">Todos status</option><option value="published">Publicado</option><option value="hidden">Oculto</option><option value="draft">Rascunho</option><option value="processing">Processando</option><option value="removed">Removido</option>
                     </select>
@@ -2771,13 +2771,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <div className="flex flex-col md:flex-row gap-3">
                     <input value={orderSearch} onChange={(event) => setOrderSearch(event.target.value)} placeholder="Buscar pedido, cliente, evento" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-80" />
                     <select value={orderStatusFilter} onChange={(event) => setOrderStatusFilter(event.target.value as typeof orderStatusFilter)} className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent">
-                      <option value="all">Todos status</option><option value="pending">Pending</option><option value="paid">Paid</option><option value="refused">Refused</option><option value="canceled">Canceled</option><option value="refunded">Refunded</option>
+                      <option value="all">Todos os status</option><option value="pending">Pendente</option><option value="paid">Pago</option><option value="refused">Recusado</option><option value="canceled">Cancelado</option><option value="refunded">Reembolsado</option>
                     </select>
                   </div>
                 </div>
                 <div className="overflow-x-auto">
                   <table className="w-full text-left">
-                    <thead className="bg-[#05080d] text-gray-500 font-mono text-[10px] uppercase"><tr><th className="px-5 py-3">Pedido</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Valor</th><th className="px-5 py-3">Metodo</th><th className="px-5 py-3">Evento/Fotografo</th><th className="px-5 py-3">Ação</th></tr></thead>
+                    <thead className="bg-[#05080d] text-gray-500 font-mono text-[10px] uppercase"><tr><th className="px-5 py-3">Pedido</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Valor</th><th className="px-5 py-3">Método</th><th className="px-5 py-3">Evento/Fotógrafo</th><th className="px-5 py-3">Ação</th></tr></thead>
                     <tbody className="divide-y divide-white/10">
                       {filteredOrders.slice(0, 160).map((order) => {
                         const firstItem = order.items?.[0];
@@ -2789,7 +2789,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             <td className="px-5 py-4 font-sans font-black text-green-400">{formatCurrency(Number(order.total || 0))}</td>
                             <td className="px-5 py-4 font-mono text-xs uppercase">{order.paymentMethod || 'checkout'}</td>
                             <td className="px-5 py-4 font-mono text-[10px] text-gray-400">{firstItem?.event || 'N/I'}<br />{firstItem ? photographerById.get(firstItem.vendedorId)?.name ?? firstItem.vendedorId : 'N/I'}</td>
-                            <td className="px-5 py-4"><select disabled={updatingOrderId === order.id} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pending</option><option value="paid">Paid</option><option value="refused">Refused</option><option value="canceled">Canceled</option><option value="refunded">Refunded</option></select></td>
+                            <td className="px-5 py-4"><select disabled={updatingOrderId === order.id} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pendente</option><option value="paid">Pago</option><option value="refused">Recusado</option><option value="canceled">Cancelado</option><option value="refunded">Reembolsado</option></select></td>
                           </tr>
                         );
                       })}
@@ -2877,7 +2877,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               </div>
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                 <div className="bg-[#0d131c] border border-white/10">
-                  <div className="p-5 border-b border-white/10 flex items-center justify-between"><h3 className="font-sans font-black text-base uppercase">Historico de pagamentos</h3><select value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value as typeof paymentStatusFilter)} className="h-10 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="all">Todos</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="refused">Refused</option><option value="failed">Failed</option></select></div>
+                  <div className="p-5 border-b border-white/10 flex items-center justify-between"><h3 className="font-sans font-black text-base uppercase">Histórico de pagamentos</h3><select value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value as typeof paymentStatusFilter)} className="h-10 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="all">Todos</option><option value="paid">Pago</option><option value="pending">Pendente</option><option value="refused">Recusado</option><option value="failed">Falhou</option></select></div>
                   <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{filteredPayments.slice(0, 120).map((payment) => <div key={payment.id} className="p-4 flex justify-between gap-4"><div><p className="font-sans font-black text-sm uppercase">{payment.provider} - {payment.method}</p><p className="font-mono text-[10px] text-gray-500">Pedido #{payment.orderId.slice(0, 8)} - {payment.providerPaymentId}</p></div><span className={`h-fit px-2 py-1 border font-mono text-[10px] uppercase ${orderStatusClasses[payment.status]}`}>{payment.status}</span></div>)}</div>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10">
@@ -2899,13 +2899,13 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saques pendentes</p>
                   <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(pendingWithdrawalTotal)}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{pendingWithdrawals.length} solicitacao(oes)</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">{pendingWithdrawals.length === 1 ? '1 solicitação' : `${pendingWithdrawals.length} solicitações`}</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Receita paga</p>
                   <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(paidRevenueTotal)}</p>
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">
-                    {paidSaleItems.length} item(ns) pago(s) em {paidOrders.length} pedido(s)
+                    {paidSaleItems.length === 1 ? '1 item pago' : `${paidSaleItems.length} itens pagos`} em {paidOrders.length === 1 ? '1 pedido' : `${paidOrders.length} pedidos`}
                   </p>
                   {paidRevenueMismatch && (
                     <p className="font-mono text-[9px] uppercase text-yellow-300 mt-2">
@@ -2925,7 +2925,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <div>
                     <h3 className="font-sans font-black text-base uppercase text-white">Fila de Saques Pix</h3>
                     <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
-                      Transferencias Pix solicitadas pelos fotografos
+                      Transferências Pix solicitadas pelos fotógrafos
                     </p>
                   </div>
                   <div className="bg-[#080d14] text-white border border-white/10 px-4 py-3">
@@ -2942,7 +2942,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                         <div key={withdrawal.id} className="p-5 space-y-4">
                           <div className="flex items-start justify-between gap-4">
                             <div className="min-w-0">
-                              <p className="font-sans font-black text-lg uppercase text-white truncate">{photographer?.name ?? 'Fotografo'}</p>
+                              <p className="font-sans font-black text-lg uppercase text-white truncate">{photographer?.name ?? 'Fotógrafo'}</p>
                               <p className="font-mono text-[10px] text-gray-500 truncate">{photographer?.email ?? withdrawal.photographerId}</p>
                               <p className="font-mono text-[10px] text-gray-500 uppercase mt-2">
                                 Solicitado em {new Date(withdrawal.createdAt).toLocaleString('pt-BR')}
@@ -2956,7 +2956,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
                           <div className="bg-[#080d14] border border-white/10 p-3">
                             <p className="font-mono text-[9px] uppercase text-gray-500">Chave Pix</p>
-                            <p className="font-mono text-xs text-gray-200 break-all">{withdrawal.pixKey || 'Chave nao informada'}</p>
+                            <p className="font-mono text-xs text-gray-200 break-all">{withdrawal.pixKey || 'Chave não informada'}</p>
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -3038,7 +3038,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                   )}
                                 </div>
                                 <p className="text-gray-500 text-[10px] mt-1">
-                                  {order.paymentProvider} - {new Date(order.createdAt).toLocaleString('pt-BR')} - {itemCount} item(ns)
+                                  {order.paymentProvider} - {new Date(order.createdAt).toLocaleString('pt-BR')} - {itemCount === 1 ? '1 item' : `${itemCount} itens`}
                                 </p>
                               </div>
                             </div>
@@ -3068,7 +3068,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="bg-[#05080d] text-white border border-white/10 p-5">
                   <div className="flex items-center justify-between gap-4 mb-5">
                     <div>
-                      <h3 className="font-sans font-black text-base uppercase text-white">Historico de Saques</h3>
+                      <h3 className="font-sans font-black text-base uppercase text-white">Histórico de saques</h3>
                       <p className="font-mono text-[10px] uppercase text-gray-500">Pagos e recusados recentemente</p>
                     </div>
                     <DollarSign className="w-5 h-5 text-gray-500" />
@@ -3079,7 +3079,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       return (
                         <div key={withdrawal.id} className="py-4 first:pt-0 last:pb-0 flex justify-between items-start gap-4 text-xs font-mono">
                           <div className="min-w-0">
-                            <p className="uppercase text-white truncate">{photographer?.name ?? 'Fotografo'}</p>
+                            <p className="uppercase text-white truncate">{photographer?.name ?? 'Fotógrafo'}</p>
                             <p className="text-gray-500 text-[10px]">{withdrawal.status} - {new Date(withdrawal.createdAt).toLocaleDateString('pt-BR')}</p>
                           </div>
                           <p className={withdrawal.status === 'paid' ? 'text-green-400' : 'text-red-300'}>
@@ -3144,12 +3144,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Taxa plataforma</p>
                   <p className="font-sans font-black text-3xl text-white">{settingsForm.platformFeePercent}%</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Comissao sobre vendas</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Comissão sobre vendas</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Taxa saque</p>
                   <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(settingsForm.withdrawalFee)}</p>
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Cobrada por solicitacao Pix</p>
+                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Cobrada por solicitação Pix</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Seguranca</p>
@@ -3259,7 +3259,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       </div>
                       <div className="min-w-0">
                         <p className="font-sans font-black text-sm uppercase text-white">Auto-block suspicious</p>
-                        <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Bloqueio automatico apos 3 falhas</p>
+                        <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Bloqueio automático após 3 falhas</p>
                       </div>
                     </div>
                     <button
@@ -3330,7 +3330,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       {editingEventId ? 'Editar Evento' : 'Criar Evento'}
                     </h3>
                     <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
-                      Dados exibidos no marketplace e nos fluxos de midia
+                      Dados exibidos no marketplace e nos fluxos de mídia
                     </p>
                   </div>
                 </div>
@@ -3480,7 +3480,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="bg-[#080d14] border border-white/10 p-4 flex items-start gap-3">
                   <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
                   <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
-                    Eventos cadastrados aqui podem ser reutilizados pelos fotografos e aparecem organizados nas areas de busca e gestao de midia.
+                    Eventos cadastrados aqui podem ser reutilizados pelos fotógrafos e aparecem organizados nas áreas de busca e gestão de mídia.
                   </p>
                 </div>
 
@@ -3497,7 +3497,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     type="submit"
                     className="h-13 sm:h-14 flex-1 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
-                    {isCreatingEvent ? 'Salvando...' : editingEventId ? 'Salvar alteracoes' : 'Criar evento'}
+                    {isCreatingEvent ? 'Salvando...' : editingEventId ? 'Salvar alterações' : 'Criar evento'}
                   </button>
                 </div>
               </form>
@@ -3540,11 +3540,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </div>
                   <div>
                     <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-gray-500 mb-2">
-                      {photographerActionDialog.type === 'delete' ? 'Atencao' : photographerActionDialog.type === 'disable' ? 'Desativar fotografo' : 'Reativar fotografo'}
+                      {photographerActionDialog.type === 'delete' ? 'Atenção' : photographerActionDialog.type === 'disable' ? 'Desativar fotógrafo' : 'Reativar fotógrafo'}
                     </p>
                     <h3 className="font-sans font-black text-2xl md:text-3xl uppercase leading-tight">
                       {photographerActionDialog.type === 'delete'
-                        ? 'Excluir fotografo'
+                        ? 'Excluir fotógrafo'
                         : photographerActionDialog.type === 'disable'
                           ? 'Bloquear acesso'
                           : 'Restaurar acesso'}
@@ -3553,30 +3553,30 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 </div>
 
                 <div className="bg-[#080d14] border border-white/10 p-4">
-                  <p className="font-sans font-black text-base uppercase text-white">{photographerActionDialog.photographer.name || 'Fotografo sem nome'}</p>
+                  <p className="font-sans font-black text-base uppercase text-white">{photographerActionDialog.photographer.name || 'Fotógrafo sem nome'}</p>
                   <p className="font-mono text-[10px] text-gray-500 lowercase mt-1">{photographerActionDialog.photographer.email}</p>
                 </div>
 
                 {photographerActionDialog.type === 'delete' ? (
                   <div className="space-y-3 text-gray-300">
-                    <p className="font-sans text-sm leading-relaxed">Voce realmente deseja excluir este fotografo?</p>
+                    <p className="font-sans text-sm leading-relaxed">Você realmente deseja excluir este fotógrafo?</p>
                     <div className="border border-red-500/25 bg-red-500/10 p-4">
                       <p className="font-mono text-[10px] uppercase tracking-widest text-red-200 mb-3">Esta acao podera remover:</p>
                       <ul className="space-y-2 font-mono text-[10px] uppercase text-red-100/80">
                         <li>Perfil publico</li>
                         <li>Eventos vinculados</li>
                         <li>Fotos vinculadas</li>
-                        <li>Historico da conta</li>
+                        <li>Histórico da conta</li>
                       </ul>
                     </div>
                   </div>
                 ) : photographerActionDialog.type === 'disable' ? (
                   <p className="font-sans text-sm leading-relaxed text-gray-300">
-                    O fotografo perdera acesso a plataforma ate ser reativado por um administrador.
+                    O fotógrafo perderá acesso à plataforma até ser reativado por um administrador.
                   </p>
                 ) : (
                   <p className="font-sans text-sm leading-relaxed text-gray-300">
-                    O fotografo voltara a ter acesso ao painel e podera publicar eventos e midias novamente.
+                    O fotógrafo voltará a ter acesso ao painel e poderá publicar eventos e mídias novamente.
                   </p>
                 )}
 
@@ -3646,8 +3646,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <Users className="w-3.5 h-3.5" />
                   Credenciamento
                 </div>
-                <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Novo Fotografo</h3>
-                <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">Cadastro operacional para equipe de midia</p>
+                <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Novo Fotógrafo</h3>
+                <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">Cadastro operacional para equipe de mídia</p>
               </div>
 
               <form onSubmit={handleAddPhotographer} className="p-7 md:p-9 space-y-6">
@@ -3705,7 +3705,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 <div className="bg-[#080d14] border border-white/10 p-4 flex items-start gap-3">
                   <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
                   <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-400">
-                    O sistema cria o registro e envia um convite por email para o fotografo definir a senha de acesso ao painel.
+                    O sistema cria o registro e envia um convite por e-mail para o fotógrafo definir a senha de acesso ao painel.
                   </p>
                 </div>
 
@@ -3762,7 +3762,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </div>
                   <div className="min-w-0">
                     <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-2">Perfil operacional</p>
-                    <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal">Editar Fotografo</h3>
+                    <h3 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal">Editar Fotógrafo</h3>
                     <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest truncate mt-2">{editingPhotographer.email}</p>
                     <p className="font-mono text-[9px] text-gray-600 uppercase truncate mt-1">ID {editingPhotographer.id}</p>
                   </div>
@@ -3779,7 +3779,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       value={editForm.name}
                       onChange={(e) => setEditForm((current) => ({ ...current, name: e.target.value }))}
                       className="w-full h-14 px-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors"
-                      placeholder="Nome do fotografo"
+                      placeholder="Nome do fotógrafo"
                     />
                   </div>
 
@@ -3833,7 +3833,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       value={editForm.bio}
                       onChange={(e) => setEditForm((current) => ({ ...current, bio: e.target.value }))}
                       className="w-full h-28 p-4 bg-[#080d14] border border-white/15 text-white placeholder:text-gray-600 font-mono text-sm outline-none focus:border-brutal-accent transition-colors resize-none"
-                      placeholder="Resumo do fotografo, especialidade ou observacoes internas."
+                      placeholder="Resumo do fotógrafo, especialidade ou observações internas."
                     />
                   </div>
                 </div>
@@ -3851,7 +3851,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     type="submit"
                     className="h-13 sm:h-14 flex-1 bg-brutal-accent text-white border border-brutal-accent font-sans font-black text-sm uppercase tracking-widest hover:bg-white hover:text-brutal-accent transition-colors cursor-pointer disabled:bg-gray-700 disabled:border-gray-700 disabled:text-gray-400 disabled:cursor-not-allowed"
                   >
-                    {isUpdatingPhotographer ? 'Salvando...' : 'Salvar alteracoes'}
+                    {isUpdatingPhotographer ? 'Salvando...' : 'Salvar alterações'}
                   </button>
                 </div>
               </form>

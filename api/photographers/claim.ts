@@ -29,7 +29,7 @@ export default async function handler(req: any, res: any) {
   setCors(req, res);
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   let step = 'inicio';
@@ -50,7 +50,7 @@ export default async function handler(req: any, res: any) {
 
     const normalizedEmail = email.trim().toLowerCase();
     if (!authUser?.id || authUser.id !== userId.trim() || (authUser.email && authUser.email !== normalizedEmail)) {
-      return res.status(403).json({ error: 'Usuario autenticado nao corresponde ao cadastro reivindicado.' });
+      return res.status(403).json({ error: 'Usuário autenticado não corresponde ao cadastro reivindicado.' });
     }
 
     step = 'buscar_por_id_auth';
@@ -91,7 +91,7 @@ export default async function handler(req: any, res: any) {
 
     if (!updated || updated.id !== userId.trim()) {
       return res.status(409).json({
-        error: 'Cadastro aprovado, mas nao foi possivel sincronizar o id do fotografo.',
+        error: 'Cadastro aprovado, mas não foi possível sincronizar o ID do fotógrafo.',
         source: 'photographers-claim',
         step,
       });
@@ -105,7 +105,7 @@ export default async function handler(req: any, res: any) {
 
     if (!confirmed) {
       return res.status(409).json({
-        error: 'Sincronizacao executada, mas o cadastro ainda nao foi encontrado pelo id do usuario.',
+        error: 'Sincronização executada, mas o cadastro ainda não foi encontrado pelo ID do usuário.',
         source: 'photographers-claim',
         step,
       });
@@ -119,7 +119,7 @@ export default async function handler(req: any, res: any) {
     });
   } catch (error: any) {
     return res.status(500).json({
-      error: error?.message || 'Erro ao claim de fotografo pendente.',
+      error: error?.message || 'Erro ao reivindicar cadastro de fotógrafo pendente.',
       source: 'photographers-claim',
       step,
     });

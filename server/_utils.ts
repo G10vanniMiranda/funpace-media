@@ -61,7 +61,7 @@ export function getSupabaseApiConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase Service Role nao configurado nas variaveis de ambiente da Vercel.');
+    throw new Error('Supabase Service Role não configurado nas variáveis de ambiente da Vercel.');
   }
 
   return {

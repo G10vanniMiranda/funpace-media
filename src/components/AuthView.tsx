@@ -31,7 +31,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
     const normalizedEmail = normalizeAuthEmail(email);
 
     if (!isValidAuthEmail(normalizedEmail)) {
-      nextErrors.email = 'Digite um e-mail valido, como nome@gmail.com.';
+      nextErrors.email = 'Digite um e-mail válido, como nome@gmail.com.';
     }
     if (!password || password.length < 6) {
       nextErrors.password = 'Use pelo menos 6 caracteres.';
@@ -39,8 +39,8 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
     if (mode === 'register') {
       if (!name.trim()) nextErrors.name = 'Informe seu nome completo.';
       const phoneDigits = onlyWhatsappDigits(phone);
-      if (phoneDigits.length < 10) nextErrors.phone = 'Informe um WhatsApp valido.';
-      if (cpf && !isValidCpf(cpf)) nextErrors.cpf = 'CPF invalido.';
+      if (phoneDigits.length < 10) nextErrors.phone = 'Informe um WhatsApp válido.';
+      if (cpf && !isValidCpf(cpf)) nextErrors.cpf = 'CPF inválido.';
     }
 
     setFieldError(nextErrors);
@@ -89,16 +89,16 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
     }
     const normalizedEmail = normalizeAuthEmail(email);
     if (!isValidAuthEmail(normalizedEmail)) {
-      setFieldError({ email: 'Digite um e-mail valido, como nome@gmail.com.' });
+      setFieldError({ email: 'Digite um e-mail válido, como nome@gmail.com.' });
       return;
     }
 
     setLoading(true);
     try {
       await requestPasswordReset(normalizedEmail);
-      setMessage('Enviamos um link de recuperacao para seu e-mail.');
+      setMessage('Enviamos um link de recuperação para seu e-mail.');
     } catch (err: any) {
-      setError(err?.message || 'Nao foi possivel enviar a recuperacao de senha.');
+      setError(err?.message || 'Não foi possível enviar a recuperação de senha.');
     } finally {
       setLoading(false);
     }
@@ -109,7 +109,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
     setError(null);
     setMessage(null);
     if (!isValidAuthEmail(normalizedEmail)) {
-      setFieldError({ email: 'Digite um e-mail valido para reenviar a confirmacao.' });
+      setFieldError({ email: 'Digite um e-mail válido para reenviar a confirmação.' });
       return;
     }
 
@@ -117,9 +117,9 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
     try {
       await resendSignupConfirmation(normalizedEmail);
       setPendingConfirmationEmail(normalizedEmail);
-      setMessage('Reenviamos a confirmacao. Confira a caixa de entrada e o spam.');
+      setMessage('Reenviamos a confirmação. Confira a caixa de entrada e o spam.');
     } catch (err: any) {
-      setError(err?.message || 'Nao foi possivel reenviar a confirmacao.');
+      setError(err?.message || 'Não foi possível reenviar a confirmação.');
     } finally {
       setLoading(false);
     }
@@ -132,7 +132,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-      setError(err?.message || 'Nao foi possivel entrar com Google.');
+      setError(err?.message || 'Não foi possível entrar com Google.');
       setLoading(false);
     }
   };
@@ -174,7 +174,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
             {mode === 'login' ? 'ENTRAR' : 'CRIAR CONTA'}
           </h2>
           <p className="font-mono text-sm uppercase tracking-widest text-gray-500">
-            {mode === 'login' ? 'Bem-vindo de volta, corredor.' : 'Junte-se a nossa comunidade.'}
+            {mode === 'login' ? 'Bem-vindo de volta, corredor.' : 'Junte-se à nossa comunidade.'}
           </p>
         </div>
 
@@ -188,7 +188,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                 className="space-y-4"
               >
                 <div className="space-y-1">
-                  <label className="font-mono text-[10px] uppercase tracking-widest font-bold">Nome Completo</label>
+                  <label className="font-mono text-[10px] uppercase tracking-widest font-bold">Nome completo</label>
                   <div className="relative">
                     <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
@@ -224,7 +224,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                   {fieldError.phone && <p className="font-mono text-[10px] uppercase text-red-600">{fieldError.phone}</p>}
                 </div>
                 <div className="space-y-1">
-                  <label className="font-mono text-[10px] uppercase tracking-widest font-bold">CPF Opcional</label>
+                  <label className="font-mono text-[10px] uppercase tracking-widest font-bold">CPF opcional</label>
                   <input
                     type="text"
                     value={formatCpf(cpf)}
@@ -304,7 +304,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
                 disabled={loading}
                 className="min-h-10 w-full bg-white brutal-border font-display text-xs uppercase tracking-widest hover:bg-yellow-100 disabled:opacity-60"
               >
-                Reenviar confirmacao
+                Reenviar confirmação
               </button>
             </div>
           )}
@@ -359,7 +359,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
         </form>
 
         <p className="mt-8 text-center font-mono text-xs uppercase tracking-widest">
-          {mode === 'login' ? 'Nao tem uma conta?' : 'Ja possui conta?'}
+          {mode === 'login' ? 'Não tem uma conta?' : 'Já possui conta?'}
           <button
             onClick={toggleMode}
             className="ml-2 text-brutal-accent font-bold hover:underline cursor-pointer"

@@ -150,15 +150,9 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
     <section className="pt-10 pb-8 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
       <div className="mb-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="max-w-3xl">
-          <div className="flex items-center gap-3 mb-3">
-            <div className="w-12 h-0.5 bg-brutal-accent" />
-            <p className="font-mono text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold">
-              Escolha o evento
-            </p>
-          </div>
           <h2 className="text-4xl md:text-6xl mb-2">EVENTOS</h2>
           <p className="font-mono text-xs md:text-sm text-gray-600 uppercase tracking-widest">
-            Fotos e videos organizados por cobertura
+            Fotos e vídeos organizados por cobertura
           </p>
           {query.trim() && (
             <p className="mt-3 font-mono text-xs uppercase tracking-widest text-gray-400">
@@ -222,7 +216,7 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                 </h3>
                 <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
-                    {event.items} midias
+                    {event.items === 1 ? '1 mídia' : `${event.items} mídias`}
                   </p>
                   <span className="font-display text-sm uppercase text-brutal-accent">
                     Ver evento

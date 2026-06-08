@@ -126,7 +126,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
           <div>
             <h1 className="font-display text-5xl md:text-7xl uppercase tracking-tighter">Finalizar Compra</h1>
             <p className="font-mono text-sm uppercase tracking-widest text-gray-500 mt-2">
-              Fotos e videos digitais liberados apos confirmacao do pagamento.
+              Fotos e vídeos digitais liberados após a confirmação do pagamento.
             </p>
           </div>
 
@@ -135,7 +135,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
               <div>
                 <h2 className="font-display text-2xl uppercase">Entre para continuar</h2>
                 <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
-                  Seu e-mail sera usado para liberar os downloads comprados.
+                  Seu e-mail será usado para liberar os downloads comprados.
                 </p>
               </div>
               <button
@@ -177,15 +177,15 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
               <PaymentAction
                 icon={<Smartphone className="w-5 h-5" />}
                 title="Pagar com PIX"
-                detail="Confirmacao automatica via InfinitePay"
+                detail="Confirmação automática via InfinitePay"
                 disabled={!canPay}
                 loading={submittingMethod === 'pix'}
                 onClick={() => handlePay('pix')}
               />
               <PaymentAction
                 icon={<CreditCard className="w-5 h-5" />}
-                title="Pagar com cartao"
-                detail="Credito, e debito se disponivel no checkout"
+                title="Pagar com cartão"
+                detail="Crédito e débito, se disponíveis no checkout"
                 disabled={!canPay}
                 loading={submittingMethod === 'credit_card'}
                 onClick={() => handlePay('credit_card')}
@@ -198,7 +198,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                   <div>
                     <p className="font-display text-xl uppercase">PIX aguardando pagamento</p>
                     <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
-                      Quando a InfinitePay confirmar o pagamento, os downloads serao liberados automaticamente.
+                      Quando a InfinitePay confirmar o pagamento, os downloads serão liberados automaticamente.
                     </p>
                   </div>
                 </div>
@@ -218,12 +218,12 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                       className="min-h-11 w-full bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
                     >
                       <Copy className="w-4 h-4" />
-                      {copiedPix ? 'Codigo copiado' : 'Copiar codigo PIX'}
+                      {copiedPix ? 'Código copiado' : 'Copiar código PIX'}
                     </button>
                   </>
                 ) : (
                   <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
-                    Este retorno da InfinitePay nao trouxe QR Code direto. Abra o ambiente seguro para concluir com PIX.
+                    Este retorno da InfinitePay não trouxe o QR Code direto. Abra o ambiente seguro para concluir com PIX.
                   </p>
                 )}
                 {checkoutResult.paymentUrl && (
@@ -240,7 +240,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             <div className="bg-gray-50 brutal-border-thin p-4 flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
               <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
-                O pagamento acontece na InfinitePay. A Funpace nao armazena dados de cartao e nao solicita endereco de entrega.
+                O pagamento acontece na InfinitePay. A Funpace não armazena dados de cartão e não solicita endereço de entrega.
               </p>
             </div>
           </section>
@@ -249,14 +249,14 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
         <aside className="lg:sticky lg:top-6 h-fit bg-white brutal-border brutal-shadow p-6 space-y-5">
           <div className="flex items-center justify-between border-b-2 border-brutal-black pb-3">
             <h2 className="font-display text-2xl uppercase">Pedido</h2>
-            <span className="font-mono text-[10px] uppercase text-gray-400">{cartItems.length} item(ns)</span>
+            <span className="font-mono text-[10px] uppercase text-gray-400">{cartItems.length === 1 ? '1 item' : `${cartItems.length} itens`}</span>
           </div>
 
           {cartItems.length === 0 ? (
             <div className="py-12 text-center">
               <p className="font-display text-2xl uppercase">Carrinho vazio</p>
               <button onClick={() => navigate('/')} className="mt-4 font-mono text-xs uppercase text-brutal-accent font-bold cursor-pointer">
-                Escolher midias
+                Escolher mídias
               </button>
             </div>
           ) : (
@@ -294,7 +294,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
               />
               {couponCode.trim() && (
                 <p className="font-mono text-[9px] uppercase leading-relaxed text-gray-500">
-                  O cupom sera validado antes de abrir o pagamento seguro.
+                  O cupom será validado antes de abrir o pagamento seguro.
                 </p>
               )}
             </div>
@@ -329,7 +329,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             {!isSubmitting && <ArrowRight className="w-6 h-6 mt-1" />}
           </button>
           {user && cartItems.length > 0 && !contactValid && (
-            <p className="font-mono text-[9px] uppercase text-red-500 text-center">Preencha nome, e-mail e WhatsApp validos.</p>
+            <p className="font-mono text-[9px] uppercase text-red-500 text-center">Preencha nome, e-mail e WhatsApp válidos.</p>
           )}
           {cartItems.length > 0 && !meetsMinimumTotal && (
             <p className="font-mono text-[9px] uppercase text-red-500 text-center">

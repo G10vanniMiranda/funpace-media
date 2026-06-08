@@ -208,11 +208,11 @@ function Storefront() {
         const [products, eventRows, photographerRows] = await Promise.all([
           productService.getLatestProducts(storefrontProductLimit),
           eventService.getPublishedEvents(300).catch((error) => {
-            console.warn('Eventos cadastrados indisponiveis na vitrine; usando apenas midias publicadas.', error);
+            console.warn('Eventos cadastrados indisponíveis na vitrine; usando apenas mídias publicadas.', error);
             return [] as Event[];
           }),
           photographerService.getPublicPhotographers(1000).catch((error) => {
-            console.warn('Fotografos publicos indisponiveis na busca global.', error);
+            console.warn('Fotógrafos públicos indisponíveis na busca global.', error);
             return [] as Photographer[];
           }),
         ]);
@@ -286,14 +286,14 @@ function Storefront() {
 
           if (!response.ok) {
             const payload = await response.json().catch(() => ({}));
-            throw new Error(payload?.error || payload?.message || 'Pagamento ainda nao confirmado.');
+            throw new Error(payload?.error || payload?.message || 'Pagamento ainda não confirmado.');
           }
 
           const orderId = params.get('order') || params.get('order_nsu');
           setPaymentNotice({
             status: 'paid',
             orderId,
-            message: 'Pagamento confirmado. Seus arquivos digitais ja estao liberados para download.',
+            message: 'Pagamento confirmado. Seus arquivos digitais já estão liberados para download.',
           });
           setCart([]);
         } catch (error: any) {
@@ -301,7 +301,7 @@ function Storefront() {
           setPaymentNotice({
             status: 'pending',
             orderId: params.get('order') || params.get('order_nsu'),
-            message: 'Recebemos o retorno do checkout. Se o pagamento foi aprovado, a liberacao acontecera quando a InfinitePay confirmar.',
+            message: 'Recebemos o retorno do checkout. Se o pagamento foi aprovado, a liberação acontecerá quando a InfinitePay confirmar.',
           });
         } finally {
           window.history.replaceState({}, '', window.location.pathname);
@@ -313,7 +313,7 @@ function Storefront() {
       setPaymentNotice({
         status: 'cancelled',
         orderId: params.get('order') || params.get('order_nsu'),
-        message: 'O pagamento foi cancelado. O pedido continua disponivel para uma nova tentativa.',
+        message: 'O pagamento foi cancelado. O pedido continua disponível para uma nova tentativa.',
       });
       window.history.replaceState({}, '', window.location.pathname);
     }
@@ -529,7 +529,7 @@ function Storefront() {
     return sellerId ? publicPhotographers.find((photographer) => photographer.id === sellerId) ?? null : null;
   }, [displayPhotos, displayVideos, publicPhotographers, selectedEventName, selectedRegisteredEvent?.photographerId]);
   const selectedEventCategory = selectedRegisteredEvent?.status === 'scheduled'
-    ? 'Proximo evento'
+    ? 'Próximo evento'
     : selectedRegisteredEvent?.status === 'closed'
       ? 'Evento encerrado'
       : selectedRegisteredEvent?.status === 'active'
@@ -567,7 +567,7 @@ function Storefront() {
 
   const handleAddToCart = (item: Product) => {
     if (!isValidCartProductId(item.id)) {
-      alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
+      alert('Esta mídia precisa ser publicada novamente antes de ir para o checkout.');
       return;
     }
 
@@ -616,7 +616,7 @@ function Storefront() {
         saveLikedProductIds(next);
         return next;
       });
-      showToast('Nao foi possivel atualizar o favorito.', 'error');
+      showToast('Não foi possível atualizar o favorito.', 'error');
     });
   };
 
@@ -737,7 +737,7 @@ function Storefront() {
       const checkoutItems = cart.filter((item) => isValidCartProductId(item.id)).map(item => ({ id: item.id }));
       if (checkoutItems.length !== cart.length) {
         setCart(cart.filter((item) => isValidCartProductId(item.id)));
-        throw new Error('Removemos midias antigas do carrinho. Adicione novamente as midias publicadas e tente outra vez.');
+        throw new Error('Removemos mídias antigas do carrinho. Adicione novamente as mídias publicadas e tente outra vez.');
       }
 
       const result = await paymentService.createCheckout({
@@ -1078,7 +1078,7 @@ function Storefront() {
                         </button>
                       </div>
                       <div className="mt-4 flex flex-col gap-2 border-t border-black/10 pt-4 sm:flex-row sm:items-center sm:justify-end">
-                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500 sm:mr-auto">Voce tambem pode:</span>
+                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-500 sm:mr-auto">Você também pode:</span>
                         <button
                           type="button"
                           onClick={() => setIsFaceSearchOpen(true)}
@@ -1100,7 +1100,7 @@ function Storefront() {
                     ? displayPhotos.length > 0
                       ? `Encontramos ${displayPhotos.length} ${displayPhotos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento.`
                       : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'
-                    : searchType ? 'Resultados filtrados por numero de peito.' : selectedEventName ? 'Midias organizadas por evento' : 'FOTOS DOS ULTIMOS EVENTOS'}
+                    : searchType ? 'Resultados filtrados por número de peito.' : selectedEventName ? 'Mídias organizadas por evento' : 'FOTOS DOS ÚLTIMOS EVENTOS'}
                   photos={displayPhotos}
                   onAddToCart={handleAddToCart}
                   cartItems={cart}
@@ -1262,7 +1262,7 @@ function PublicPhotographerPage({
       }
     }
     loadPublicPhotographer().catch((error) => {
-      console.error('Erro ao carregar perfil publico do fotografo:', error);
+      console.error('Erro ao carregar perfil público do fotógrafo:', error);
       if (!cancelled) setIsLoading(false);
     });
     return () => {
@@ -1275,7 +1275,7 @@ function PublicPhotographerPage({
     const titleName = getPhotographerPublicName(photographer);
     const publicSlug = photographer.username || photographer.slug || slug;
     const canonicalUrl = `${window.location.origin}/${publicSlug}`;
-    const title = `${titleName} - Fotografo Oficial | Funpace Media`;
+    const title = `${titleName} - Fotógrafo Oficial | Funpace Media`;
     const description = `Perfil publico de ${titleName}${photographer.city ? ` em ${photographer.city}` : ''}: eventos, albuns e fotos na Funpace Media.`;
     document.title = title;
     setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
@@ -1410,11 +1410,11 @@ function PublicPhotographerPage({
   }), [cityFilter, dateFilter, events, normalizedQuery, products]);
 
   if (isLoading) {
-    return <PublicLoading label="Carregando perfil do fotografo..." />;
+    return <PublicLoading label="Carregando perfil do fotógrafo..." />;
   }
 
   if (!photographer) {
-    return <PublicEmpty title="Fotografo nao encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
+    return <PublicEmpty title="Fotógrafo não encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
   }
 
   const displayName = getPhotographerPublicName(photographer);
@@ -1472,13 +1472,13 @@ function PublicPhotographerPage({
         <div className="grid gap-4 md:grid-cols-3">
           <PublicStat icon={<CalendarDays className="h-5 w-5" />} label="Eventos" value={publicAlbums.length} />
           <PublicStat icon={<Camera className="h-5 w-5" />} label="Fotos" value={photoCount} />
-          <PublicStat icon={<ImageIcon className="h-5 w-5" />} label="Midias" value={products.length} />
+          <PublicStat icon={<ImageIcon className="h-5 w-5" />} label="Mídias" value={products.length} />
         </div>
 
         <div className="mt-8 grid gap-3 lg:grid-cols-[minmax(0,1fr)_220px_180px_auto]">
           <label className="relative block">
             <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
-            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar fotografo, evento, cidade ou numero de peito" className="h-13 w-full brutal-border bg-white pl-12 pr-4 font-mono text-xs uppercase tracking-widest outline-none focus:border-brutal-accent" />
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar fotógrafo, evento, cidade ou número de peito" className="h-13 w-full brutal-border bg-white pl-12 pr-4 font-mono text-xs uppercase tracking-widest outline-none focus:border-brutal-accent" />
           </label>
           <select value={cityFilter} onChange={(event) => setCityFilter(event.target.value)} className="h-13 brutal-border bg-white px-4 font-mono text-xs uppercase tracking-widest outline-none">
             <option value="">Todas as cidades</option>
@@ -1517,13 +1517,13 @@ function PublicPhotographerPage({
             })}
           </div>
           {filteredAlbums.length === 0 && (
-            <PublicEmpty title={publicAlbums.length === 0 ? 'Este fotografo ainda nao publicou nenhum evento.' : 'Nenhum evento encontrado para estes filtros.'} />
+            <PublicEmpty title={publicAlbums.length === 0 ? 'Este fotógrafo ainda não publicou nenhum evento.' : 'Nenhum evento encontrado para estes filtros.'} />
           )}
         </section>
       ) : (
         <PhotoGrid
-          title="Fotos do fotografo"
-          subtitle={`${filteredProducts.length} midias encontradas no perfil de ${displayName}`}
+          title="Fotos do fotógrafo"
+          subtitle={`${filteredProducts.length === 1 ? '1 mídia encontrada' : `${filteredProducts.length} mídias encontradas`} no perfil de ${displayName}`}
           photos={filteredProducts.filter((product) => product.type === 'IMG')}
           onAddToCart={onAddToCart}
           cartItems={cartItems}
@@ -1602,14 +1602,14 @@ function PublicEventPage({
   }, [event]);
 
   if (isLoading) return <PublicLoading label="Carregando evento..." />;
-  if (!event) return <PublicEmpty title="Evento nao encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
+  if (!event) return <PublicEmpty title="Evento não encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
 
   const allPhotos = products.filter((product) => product.type === 'IMG');
   const photos = faceMatches ? faceMatches.map((match) => match.product).filter((product) => product.type === 'IMG') : allPhotos;
   const videos = products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW');
   const cover = event.bannerImage || event.coverImage || products.find((product) => product.thumbnailUrl)?.thumbnailUrl || '';
   const checkpoints = new Set(products.map((product) => product.checkpoint).filter(Boolean)).size;
-  const eventCategory = event.status === 'scheduled' ? 'Proximo evento' : event.status === 'closed' ? 'Evento encerrado' : 'Evento esportivo';
+  const eventCategory = event.status === 'scheduled' ? 'Próximo evento' : event.status === 'closed' ? 'Evento encerrado' : 'Evento esportivo';
 
   return (
     <main className="bg-[#f4f4f2]">
@@ -1644,7 +1644,7 @@ function PublicEventPage({
                   </div>
                   {photographer && (
                     <div className="shrink-0 rounded-xl bg-brutal-black px-4 py-3 text-white shadow-md">
-                      <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-white/50">Fotografo</p>
+                      <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-white/50">Fotógrafo</p>
                       <p className="mt-1 font-display text-sm uppercase">{getPhotographerPublicName(photographer)}</p>
                     </div>
                   )}
@@ -1944,7 +1944,7 @@ function LegacyCustomerOrdersRoute() {
 
   const handleAddToCart = (item: Product) => {
     if (!isValidCartProductId(item.id)) {
-      alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
+      alert('Esta mídia precisa ser publicada novamente antes de ir para o checkout.');
       return;
     }
 
@@ -2034,7 +2034,7 @@ function CustomerAccountRoute() {
 
   const handleAddToCart = (item: Product) => {
     if (!isValidCartProductId(item.id)) {
-      alert('Esta midia precisa ser publicada novamente antes de ir para o checkout.');
+      alert('Esta mídia precisa ser publicada novamente antes de ir para o checkout.');
       return;
     }
 

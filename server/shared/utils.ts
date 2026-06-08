@@ -101,7 +101,7 @@ export function handleOptions(req: any, res: any) {
   }
 
   if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(String(req.method || '').toUpperCase()) && !isTrustedBrowserOrigin(req)) {
-    res.status(403).json({ error: 'Origem nao autorizada.' });
+    res.status(403).json({ error: 'Origem não autorizada.' });
     return true;
   }
 
@@ -152,7 +152,7 @@ export function getSupabaseApiConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase Service Role nao configurado nas variaveis de ambiente da Vercel.');
+    throw new Error('Supabase Service Role não configurado nas variáveis de ambiente da Vercel.');
   }
 
   return {
@@ -237,7 +237,7 @@ export async function fetchWithTimeout(input: string | URL, init: RequestInit = 
     });
   } catch (error: any) {
     if (error?.name === 'AbortError') {
-      throw new Error(`Tempo limite excedido ao chamar servico externo (${timeoutMs}ms).`);
+      throw new Error(`Tempo limite excedido ao chamar serviço externo (${timeoutMs}ms).`);
     }
     throw error;
   } finally {

@@ -26,7 +26,7 @@ export default async function handler(req: any, res: any) {
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (!isIpAllowed(req)) {
-    return res.status(403).json({ error: 'IP nao autorizado para rotas administrativas.' });
+    return res.status(403).json({ error: 'IP não autorizado para rotas administrativas.' });
   }
 
   const route = routeName(req);
@@ -51,5 +51,5 @@ export default async function handler(req: any, res: any) {
     return photographerActionHandler(req, res);
   }
 
-  return res.status(404).json({ error: 'Rota admin nao encontrada.' });
+  return res.status(404).json({ error: 'Rota admin não encontrada.' });
 }

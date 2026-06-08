@@ -120,7 +120,7 @@ function getSupabaseConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase Service Role nao configurado na Vercel.');
+    throw new Error('Supabase Service Role não configurado na Vercel.');
   }
 
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), supabaseKey };
@@ -172,7 +172,7 @@ function getInfinitePayCheckoutEndpoint() {
 
 function getInfinitePayHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;
-  if (!handle) throw new Error('INFINITEPAY_HANDLE nao configurado.');
+  if (!handle) throw new Error('INFINITEPAY_HANDLE não configurado.');
   return handle;
 }
 
@@ -191,7 +191,7 @@ async function fetchWithTimeout(input: string, init: RequestInit = {}, timeoutMs
     });
   } catch (error: any) {
     if (error?.name === 'AbortError') {
-      throw new Error(`Tempo limite excedido ao chamar servico externo (${timeoutMs}ms).`);
+      throw new Error(`Tempo limite excedido ao chamar serviço externo (${timeoutMs}ms).`);
     }
     throw error;
   } finally {
@@ -228,17 +228,17 @@ function extractPix(payload: any) {
 async function validateCoupon(input: { code: string; subtotal: number; itemCount: number }) {
   const code = normalizeCouponCode(input.code);
   if (!code) return { coupon: null, discountTotal: 0 };
-  if (code.length < 3) throw new Error('Cupom invalido.');
+  if (code.length < 3) throw new Error('Cupom inválido.');
 
   const rows = await supabaseRequest<any[]>(
     `/rest/v1/coupons?select=*&code=eq.${encodeURIComponent(code)}&limit=1`,
   );
   const coupon = rows[0];
-  if (!coupon || !coupon.isActive) throw new Error('Cupom invalido ou inativo.');
+  if (!coupon || !coupon.isActive) throw new Error('Cupom inválido ou inativo.');
 
   const now = Date.now();
   if (coupon.startsAt && new Date(coupon.startsAt).getTime() > now) {
-    throw new Error('Cupom ainda nao esta valido.');
+    throw new Error('Cupom ainda não está válido.');
   }
   if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) {
     throw new Error('Cupom expirado.');
@@ -255,7 +255,7 @@ async function validateCoupon(input: { code: string; subtotal: number; itemCount
     : Math.round(Number(coupon.value) * 100);
   const discountCents = Math.min(maxDiscountCents, Math.max(0, requestedDiscountCents));
 
-  if (discountCents <= 0) throw new Error('Cupom nao pode ser aplicado a este carrinho.');
+  if (discountCents <= 0) throw new Error('Cupom não pode ser aplicado a este carrinho.');
   return { coupon, discountTotal: roundMoney(discountCents / 100) };
 }
 
@@ -372,7 +372,7 @@ async function createInfinitePayCheckout(input: {
 async function createProviderCheckout(input: Parameters<typeof createInfinitePayCheckout>[0]) {
   const provider = String(process.env.PAYMENT_PROVIDER || 'infinitepay').trim().toLowerCase();
   if (provider !== 'infinitepay') {
-    throw new Error(`PAYMENT_PROVIDER invalido ou nao implementado: ${provider}`);
+    throw new Error(`PAYMENT_PROVIDER inválido ou não implementado: ${provider}`);
   }
 
   return createInfinitePayCheckout(input);
@@ -401,7 +401,7 @@ async function recordPayment(input: {
       updatedAt: new Date().toISOString(),
     }),
   }).catch((error) => {
-    console.error('Nao foi possivel registrar payment:', error);
+    console.error('Não foi possível registrar payment:', error);
   });
 }
 
@@ -426,7 +426,7 @@ function buildSafeSuccessUrl(req: any, inputUrl: string | undefined, orderId: st
   const origin = candidate.origin.replace(/\/+$/, '');
 
   if (!getAllowedRedirectOrigins(req).has(origin)) {
-    throw new Error('URL de retorno do checkout nao autorizada.');
+    throw new Error('URL de retorno do checkout não autorizada.');
   }
 
   candidate.searchParams.set('payment', 'success');
@@ -444,7 +444,7 @@ function buildSafeOptionalRedirectUrl(req: any, inputUrl: string | undefined) {
   const origin = candidate.origin.replace(/\/+$/, '');
 
   if (!getAllowedRedirectOrigins(req).has(origin)) {
-    throw new Error('URL de cancelamento do checkout nao autorizada.');
+    throw new Error('URL de cancelamento do checkout não autorizada.');
   }
 
   return candidate.toString();
@@ -491,7 +491,7 @@ export default async function handler(req: any, res: any) {
     if (rejectUntrustedBrowserOrigin(req, res)) return;
 
     if (req.method !== 'POST') {
-      return res.status(405).json({ error: 'Metodo nao permitido.', requestId });
+      return res.status(405).json({ error: 'Método não permitido.', requestId });
     }
 
     assertCheckoutEnvironment();
@@ -527,7 +527,7 @@ export default async function handler(req: any, res: any) {
 
     const productIds = [...new Set(items.map((item: any) => String(item.id || '').trim()))].filter(Boolean);
     if (productIds.length !== items.length || productIds.some((id) => !isValidCartProductId(id))) {
-      return res.status(400).json({ error: 'Carrinho contem produto invalido.', requestId });
+      return res.status(400).json({ error: 'Carrinho contém produto inválido.', requestId });
     }
 
     const products = await supabaseRequest<any[]>(
@@ -535,7 +535,7 @@ export default async function handler(req: any, res: any) {
     );
 
     if (products.length !== productIds.length) {
-      return res.status(400).json({ error: 'Um ou mais produtos nao estao disponiveis.', requestId });
+      return res.status(400).json({ error: 'Um ou mais produtos não estão disponíveis.', requestId });
     }
 
     const subtotal = roundMoney(products.reduce((sum: number, product: any) => sum + Number(product.price), 0));
@@ -546,7 +546,7 @@ export default async function handler(req: any, res: any) {
     try {
       couponResult = await validateCoupon({ code: couponCode, subtotal, itemCount: products.length });
     } catch (error: any) {
-      return res.status(400).json({ error: error?.message || 'Cupom invalido.', requestId });
+      return res.status(400).json({ error: error?.message || 'Cupom inválido.', requestId });
     }
     const discountTotal = couponResult.discountTotal;
     const total = roundMoney(subtotal - discountTotal);
@@ -594,7 +594,7 @@ export default async function handler(req: any, res: any) {
 
     const orderId = order?.id;
     if (!orderId) {
-      return res.status(500).json({ error: 'Supabase nao retornou o ID do pedido.', requestId });
+      return res.status(500).json({ error: 'Supabase não retornou o ID do pedido.', requestId });
     }
 
     logCheckout('info', 'order_created', { requestId, orderId, itemCount: checkoutProducts.length, total });
@@ -684,7 +684,7 @@ export default async function handler(req: any, res: any) {
         headers: { Prefer: 'return=minimal' },
         body: JSON.stringify({ usedCount: nextUsedCount }),
       }).catch((error) => {
-        console.error('Nao foi possivel atualizar uso do cupom:', error);
+        console.error('Não foi possível atualizar uso do cupom:', error);
       });
     }
 

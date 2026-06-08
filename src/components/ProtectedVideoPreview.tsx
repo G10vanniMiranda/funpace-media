@@ -116,7 +116,7 @@ export function ProtectedVideoPreview({
       >
         <span className="inline-flex items-center gap-2 bg-brutal-black/75 px-3 py-2 text-white backdrop-blur-sm brutal-border-thin font-mono text-[10px] uppercase">
           {isLoading ? <Loader2 className="w-3 h-3 animate-spin" /> : <Eye className="w-3 h-3" />}
-          {canPreview ? 'Preview 4s' : 'Preview indisponivel'}
+          {canPreview ? 'Preview 4s' : 'Preview indisponível'}
         </span>
       </button>
     </ProtectedMedia>

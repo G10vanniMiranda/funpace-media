@@ -90,7 +90,7 @@ function getSupabaseConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase Service Role nao configurado na Vercel.');
+    throw new Error('Supabase Service Role não configurado na Vercel.');
   }
 
   return {
@@ -199,7 +199,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   let step = 'inicio';
@@ -220,17 +220,17 @@ export default async function handler(req: any, res: any) {
 
     const phoneDigits = onlyPhoneDigits(typeof phone === 'string' ? phone : '');
     if (!phoneDigits || phoneDigits.length < 10) {
-      return res.status(400).json({ error: 'Telefone valido e obrigatorio para cadastro de fotografo.' });
+      return res.status(400).json({ error: 'Telefone válido é obrigatório para cadastro de fotógrafo.' });
     }
 
     const cpfDigits = onlyCpfDigits(typeof cpf === 'string' ? cpf : '');
     if (!cpfDigits || !isValidCpf(cpfDigits)) {
-      return res.status(400).json({ error: 'CPF valido e obrigatorio para cadastro de fotografo.' });
+      return res.status(400).json({ error: 'CPF válido é obrigatório para cadastro de fotógrafo.' });
     }
 
     const instagramHandle = onlyInstagramHandle(typeof instagram === 'string' ? instagram : '');
     if (!isValidInstagramHandle(instagramHandle)) {
-      return res.status(400).json({ error: 'Instagram valido e obrigatorio para cadastro de fotografo.' });
+      return res.status(400).json({ error: 'Instagram válido é obrigatório para cadastro de fotógrafo.' });
     }
 
     const normalizedEmail = email.trim().toLowerCase();
@@ -249,7 +249,7 @@ export default async function handler(req: any, res: any) {
     step = 'gravar_fotografo';
     if (existingByEmail[0]?.id) {
       if (existingByEmail[0]?.verified) {
-        return res.status(409).json({ error: 'Este e-mail ja pertence a um fotografo aprovado.' });
+        return res.status(409).json({ error: 'Este e-mail já pertence a um fotógrafo aprovado.' });
       }
 
       await supabaseRequest(`/rest/v1/photographers?email=eq.${encodeURIComponent(normalizedEmail)}`, {
@@ -304,7 +304,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ ok: true, id: resolvedId });
   } catch (error: any) {
-    const safe = publicError(error, 'Erro ao registrar fotografo pendente.');
+    const safe = publicError(error, 'Erro ao registrar fotógrafo pendente.');
     return res.status(safe.statusCode).json({
       error: safe.message,
       source: 'photographers-request',

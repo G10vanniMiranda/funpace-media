@@ -18,10 +18,10 @@ export function PhotographerPasswordSetup() {
         const sessionUser = await completePasswordSetupFromUrl();
         setUser(sessionUser);
         if (!sessionUser?.email) {
-          setError('Link invalido ou expirado. Solicite um novo convite ao administrador.');
+          setError('Link inválido ou expirado. Solicite um novo convite ao administrador.');
         }
       } catch (err: any) {
-        setError(err?.message || 'Nao foi possivel validar o convite.');
+        setError(err?.message || 'Não foi possível validar o convite.');
       } finally {
         setIsLoading(false);
       }
@@ -51,7 +51,7 @@ export function PhotographerPasswordSetup() {
     }
 
     if (password !== confirmPassword) {
-      setError('As senhas nao conferem.');
+      setError('As senhas não conferem.');
       return;
     }
 
@@ -63,12 +63,12 @@ export function PhotographerPasswordSetup() {
         setUser(updatedUser);
       }
 
-      setSuccess('Senha criada com sucesso. Redirecionando para o painel do fotografo...');
+      setSuccess('Senha criada com sucesso. Redirecionando para o painel do fotógrafo...');
       window.setTimeout(() => {
         window.location.assign('/fotografo');
       }, 1200);
     } catch (err: any) {
-      setError(err?.message || 'Nao foi possivel criar a senha.');
+      setError(err?.message || 'Não foi possível criar a senha.');
     } finally {
       setIsSaving(false);
     }
@@ -93,7 +93,7 @@ export function PhotographerPasswordSetup() {
         <div className="p-7 md:p-9 border-b border-white/10">
           <div className="inline-flex items-center gap-2 px-3 py-1 bg-brutal-accent/10 border border-brutal-accent/30 text-brutal-accent font-mono text-[10px] uppercase tracking-widest mb-5">
             <Lock className="w-3.5 h-3.5" />
-            Acesso do fotografo
+            Acesso do fotógrafo
           </div>
           <h1 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Criar Senha</h1>
           <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">Defina sua senha para acessar o painel</p>
@@ -111,7 +111,7 @@ export function PhotographerPasswordSetup() {
                 <div className="flex items-center gap-3 border border-white/10 bg-[#080d14] p-4">
                   <Mail className="w-5 h-5 text-brutal-accent" />
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase text-gray-500">Email autorizado</p>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">E-mail autorizado</p>
                     <p className="font-mono text-xs text-white truncate">{user.email}</p>
                   </div>
                 </div>

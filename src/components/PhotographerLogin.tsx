@@ -49,7 +49,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
     if (!pendingResponse.ok) {
       const payload = await pendingResponse.json().catch(() => ({}));
       const detail = payload?.error || payload?.message || 'Erro ao registrar cadastro pendente.';
-      throw new Error(`Nao foi possivel registrar cadastro pendente: ${detail}`);
+      throw new Error(`Não foi possível registrar o cadastro pendente: ${detail}`);
     }
   }
 
@@ -72,12 +72,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(payload?.error || payload?.message || 'Nao foi possivel enviar o link.');
+        throw new Error(payload?.error || payload?.message || 'Não foi possível enviar o link.');
       }
 
       setSuccess(payload?.message || 'Se este e-mail estiver cadastrado, enviaremos um link para criar a senha.');
     } catch (err: any) {
-      setError(err?.message || 'Nao foi possivel enviar o link de senha.');
+      setError(err?.message || 'Não foi possível enviar o link de senha.');
     } finally {
       setIsSendingPasswordLink(false);
     }
@@ -93,12 +93,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
       if (isRegistering) {
         const phoneDigits = onlyWhatsappDigits(phone);
         if (phoneDigits.length < 10) {
-          setError('Telefone invalido.');
+          setError('Telefone inválido.');
           return;
         }
 
         if (!isValidCpf(cpf)) {
-          setError('CPF invalido.');
+          setError('CPF inválido.');
           return;
         }
 
@@ -178,12 +178,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         }
 
         if (!authUser?.id || requiresEmailConfirmation) {
-          setSuccess('SOLICITACAO ENVIADA: confirme seu e-mail e aguarde a aprovacao do administrador para acessar o painel.');
+          setSuccess('SOLICITAÇÃO ENVIADA: confirme seu e-mail e aguarde a aprovação do administrador para acessar o painel.');
           setIsRegistering(false);
           return;
         }
 
-        setSuccess('CADASTRO ENVIADO: Aguarde a aprovacao do administrador para acessar o painel.');
+        setSuccess('CADASTRO ENVIADO: aguarde a aprovação do administrador para acessar o painel.');
         setIsRegistering(false);
       } else {
         if (isMockMode) {
@@ -192,9 +192,9 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           if (photographer?.verified) {
             onLoginSuccess(photographer);
           } else if (photographer) {
-            setError('PENDENTE: cadastro mock ainda nao aprovado pelo administrador.');
+            setError('PENDENTE: cadastro de teste ainda não aprovado pelo administrador.');
           } else {
-            setError('ACESSO NEGADO: email nao cadastrado como fotografo parceiro.');
+            setError('ACESSO NEGADO: e-mail não cadastrado como fotógrafo parceiro.');
           }
           return;
         }
@@ -222,14 +222,14 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
               claimDetail = claimPayload?.step ? `${claimMessage} (${claimPayload.step})` : claimMessage;
             }
           } catch (claimError) {
-            console.warn('Nao foi possivel sincronizar cadastro do fotografo.', claimError);
+            console.warn('Não foi possível sincronizar o cadastro do fotógrafo.', claimError);
             claimDetail = claimError instanceof Error ? claimError.message : String(claimError);
           }
 
           if (!photographer) {
             const photographerByEmail = await photographerService.getPhotographerByEmail(loginEmail);
             if (photographerByEmail?.verified && photographerByEmail.id !== authUser.id) {
-              setError(`CADASTRO APROVADO, MAS A CONTA AINDA NAO FOI SINCRONIZADA.${claimDetail ? ` ${claimDetail}` : ''}`);
+              setError(`CADASTRO APROVADO, MAS A CONTA AINDA NÃO FOI SINCRONIZADA.${claimDetail ? ` ${claimDetail}` : ''}`);
               return;
             }
             photographer = photographerByEmail;
@@ -238,18 +238,18 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
         if (photographer) {
           if (!photographer.verified) {
-            setError('PENDENTE: Seu cadastro ainda nao foi aprovado pelo administrador.');
+            setError('PENDENTE: seu cadastro ainda não foi aprovado pelo administrador.');
             return;
           }
           onLoginSuccess(photographer);
         } else {
-          setError('ACESSO NEGADO: esta conta ainda nao possui cadastro de fotografo.');
+          setError('ACESSO NEGADO: esta conta ainda não possui cadastro de fotógrafo.');
         }
       }
     } catch (err: any) {
       const rawMessage = String(err?.message || 'ERRO DE CONEXAO: Tente novamente mais tarde.');
       if (rawMessage.toUpperCase().includes('EMAIL_NOT_CONFIRMED') || rawMessage.toUpperCase().includes('NOT CONFIRMED')) {
-        setError('E-mail ainda nao confirmado. Verifique sua caixa de entrada e SPAM.');
+        setError('E-mail ainda não confirmado. Verifique sua caixa de entrada e o spam.');
       } else {
         setError(rawMessage);
       }
@@ -367,7 +367,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           )}
 
           <div className="space-y-2">
-            <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">Email Corporativo</label>
+            <label className="block font-mono text-[10px] uppercase font-bold text-gray-400 tracking-widest">E-mail corporativo</label>
             <div className="relative">
               <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
@@ -439,7 +439,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             onClick={() => setIsRegistering(!isRegistering)}
             className="font-mono text-[10px] uppercase font-bold text-brutal-accent hover:underline tracking-widest"
           >
-            {isRegistering ? 'Já tenho cadastro? Fazer Login' : 'Não tem conta? Registre-se aqui'}
+            {isRegistering ? 'Já tenho cadastro? Fazer login' : 'Não tem conta? Registre-se aqui'}
           </button>
         </div>
 

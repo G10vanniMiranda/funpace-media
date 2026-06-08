@@ -34,12 +34,12 @@ export function paidOrderEmailTemplate(input: { buyerName: string; orderShort: s
     subject: `Pagamento aprovado - pedido #${input.orderShort}`,
     html: baseTemplate({
       title: 'Pagamento aprovado',
-      preview: 'Seus downloads Funpace Media ja estao liberados.',
+      preview: 'Seus downloads Funpace Media já estão liberados.',
       ctaLabel: 'Acessar meus pedidos',
       ctaUrl: input.ordersUrl,
       body: `
-        <p>Ola, <strong>${input.buyerName}</strong>.</p>
-        <p>Recebemos a confirmacao do pedido <strong>#${input.orderShort}</strong>. Seus arquivos digitais ja estao liberados na area do cliente.</p>
+        <p>Olá, <strong>${input.buyerName}</strong>.</p>
+        <p>Recebemos a confirmação do pedido <strong>#${input.orderShort}</strong>. Seus arquivos digitais já estão liberados na área do cliente.</p>
       `,
     }),
   };
@@ -47,26 +47,26 @@ export function paidOrderEmailTemplate(input: { buyerName: string; orderShort: s
 
 export function welcomeEmailTemplate(input: { name: string; accountUrl: string }) {
   return {
-    subject: 'Bem-vindo a Funpace Media',
+    subject: 'Bem-vindo à Funpace Media',
     html: baseTemplate({
       title: 'Conta criada',
-      preview: 'Sua conta Funpace Media esta pronta.',
+      preview: 'Sua conta Funpace Media está pronta.',
       ctaLabel: 'Abrir minha conta',
       ctaUrl: input.accountUrl,
-      body: `<p>Ola, <strong>${input.name}</strong>.</p><p>Sua conta esta pronta para acompanhar pedidos, favoritos e downloads.</p>`,
+      body: `<p>Olá, <strong>${input.name}</strong>.</p><p>Sua conta está pronta para acompanhar pedidos, favoritos e downloads.</p>`,
     }),
   };
 }
 
 export function passwordRecoveryTemplate(input: { recoveryUrl: string }) {
   return {
-    subject: 'Recuperacao de senha',
+    subject: 'Recuperação de senha',
     html: baseTemplate({
       title: 'Recuperar senha',
       preview: 'Use o link para definir uma nova senha.',
       ctaLabel: 'Definir nova senha',
       ctaUrl: input.recoveryUrl,
-      body: '<p>Recebemos uma solicitacao para recuperar sua senha. Use o botao abaixo para continuar.</p>',
+      body: '<p>Recebemos uma solicitação para recuperar sua senha. Use o botão abaixo para continuar.</p>',
     }),
   };
 }
@@ -76,10 +76,10 @@ export function downloadReleasedTemplate(input: { buyerName: string; ordersUrl: 
     subject: 'Downloads liberados',
     html: baseTemplate({
       title: 'Downloads liberados',
-      preview: 'Suas fotos digitais ja podem ser baixadas.',
+      preview: 'Suas fotos digitais já podem ser baixadas.',
       ctaLabel: 'Baixar fotos',
       ctaUrl: input.ordersUrl,
-      body: `<p>Ola, <strong>${input.buyerName}</strong>.</p><p>Os downloads da sua compra foram liberados com acesso protegido.</p>`,
+      body: `<p>Olá, <strong>${input.buyerName}</strong>.</p><p>Os downloads da sua compra foram liberados com acesso protegido.</p>`,
     }),
   };
 }

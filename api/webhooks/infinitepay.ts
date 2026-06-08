@@ -89,7 +89,7 @@ function getPayloadValue(payload: any, names: string[]) {
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
-  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase Service Role nao configurado.');
+  if (!supabaseUrl || !supabaseKey) throw new Error('Supabase Service Role não configurado.');
   return { supabaseUrl: supabaseUrl.replace(/\/+$/, ''), supabaseKey };
 }
 
@@ -117,7 +117,7 @@ async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise
 
 function getInfinitePayHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;
-  if (!handle) throw new Error('INFINITEPAY_HANDLE nao configurado.');
+  if (!handle) throw new Error('INFINITEPAY_HANDLE não configurado.');
   return handle;
 }
 
@@ -262,12 +262,12 @@ export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'POST,OPTIONS', 'Content-Type, Authorization, X-Webhook-Secret, X-InfinitePay-Token, X-InfinitePay-Signature, X-Webhook-Signature, X-Signature')) return;
   setSecurityHeaders(res);
   if (rateLimit(req, res, { keyPrefix: 'webhook-infinitepay', windowMs: 60 * 1000, max: 240 })) return;
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     assertRequestSize(req, Number(process.env.WEBHOOK_MAX_BODY_BYTES || 200 * 1024));
     if (!(await isWebhookAuthorized(req))) {
-      return res.status(401).json({ success: false, received: false, error: 'Webhook nao autorizado.' });
+      return res.status(401).json({ success: false, received: false, error: 'Webhook não autorizado.' });
     }
 
     const payload = getJsonBody(req);
@@ -310,7 +310,7 @@ export default async function handler(req: any, res: any) {
         orderId,
         status: payloadStatus,
         requiresAdminRecovery: payloadStatus === 'paid',
-        warning: 'Webhook sem transaction_nsu ou invoice_slug; evento registrado para recuperacao.',
+      warning: 'Webhook sem transaction_nsu ou invoice_slug; evento registrado para recuperação.',
       });
     }
 

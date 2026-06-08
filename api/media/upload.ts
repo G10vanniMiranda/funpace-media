@@ -79,7 +79,7 @@ function getSupabaseConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY nao configurado.');
+    throw new Error('SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configurado.');
   }
 
   return {
@@ -99,7 +99,7 @@ function getSupabaseAuthApiKey() {
 
 function assertMediaBucketConfigured() {
   if (!mediaBucket) {
-    throw new Error('MEDIA_BUCKET nao configurado no servidor.');
+    throw new Error('MEDIA_BUCKET não configurado no servidor.');
   }
 }
 
@@ -224,7 +224,7 @@ function cleanProviderErrorMessage(raw: string, fallback: string) {
 }
 
 async function uploadToExternalBucket(path: string, fileName: string, contentType: string, buffer: Buffer) {
-  if (!externalBucketToken) throw new Error('BUCKET_API_TOKEN nao configurado no servidor.');
+  if (!externalBucketToken) throw new Error('BUCKET_API_TOKEN não configurado no servidor.');
   assertMediaBucketConfigured();
 
   const formData = new FormData();
@@ -266,7 +266,7 @@ export default async function handler(req: any, res: any) {
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   let storagePath = '';
@@ -287,19 +287,19 @@ export default async function handler(req: any, res: any) {
     }
 
     if (!(await assertVerifiedPhotographer(authUser.id))) {
-      return res.status(403).json({ error: 'Apenas fotografos aprovados podem enviar midias.' });
+      return res.status(403).json({ error: 'Apenas fotógrafos aprovados podem enviar mídias.' });
     }
 
     if (!isSafeStoragePath(storagePath, authUser.id)) {
-      return res.status(403).json({ error: 'Caminho de upload invalido para este fotografo.' });
+      return res.status(403).json({ error: 'Caminho de upload inválido para este fotógrafo.' });
     }
 
     if (!isAllowedUploadContentType(contentType)) {
-      return res.status(415).json({ error: 'Tipo de arquivo nao permitido.' });
+      return res.status(415).json({ error: 'Tipo de arquivo não permitido.' });
     }
 
     if (fileBuffer.length === 0) {
-      return res.status(400).json({ error: 'Arquivo vazio ou nao enviado.' });
+      return res.status(400).json({ error: 'Arquivo vazio ou não enviado.' });
     }
 
     console.info('[media-upload] start', {
@@ -313,7 +313,7 @@ export default async function handler(req: any, res: any) {
     const uploaded = usesExternalBucket()
       ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
       : (() => {
-          throw new Error('MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.');
+          throw new Error('MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de mídias.');
         })();
 
     console.info('[media-upload] done', {
@@ -327,7 +327,7 @@ export default async function handler(req: any, res: any) {
       publicUrl: uploaded.publicUrl || uploaded.path,
     });
   } catch (error: any) {
-    const message = error?.message || 'Nao foi possivel enviar a midia.';
+    const message = error?.message || 'Não foi possível enviar a mídia.';
     console.error('[media-upload] error', {
       bucket: mediaBucket,
       storagePath,

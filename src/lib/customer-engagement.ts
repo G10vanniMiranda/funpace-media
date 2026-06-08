@@ -75,7 +75,7 @@ export async function setProductHeart(productId: string, liked: boolean) {
     }),
   });
 
-  if (!response.ok) throw new Error('Nao foi possivel atualizar a curtida.');
+  if (!response.ok) throw new Error('Não foi possível atualizar a curtida.');
   const payload = await response.json().catch(() => ({}));
   return Number(payload?.count || 0);
 }
@@ -111,6 +111,6 @@ export async function copyText(value: string) {
   input.remove();
 
   if (!copied) {
-    throw new Error('Nao foi possivel copiar o link automaticamente.');
+    throw new Error('Não foi possível copiar o link automaticamente.');
   }
 }

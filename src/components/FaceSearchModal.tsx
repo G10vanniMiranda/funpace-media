@@ -27,7 +27,7 @@ function validateSelfie(file: File) {
     return 'Formato inválido. Envie uma selfie JPG ou PNG.';
   }
   if (file.size > maxSelfieBytes) {
-    return 'Imagem muito grande. Envie uma selfie de ate 8 MB.';
+    return 'Imagem muito grande. Envie uma selfie de até 8 MB.';
   }
   return '';
 }
@@ -169,7 +169,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       await attachCameraStream();
       console.log('Camera aberta');
     } catch {
-      setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
+      setError('Precisamos de acesso à câmera para realizar a busca facial. Verifique as permissões do navegador e tente novamente.');
     } finally {
       setIsCameraLoading(false);
     }
@@ -316,7 +316,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     const activeConsent = consent || readStoredConsent();
     if (!activeConsent) {
       setShowConsent(true);
-      setError('Permissao para uso de imagem necessaria antes da busca facial.');
+      setError('Permissão para uso de imagem necessária antes da busca facial.');
       return;
     }
     setError('');
@@ -386,17 +386,17 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
             {showConsent ? (
               <div className="p-5 sm:p-8">
                 <div className="mx-auto max-w-2xl text-center">
-                  <h3 className="font-display text-3xl uppercase text-brutal-accent sm:text-4xl">Permissao para Uso de Imagem</h3>
+                  <h3 className="font-display text-3xl uppercase text-brutal-accent sm:text-4xl">Permissão para Uso de Imagem</h3>
                   <p className="mt-5 text-base leading-relaxed text-gray-700">
-                    Para encontrar suas fotos em nosso banco de dados, precisamos que envie uma selfie. Sua privacidade e nossa prioridade e seus dados serao tratados de acordo com a Lei Geral de Protecao de Dados (LGPD).
+                    Para encontrar suas fotos em nosso banco de dados, precisamos que você envie uma selfie. Sua privacidade é nossa prioridade, e seus dados serão tratados de acordo com a Lei Geral de Proteção de Dados (LGPD).
                   </p>
                   <div className="mt-6 rounded-2xl bg-gray-50 p-5 text-left text-sm leading-relaxed text-gray-700">
                     <p className="mb-3 text-center font-display text-xl uppercase text-brutal-accent">Como usamos sua imagem:</p>
                     <ul className="space-y-2">
-                      <li>Sua foto sera utilizada exclusivamente para localizar suas fotos atraves do reconhecimento facial.</li>
+                      <li>Sua foto será utilizada exclusivamente para localizar suas fotos por meio do reconhecimento facial.</li>
                       <li>Não compartilhamos sua imagem com terceiros.</li>
                       <li>Caso a opção de armazenamento não seja marcada, a selfie será removida após o processamento.</li>
-                      <li>O usuário poderá solicitar a exclusão dos dados a qualquer momento.</li>
+                      <li>Você poderá solicitar a exclusão dos dados a qualquer momento.</li>
                     </ul>
                   </div>
                   <p className="mt-5 font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">
@@ -477,11 +477,11 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                       {(isCameraLoading || isCapturing || !isCameraReady) && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-brutal-black/80 text-white">
                           <Loader2 className="h-10 w-10 animate-spin text-brutal-accent" />
-                          <span className="font-mono text-[10px] uppercase tracking-widest">{isCapturing ? 'Capturando selfie...' : isCameraLoading ? 'Abrindo camera...' : 'Preparando camera...'}</span>
+                          <span className="font-mono text-[10px] uppercase tracking-widest">{isCapturing ? 'Capturando selfie...' : isCameraLoading ? 'Abrindo câmera...' : 'Preparando câmera...'}</span>
                         </div>
                       )}
                     </div>
-                    <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">Camera frontal quando disponivel</span>
+                    <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">Câmera frontal quando disponível</span>
                     <div className="mt-2 grid w-full max-w-sm gap-3 sm:grid-cols-2">
                       <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading || isCapturing} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
                         {isCapturing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
@@ -506,11 +506,11 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
               <div className="flex flex-col">
                 <div className="space-y-4 font-mono text-[11px] uppercase leading-relaxed text-gray-600">
                   <p className="font-bold text-brutal-black">Para melhores resultados:</p>
-                  <p>Use uma foto nitida, de frente e bem iluminada.</p>
+                  <p>Use uma foto nítida, de frente e bem iluminada.</p>
                   <p>Evite óculos escuros, capacete ou outras pessoas na imagem.</p>
                   <div className="flex items-start gap-2 border-t-2 border-dashed border-gray-200 pt-4 text-gray-500">
                     <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-brutal-accent" />
-                    <span>A selfie e usada somente durante a busca e removida apos o processamento.</span>
+                    <span>A selfie é usada somente durante a busca e removida após o processamento.</span>
                   </div>
                 </div>
 

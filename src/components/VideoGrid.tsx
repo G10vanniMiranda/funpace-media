@@ -1,5 +1,5 @@
 import React from 'react';
-import { Play, ShoppingCart, Check, Clock, MapPin, Heart, Share2 } from 'lucide-react';
+import { Play, ShoppingCart, Check, Clock, MapPin, Heart, Share2, Video } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Product } from '../types';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
@@ -104,10 +104,10 @@ export function VideoGrid({
             <div className="relative aspect-video overflow-hidden bg-brutal-black">
               <ProtectedVideoPreview
                 src={video.url}
-                poster={video.thumbnailUrl}
+                poster={video.thumbnailUrl || video.watermarkUrl}
                 alt={video.name}
                 watermark={`FUNPACE ${video.bib || video.id.slice(0, 6)}`}
-                imgClassName="w-full h-full object-cover opacity-80"
+                imgClassName="w-full h-full object-cover opacity-85 transition-transform duration-500 group-hover:scale-[1.04]"
               />
 
               <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
@@ -115,7 +115,7 @@ export function VideoGrid({
               {/* Video Badge */}
               <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                HD
+                VÍDEO
               </div>
 
               <div className="absolute top-4 right-4 z-10 flex gap-2">
@@ -146,8 +146,8 @@ export function VideoGrid({
 
               {/* Duration */}
               <div className="absolute bottom-4 right-4 font-mono text-[10px] text-white bg-brutal-black/50 px-2 py-1 backdrop-blur-sm flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {video.duration}
+                {video.duration ? <Clock className="w-3 h-3" /> : <Video className="w-3 h-3" />}
+                {video.duration || 'Preview'}
               </div>
             </div>
 

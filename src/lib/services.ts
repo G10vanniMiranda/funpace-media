@@ -237,7 +237,7 @@ function mediaPathKey(value?: string | null) {
   return value || '';
 }
 
-async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; type?: string }>(
+async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | null; watermarkUrl?: string | null; type?: string }>(
   items: T[],
   options: { protectImageOriginals?: boolean; protectOriginals?: boolean; allowOriginals?: boolean } = {},
 ): Promise<T[]> {
@@ -248,13 +248,16 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
     ...item,
     url: shouldProtectOriginal(item) ? '' : createPublicMediaUrl(item.url),
     thumbnailUrl: item.thumbnailUrl ? createPublicMediaUrl(item.thumbnailUrl) : item.thumbnailUrl,
+    watermarkUrl: item.watermarkUrl ? createPublicMediaUrl(item.watermarkUrl) : item.watermarkUrl,
   }));
 
   const paths = Array.from(new Set(items.flatMap((item) => {
     const thumbnail = mediaPathKey(item.thumbnailUrl);
+    const watermark = mediaPathKey(item.watermarkUrl);
     const shouldSignOriginal = !shouldProtectOriginal(item) && (item.type === 'VIDEO' || item.type === 'VIEW' || !thumbnail);
     return [
       thumbnail,
+      watermark,
       shouldSignOriginal ? mediaPathKey(item.url) : '',
     ];
   }).filter(Boolean)));
@@ -285,6 +288,7 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
       ...item,
       url: shouldProtectOriginal(item) ? '' : item.url && urls[item.url] ? urls[item.url] : item.url,
       thumbnailUrl: item.thumbnailUrl && urls[item.thumbnailUrl] ? urls[item.thumbnailUrl] : item.thumbnailUrl,
+      watermarkUrl: item.watermarkUrl && urls[item.watermarkUrl] ? urls[item.watermarkUrl] : item.watermarkUrl,
     }));
   } catch (error) {
     console.error('Erro ao assinar URLs de mídia:', error);

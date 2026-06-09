@@ -61,6 +61,10 @@
       "destination": "/api/system?route=checkout-debug"
     },
     {
+      "source": "/api/events/media-counts",
+      "destination": "/api/system?route=events-media-counts"
+    },
+    {
       "source": "/api/payments/reconcile",
       "destination": "/api/system?route=payments-reconcile"
     },

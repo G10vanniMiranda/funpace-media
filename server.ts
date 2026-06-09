@@ -12,6 +12,7 @@ import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
 import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
 import adminApiHandler from "./api/admin";
+import eventMediaCountsHandler from "./server/api/events/media-counts";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
@@ -1222,6 +1223,8 @@ app.get("/api/health", async (req, res) => {
 
   res.json(status);
 });
+
+app.get("/api/events/media-counts", eventMediaCountsHandler);
 
 app.all([
   "/api/admin",

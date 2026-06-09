@@ -85,7 +85,7 @@ test('public event page uses compact premium layout without changing gallery beh
   assert.match(page, /Encontre suas fotos com uma selfie/);
   assert.match(page, /Tirar selfie/);
   assert.match(page, /Carregar foto/);
-  assert.match(page, /Ver todas as fotos/);
+  assert.match(page, /Limpar busca facial/);
   assert.match(page, /EventCompactStat/);
   assert.match(page, /onAddToCart=\{onAddToCart\}/);
   assert.match(photoGrid, /compact\?: boolean/);

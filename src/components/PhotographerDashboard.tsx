@@ -762,7 +762,7 @@ function isMissingLocalUploadFileError(message: string) {
 
 function getMissingLocalUploadFileMessage(file?: File) {
   const fileName = file?.name ? ` (${file.name})` : '';
-  return `Não foi possível localizar o arquivo local${fileName} durante a publicação. Verifique se a foto ainda existe no dispositivo ou armazenamento em nuvem, deixe o arquivo disponível offline, selecione a foto novamente e tente publicar.`;
+  return `Nao foi possivel localizar o arquivo local${fileName} durante a publicacao. Verifique se as fotos ainda existem no armazenamento, deixe o arquivo disponivel offline, selecione a foto novamente e tente publicar.`;
 }
 
 function getUploadStageLabel(stage: UploadPublishStage) {
@@ -2411,7 +2411,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       if (publishedCount === 0 && failedUploads.length > 0) {
         const firstFailure = failedUploads[0];
-        throw new Error(`Não foi possível localizar alguns arquivos durante a publicação. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
+        throw new Error(`Nao foi possivel localizar alguns arquivos durante a publicacao. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
       }
 
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
@@ -2428,7 +2428,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) dos arquivos publicados ficaram com fallback visual.`
           : '';
-        alert(`Upload parcial concluído.\n\nPublicadas: ${publishedCount} fotos\nFalharam: ${failedUploads.length} fotos\nDuplicadas ignoradas: ${skippedDuplicateCount}\n${previewWarningText ? `${previewWarningText}\n` : ''}\nOs arquivos com falha ficaram selecionados para tentar novamente.\nPrimeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
+        alert(`Upload parcial concluido.\n\nPublicadas: ${publishedCount} fotos\nFalharam: ${failedUploads.length} fotos\nDuplicadas ignoradas: ${skippedDuplicateCount}\n${previewWarningText ? `${previewWarningText}\n` : ''}\nOs arquivos com falha ficaram selecionados para tentar novamente.\nPrimeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);

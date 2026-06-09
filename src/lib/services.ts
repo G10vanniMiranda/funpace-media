@@ -552,6 +552,27 @@ async function attachOrderItems(orders: SupabaseRow<Order>[], useAuth: boolean):
 }
 
 export const productService = {
+  async getPublishedEventMediaCounts(): Promise<Record<string, { photos: number; videos: number; items: number; eventName: string }>> {
+    const response = await fetch(apiUrl('/api/events/media-counts'), { method: 'GET' });
+    if (!response.ok) {
+      throw new Error('Nao foi possivel carregar as contagens dos eventos.');
+    }
+    const payload = await response.json().catch(() => ({})) as {
+      counts?: Array<{ eventId: string; eventName: string; photos: number; videos: number; items: number }>;
+    };
+    const counts: Record<string, { photos: number; videos: number; items: number; eventName: string }> = {};
+    for (const item of payload.counts || []) {
+      if (!item.eventId) continue;
+      counts[item.eventId] = {
+        eventName: item.eventName || '',
+        photos: Number(item.photos) || 0,
+        videos: Number(item.videos) || 0,
+        items: Number(item.items) || 0,
+      };
+    }
+    return counts;
+  },
+
   async getLatestProducts(count = 20): Promise<Product[]> {
     if (isMockMode) {
       return mockProducts
@@ -626,11 +647,11 @@ export const productService = {
     const response = await fetch(apiUrl('/api/face/search'), { method: 'POST', body: formData });
     const payload = await response.json().catch(() => ({})) as Partial<FaceSearchResponse> & { error?: string };
     if (!response.ok) {
-      if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de até 8 MB.');
-      if (response.status === 415) throw new Error('Formato inválido. Envie uma selfie JPG ou PNG.');
+      if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de ate 8 MB.');
+      if (response.status === 415) throw new Error('Formato invalido. Envie uma selfie JPG ou PNG.');
       if (response.status === 422) throw new Error('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.');
-      if (response.status === 403) throw new Error('Permissão para uso de imagem necessária para realizar a busca facial.');
-      throw new Error('Não foi possível realizar a busca facial. Tente novamente em alguns instantes.');
+      if (response.status === 403) throw new Error('Permissao para uso de imagem necessaria para realizar a busca facial.');
+      throw new Error('Nao foi possivel realizar a busca facial. Tente novamente em alguns instantes.');
     }
     const matches = Array.isArray(payload.matches) ? payload.matches : [];
     const signed = await signMediaUrls(matches.map((match) => match.product), { protectOriginals: true });

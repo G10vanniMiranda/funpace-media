@@ -180,6 +180,7 @@ function Storefront() {
   const [photos, setPhotos] = useState<Product[]>([]);
   const [videos, setVideos] = useState<Product[]>([]);
   const [registeredEvents, setRegisteredEvents] = useState<Event[]>([]);
+  const [eventMediaCounts, setEventMediaCounts] = useState<Record<string, { photos: number; videos: number; items: number; eventName: string }>>({});
   const [publicPhotographers, setPublicPhotographers] = useState<Photographer[]>([]);
   const [selectedEventName, setSelectedEventName] = useState<string | null>(null);
   const [eventQuery, setEventQuery] = useState('');
@@ -205,7 +206,7 @@ function Storefront() {
     async function loadData() {
       setIsLoading(true);
       try {
-        const [products, eventRows, photographerRows] = await Promise.all([
+        const [products, eventRows, photographerRows, mediaCounts] = await Promise.all([
           productService.getLatestProducts(storefrontProductLimit),
           eventService.getPublishedEvents(300).catch((error) => {
             console.warn('Eventos cadastrados indisponíveis na vitrine; usando apenas mídias publicadas.', error);
@@ -215,10 +216,15 @@ function Storefront() {
             console.warn('Fotógrafos públicos indisponíveis na busca global.', error);
             return [] as Photographer[];
           }),
+          productService.getPublishedEventMediaCounts().catch((error) => {
+            console.warn('Contagens de midias por evento indisponiveis; usando fallback publico.', error);
+            return {};
+          }),
         ]);
         setPhotos(products.filter(p => p.type === 'IMG'));
         setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
         setRegisteredEvents(eventRows);
+        setEventMediaCounts(mediaCounts);
         setPublicPhotographers(photographerRows);
       } catch (error) {
         console.error("Error loading initial data:", error);
@@ -977,6 +983,7 @@ function Storefront() {
                 <EventGrid
                   products={allDisplayProducts}
                   registeredEvents={registeredEvents}
+                  eventMediaCounts={eventMediaCounts}
                   query={debouncedEventQuery}
                   onSelectEvent={openGlobalEventResult}
                 />
@@ -1494,23 +1501,25 @@ function PublicPhotographerPage({
       </section>
 
       {activeView === 'events' ? (
-        <section className="mx-auto max-w-300 px-4 pb-16 md:px-6">
+        <section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pb-16 md:w-full md:max-w-[75rem] md:px-6">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredAlbums.map((album) => {
+            {filteredAlbums.map((album, albumIndex) => {
               const videoTotal = album.products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length;
               const destination = album.slug ? `/evento/${album.slug}` : `/eventos/${createEventSlug(album.name)}`;
               return (
-                <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-116 flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-120">
-                  <div className="h-48 shrink-0 border-b-2 border-brutal-black bg-gray-100 lg:h-52">
-                    {album.coverUrl ? <img src={album.coverUrl} alt={album.name} loading="lazy" style={{ objectPosition: album.coverPosition || 'center center' }} className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-105" /> : <div className="flex h-full items-center justify-center"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
+                <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-116 min-w-0 flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-120">
+                  <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-gray-100">
+                    {album.coverUrl ? (
+                      <img src={album.coverUrl} alt={album.name} loading={albumIndex < 8 ? 'eager' : 'lazy'} style={{ objectPosition: album.coverPosition || 'center center' }} className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]" />
+                    ) : <div className="flex h-full items-center justify-center bg-gray-100"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
                   </div>
-                  <div className="flex flex-1 flex-col p-4">
+                  <div className="flex min-w-0 flex-1 flex-col p-4">
                     <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(album.date)}</p>
-                    <h2 className="min-h-18 font-display text-xl uppercase leading-tight">{album.name}</h2>
+                    <h2 className="min-h-18 max-w-64 break-words font-display text-lg uppercase leading-tight sm:max-w-full sm:text-xl">{album.name}</h2>
                     <p className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-gray-500"><MapPin className="h-3.5 w-3.5 text-brutal-accent" />{album.city || 'Local a confirmar'}</p>
-                    <div className="mt-auto flex items-center justify-between border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest">
+                    <div className="mt-auto flex min-w-0 flex-col items-start justify-between gap-3 border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest sm:flex-row sm:items-center">
                       <span>{videoTotal} videos</span>
-                      <span className="font-display text-sm text-brutal-accent">Ver evento</span>
+                      <span className="shrink-0 whitespace-nowrap font-display text-sm text-brutal-accent">Ver evento</span>
                     </div>
                   </div>
                 </button>
@@ -1668,7 +1677,7 @@ function PublicEventPage({
                       <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-brutal-black text-brutal-accent transition-transform duration-300 group-hover:scale-105"><ScanFace className="h-5 w-5" /></div>
                       <div>
                         <p className="font-mono text-[8px] font-bold uppercase tracking-[0.2em] text-gray-500">Busca facial exclusiva</p>
-                        <h2 className="mt-1 font-display text-lg uppercase leading-tight">Encontre suas fotos através da Selfie</h2>
+                        <h2 className="mt-1 font-display text-lg uppercase leading-tight">Encontre suas fotos com uma selfie</h2>
                         <p className="mt-2 text-xs leading-relaxed text-gray-600">
                           Para proteger a privacidade dos participantes, as fotos deste evento são exibidas apenas através da busca facial.
                         </p>

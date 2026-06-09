@@ -5,9 +5,17 @@ import { Event, Product } from '../types';
 interface EventGridProps {
   products: Product[];
   registeredEvents?: Event[];
+  eventMediaCounts?: Record<string, EventMediaCount>;
   query: string;
   onSelectEvent: (eventName: string) => void;
 }
+
+type EventMediaCount = {
+  photos: number;
+  videos: number;
+  items: number;
+  eventName: string;
+};
 
 interface MediaEvent {
   name: string;
@@ -16,7 +24,8 @@ interface MediaEvent {
   coverPosition: string;
   date?: string;
   createdAt?: string;
-  sortTime: number;
+  eventTime: number;
+  createdTime: number;
   photos: number;
   videos: number;
   items: number;
@@ -55,7 +64,7 @@ function findEventDetail(eventName: string, products: Product[], registeredEvent
   })[0] || null;
 }
 
-function buildEvents(products: Product[], registeredEvents: Event[] = []) {
+function buildEvents(products: Product[], registeredEvents: Event[] = [], eventMediaCounts: Record<string, EventMediaCount> = {}) {
   const events = new Map<string, MediaEvent>();
   const productGroups = new Map<string, Product[]>();
 
@@ -76,23 +85,31 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
       if (!latest) return product.createdAt;
       return product.createdAt > latest ? product.createdAt : latest;
     }, undefined);
-    const fallbackSortTime = groupProducts.reduce((earliest, product) => {
+    const fallbackCreatedAt = groupProducts.reduce<string | undefined>((latest, product) => {
+      if (!product.createdAt) return latest;
+      if (!latest) return product.createdAt;
+      return product.createdAt > latest ? product.createdAt : latest;
+    }, undefined);
+    const fallbackCreatedTime = groupProducts.reduce((latest, product) => {
       const timestamp = getTimestamp(product.createdAt);
-      return timestamp && (!earliest || timestamp < earliest) ? timestamp : earliest;
+      return timestamp > latest ? timestamp : latest;
     }, 0);
-    const createdAt = eventDetail?.createdAt || fallbackDate;
+    const createdAt = eventDetail?.createdAt || fallbackCreatedAt || fallbackDate;
+    const date = eventDetail?.date || fallbackDate;
+    const mediaCount = eventDetail?.id ? eventMediaCounts[eventDetail.id] : null;
 
     events.set(normalizeText(name), {
       name,
       checkpoint: eventDetail?.checkpoint || eventDetail?.location || groupProducts[0]?.checkpoint || 'Local a confirmar',
       coverUrl: eventDetail?.coverImage || coverProduct?.thumbnailUrl || null,
       coverPosition: eventDetail?.cover_position || 'center center',
-      date: eventDetail?.date || fallbackDate,
+      date,
       createdAt,
-      sortTime: getTimestamp(eventDetail?.createdAt) || fallbackSortTime,
-      photos: groupProducts.filter((product) => product.type === 'IMG').length,
-      videos: groupProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
-      items: groupProducts.length,
+      eventTime: getTimestamp(date),
+      createdTime: getTimestamp(createdAt) || fallbackCreatedTime,
+      photos: mediaCount?.photos ?? groupProducts.filter((product) => product.type === 'IMG').length,
+      videos: mediaCount?.videos ?? groupProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length,
+      items: mediaCount?.items ?? groupProducts.length,
     });
   }
 
@@ -112,22 +129,25 @@ function buildEvents(products: Product[], registeredEvents: Event[] = []) {
       coverPosition: eventItem.cover_position || 'center center',
       date: eventItem.date,
       createdAt: eventItem.createdAt,
-      sortTime: getTimestamp(eventItem.createdAt) || getTimestamp(eventItem.date),
-      photos: 0,
-      videos: 0,
-      items: 0,
+      eventTime: getTimestamp(eventItem.date),
+      createdTime: getTimestamp(eventItem.createdAt),
+      photos: eventMediaCounts[eventItem.id]?.photos ?? 0,
+      videos: eventMediaCounts[eventItem.id]?.videos ?? 0,
+      items: eventMediaCounts[eventItem.id]?.items ?? 0,
     });
   }
 
   return Array.from(events.values()).sort((left, right) => {
-    if (left.items === 0 && right.items > 0) return 1;
-    if (right.items === 0 && left.items > 0) return -1;
-    return right.sortTime - left.sortTime || left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base' });
+    const leftTime = left.eventTime || left.createdTime;
+    const rightTime = right.eventTime || right.createdTime;
+    return rightTime - leftTime ||
+      right.createdTime - left.createdTime ||
+      left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base' });
   });
 }
 
-export function EventGrid({ products, registeredEvents = [], query, onSelectEvent }: EventGridProps) {
-  const events = React.useMemo(() => buildEvents(products, registeredEvents), [products, registeredEvents]);
+export function EventGrid({ products, registeredEvents = [], eventMediaCounts = {}, query, onSelectEvent }: EventGridProps) {
+  const events = React.useMemo(() => buildEvents(products, registeredEvents, eventMediaCounts), [products, registeredEvents, eventMediaCounts]);
   React.useEffect(() => {
     console.info('[event-cover] event-grid:covers', {
       count: events.length,
@@ -147,7 +167,7 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
   }, [events, query]);
 
   return (
-    <section className="pt-10 pb-8 md:py-20 px-4 md:px-6 max-w-350 mx-auto">
+    <section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pt-10 pb-8 md:w-full md:max-w-[87.5rem] md:px-6 md:py-20">
       <div className="mb-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="max-w-3xl">
           <h2 className="text-4xl md:text-6xl mb-2">EVENTOS</h2>
@@ -168,31 +188,31 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
-          {filteredEvents.map((event) => (
+          {filteredEvents.map((event, eventIndex) => (
             <button
               key={event.name}
               type="button"
               onClick={() => onSelectEvent(event.name)}
-              className="group flex h-full flex-col bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
+              className="group flex h-full min-w-0 flex-col bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
             >
-              <div className="relative aspect-[4/3] w-full shrink-0 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
+              <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-gray-100">
                 {event.coverUrl ? (
                   <img
                     src={event.coverUrl}
                     alt={event.name}
-                    loading="lazy"
+                    loading={eventIndex < 8 ? 'eager' : 'lazy'}
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                     style={{ objectPosition: event.coverPosition || 'center center' }}
-                    className="block w-full h-full object-cover object-center opacity-85 group-hover:scale-105 transition-transform duration-500"
+                    className="block h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                     <CalendarDays className="w-16 h-16 text-gray-300" />
                   </div>
                 )}
-                <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent" />
-                <div className="absolute bottom-4 left-4 right-4 flex flex-wrap gap-2">
+                <div className="absolute inset-0 z-[2] bg-linear-to-t from-brutal-black/70 via-transparent to-transparent" />
+                <div className="absolute bottom-4 left-4 right-4 z-[3] flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[10px] uppercase font-bold">
                     <Camera className="w-3 h-3" />
                     {event.photos}
@@ -204,21 +224,21 @@ export function EventGrid({ products, registeredEvents = [], query, onSelectEven
                 </div>
               </div>
 
-              <div className="flex flex-1 flex-col p-5">
+              <div className="flex min-w-0 flex-1 flex-col p-5">
                 <div className="flex items-center gap-2 text-gray-500 mb-3">
                   <MapPin className="w-4 h-4 text-brutal-accent shrink-0" />
                   <p className="font-mono text-[10px] uppercase tracking-widest truncate">
                     {event.checkpoint}
                   </p>
                 </div>
-                <h3 className="font-display text-xl uppercase leading-tight min-h-[4.5rem]">
+                <h3 className="min-h-[4.5rem] max-w-64 break-words font-display text-lg uppercase leading-tight sm:max-w-full sm:text-xl">
                   {event.name}
                 </h3>
-                <div className="mt-auto pt-4 border-t border-gray-100 flex items-center justify-between gap-3">
+                <div className="mt-auto flex min-w-0 flex-col items-start justify-between gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
                     {event.items === 1 ? '1 mídia' : `${event.items} mídias`}
                   </p>
-                  <span className="font-display text-sm uppercase text-brutal-accent">
+                  <span className="shrink-0 whitespace-nowrap font-display text-sm uppercase text-brutal-accent">
                     Ver evento
                   </span>
                 </div>

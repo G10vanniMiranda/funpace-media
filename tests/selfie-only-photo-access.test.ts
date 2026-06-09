@@ -25,7 +25,7 @@ test('event pages only render photo grids for face search results', () => {
 test('event selfie notice explains privacy-first access', () => {
   const source = readFileSync('src/App.tsx', 'utf8');
 
-  assert.match(source, /Encontre suas fotos através da Selfie/);
+  assert.match(source, /Encontre suas fotos com uma selfie/);
   assert.match(source, /Para proteger a privacidade dos participantes/);
   assert.match(source, /as fotos deste evento são exibidas apenas através da busca facial/);
 });

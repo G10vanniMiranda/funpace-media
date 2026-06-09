@@ -169,7 +169,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       await attachCameraStream();
       console.log('Camera aberta');
     } catch {
-      setError('Precisamos de acesso à câmera para realizar a busca facial. Verifique as permissões do navegador e tente novamente.');
+      setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
     } finally {
       setIsCameraLoading(false);
     }
@@ -316,7 +316,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     const activeConsent = consent || readStoredConsent();
     if (!activeConsent) {
       setShowConsent(true);
-      setError('Permissão para uso de imagem necessária antes da busca facial.');
+      setError('Permissao para uso de imagem necessaria antes da busca facial.');
       return;
     }
     setError('');
@@ -386,7 +386,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
             {showConsent ? (
               <div className="p-5 sm:p-8">
                 <div className="mx-auto max-w-2xl text-center">
-                  <h3 className="font-display text-3xl uppercase text-brutal-accent sm:text-4xl">Permissão para Uso de Imagem</h3>
+                  <h3 className="font-display text-3xl uppercase text-brutal-accent sm:text-4xl">Permissao para Uso de Imagem</h3>
                   <p className="mt-5 text-base leading-relaxed text-gray-700">
                     Para encontrar suas fotos em nosso banco de dados, precisamos que você envie uma selfie. Sua privacidade é nossa prioridade, e seus dados serão tratados de acordo com a Lei Geral de Proteção de Dados (LGPD).
                   </p>

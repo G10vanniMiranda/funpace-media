@@ -1004,14 +1004,14 @@ function Storefront() {
 
                   <div className="space-y-5">
                     <div className="grid gap-5 lg:grid-cols-[minmax(280px,0.48fr)_minmax(0,1fr)] lg:items-stretch">
-                      <div className="relative min-h-52 overflow-hidden rounded-[1.35rem] bg-brutal-black shadow-[0_14px_34px_rgba(5,5,5,0.16)] sm:min-h-72 lg:min-h-0">
+                      <div className="relative min-h-52 overflow-hidden rounded-[1.35rem] bg-[#111318] shadow-[0_14px_34px_rgba(5,5,5,0.16)] sm:min-h-72 lg:min-h-0">
                         {selectedEventCover ? (
                           <img
                             src={selectedEventCover}
                             alt={selectedEventName}
                             loading="eager"
                             decoding="async"
-                            className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.03]"
+                            className="absolute inset-0 h-full w-full object-contain"
                           />
                         ) : (
                           <div className="absolute inset-0 grid place-items-center text-white/35">
@@ -1508,9 +1508,9 @@ function PublicPhotographerPage({
               const destination = album.slug ? `/evento/${album.slug}` : `/eventos/${createEventSlug(album.name)}`;
               return (
                 <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-116 min-w-0 flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-120">
-                  <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-gray-100">
+                  <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
                     {album.coverUrl ? (
-                      <img src={album.coverUrl} alt={album.name} loading={albumIndex < 8 ? 'eager' : 'lazy'} style={{ objectPosition: album.coverPosition || 'center center' }} className="h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]" />
+                      <img src={album.coverUrl} alt={album.name} loading={albumIndex < 8 ? 'eager' : 'lazy'} style={{ objectPosition: album.coverPosition || 'center center' }} className="h-full w-full object-contain object-center" />
                     ) : <div className="flex h-full items-center justify-center bg-gray-100"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col p-4">
@@ -1634,9 +1634,9 @@ function PublicEventPage({
 
           <div className="overflow-hidden rounded-2xl border border-black/10 bg-white shadow-[0_18px_55px_rgba(5,5,5,0.10)]">
             <div className="grid lg:grid-cols-[minmax(300px,0.82fr)_minmax(0,1.5fr)]">
-              <div className="relative min-h-55 overflow-hidden bg-brutal-black sm:min-h-72 lg:min-h-full">
+              <div className="relative min-h-55 overflow-hidden bg-[#111318] sm:min-h-72 lg:min-h-full">
                 {cover ? (
-                  <img src={cover} alt={event.name} style={{ objectPosition: event.cover_position || 'center center' }} className="absolute inset-0 h-full w-full object-cover transition-transform duration-700 hover:scale-[1.02]" />
+                  <img src={cover} alt={event.name} style={{ objectPosition: event.cover_position || 'center center' }} className="absolute inset-0 h-full w-full object-contain" />
                 ) : (
                   <div className="absolute inset-0 grid place-items-center text-white/30"><ImageIcon className="h-16 w-16" /></div>
                 )}

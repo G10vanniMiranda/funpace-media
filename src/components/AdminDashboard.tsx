@@ -3418,9 +3418,9 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       <p className="mb-2 font-mono text-[9px] uppercase tracking-widest text-gray-500">Capa atual</p>
                       <div className="aspect-video max-w-sm bg-[#05080d] border border-brutal-accent overflow-hidden">
                         {eventForm.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                          <video src={eventForm.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
+                          <video src={eventForm.coverImage} className="w-full h-full object-contain" muted preload="metadata" />
                         ) : (
-                          <img src={eventForm.coverImage} alt="Capa atual do evento" style={{ objectPosition: eventForm.cover_position || 'center center' }} className="w-full h-full object-cover" />
+                          <img src={eventForm.coverImage} alt="Capa atual do evento" style={{ objectPosition: eventForm.cover_position || 'center center' }} className="w-full h-full object-contain" />
                         )}
                       </div>
                     </div>
@@ -3452,11 +3452,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             className={`group text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
                               }`}
                           >
-                            <div className="aspect-video bg-black overflow-hidden">
+                            <div className="aspect-video bg-[#05080d] overflow-hidden">
                               {coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                                <video src={coverUrl} className="w-full h-full object-cover transition-transform group-hover:scale-105" muted preload="metadata" />
+                                <video src={coverUrl} className="w-full h-full object-contain" muted preload="metadata" />
                               ) : (
-                                <img src={coverUrl} alt={product.name} className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                <img src={coverUrl} alt={product.name} className="w-full h-full object-contain" />
                               )}
                             </div>
                             <div className="p-2">

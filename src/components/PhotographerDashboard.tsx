@@ -2920,12 +2920,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         return (
                           <div key={eventItem.id} className="p-5 grid gap-4 hover:bg-white/[0.02] transition-colors">
                             <div className="grid gap-4 lg:grid-cols-[120px_1fr_auto] lg:items-start">
-                              <div className="aspect-video lg:aspect-square bg-[#080d14] border border-white/10 overflow-hidden">
+                              <div className="aspect-video lg:aspect-square bg-[#05080d] border border-white/10 overflow-hidden">
                                 {eventItem.coverImage ? (
                                   eventItem.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                                    <video src={eventItem.coverImage} className="w-full h-full object-cover" muted preload="metadata" />
+                                    <video src={eventItem.coverImage} className="w-full h-full object-contain" muted preload="metadata" />
                                   ) : (
-                                    <img src={eventItem.coverImage} alt={eventItem.name} style={{ objectPosition: eventItem.cover_position || 'center center' }} className="w-full h-full object-cover" />
+                                    <img src={eventItem.coverImage} alt={eventItem.name} style={{ objectPosition: eventItem.cover_position || 'center center' }} className="w-full h-full object-contain" />
                                   )
                                 ) : (
                                   <div className="w-full h-full flex items-center justify-center">
@@ -3173,12 +3173,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             className={`group bg-white text-brutal-black border-2 overflow-hidden text-left transition-all ${isActive ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-brutal-black hover:border-brutal-accent'
                               }`}
                           >
-                            <div className="relative aspect-4/3 bg-brutal-black overflow-hidden border-b-2 border-brutal-black">
+                            <div className="relative aspect-4/3 bg-[#05080d] overflow-hidden border-b-2 border-brutal-black">
                               {eventItem.coverUrl ? (
                                 eventItem.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                                  <video src={eventItem.coverUrl} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" muted preload="metadata" />
+                                  <video src={eventItem.coverUrl} className="w-full h-full object-contain opacity-85" muted preload="metadata" />
                                 ) : (
-                                  <img src={eventItem.coverUrl} alt={eventItem.name} style={{ objectPosition: eventItem.coverPosition || 'center center' }} className="w-full h-full object-cover opacity-85 group-hover:scale-105 transition-transform duration-500" />
+                                  <img src={eventItem.coverUrl} alt={eventItem.name} style={{ objectPosition: eventItem.coverPosition || 'center center' }} className="w-full h-full object-contain opacity-85" />
                                 )
                               ) : (
                                 <div className="w-full h-full bg-gray-100 flex items-center justify-center">
@@ -3244,12 +3244,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   ) : (
                     <div className="bg-[#0d131c] border border-white/10 overflow-hidden">
                       <div className="grid lg:grid-cols-[360px_1fr]">
-                        <div className="relative min-h-60 bg-[#080d14] overflow-hidden">
+                        <div className="relative min-h-60 bg-[#05080d] overflow-hidden">
                           {selectedProductEventCard?.coverUrl ? (
                             selectedProductEventCard.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
-                              <video src={selectedProductEventCard.coverUrl} className="absolute inset-0 w-full h-full object-cover opacity-80" muted preload="metadata" />
+                              <video src={selectedProductEventCard.coverUrl} className="absolute inset-0 w-full h-full object-contain opacity-80" muted preload="metadata" />
                             ) : (
-                              <img src={selectedProductEventCard.coverUrl} alt={selectedProductEventCard.name} style={{ objectPosition: selectedProductEventCard.coverPosition || 'center center' }} className="absolute inset-0 w-full h-full object-cover opacity-80" />
+                              <img src={selectedProductEventCard.coverUrl} alt={selectedProductEventCard.name} style={{ objectPosition: selectedProductEventCard.coverPosition || 'center center' }} className="absolute inset-0 w-full h-full object-contain opacity-80" />
                             )
                           ) : (
                             <div className="absolute inset-0 flex items-center justify-center">
@@ -4026,7 +4026,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                               src={pendingEventCover?.previewUrl || eventForm.coverImage}
                               alt="Capa atual do evento"
                               style={{ objectPosition: eventForm.cover_position || 'center center' }}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-contain"
                               loading="lazy"
                               decoding="async"
                             />
@@ -4102,11 +4102,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   className={`group relative text-left bg-[#05080d] border overflow-hidden transition-colors ${isSelected ? 'border-brutal-accent ring-1 ring-brutal-accent' : 'border-white/10 hover:border-brutal-accent/70'
                                     }`}
                                 >
-                                  <div className="aspect-video bg-black overflow-hidden">
+                                  <div className="aspect-video bg-[#05080d] overflow-hidden">
                                     <img
                                       src={coverUrl}
                                       alt={product.name}
-                                      className="w-full h-full object-cover transition-transform group-hover:scale-105"
+                                      className="w-full h-full object-contain"
                                       loading="lazy"
                                       decoding="async"
                                     />

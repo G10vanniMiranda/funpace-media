@@ -195,7 +195,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
               onClick={() => onSelectEvent(event.name)}
               className="group flex h-full min-w-0 flex-col bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
             >
-              <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-gray-100">
+              <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
                 {event.coverUrl ? (
                   <img
                     src={event.coverUrl}
@@ -204,7 +204,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                     style={{ objectPosition: event.coverPosition || 'center center' }}
-                    className="block h-full w-full object-cover object-center transition-transform duration-500 group-hover:scale-[1.02]"
+                    className="block h-full w-full object-contain object-center"
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">

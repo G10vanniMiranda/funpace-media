@@ -195,7 +195,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
               onClick={() => onSelectEvent(event.name)}
               className="group flex h-full min-w-0 flex-col bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
             >
-              <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
+              <div className="relative aspect-video w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
                 {event.coverUrl ? (
                   <img
                     src={event.coverUrl}

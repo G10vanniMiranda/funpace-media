@@ -2920,7 +2920,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         return (
                           <div key={eventItem.id} className="p-5 grid gap-4 hover:bg-white/[0.02] transition-colors">
                             <div className="grid gap-4 lg:grid-cols-[120px_1fr_auto] lg:items-start">
-                              <div className="aspect-video lg:aspect-square bg-[#05080d] border border-white/10 overflow-hidden">
+                              <div className="aspect-video bg-[#05080d] border border-white/10 overflow-hidden">
                                 {eventItem.coverImage ? (
                                   eventItem.coverImage.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
                                     <video src={eventItem.coverImage} className="w-full h-full object-contain" muted preload="metadata" />
@@ -3173,7 +3173,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             className={`group bg-white text-brutal-black border-2 overflow-hidden text-left transition-all ${isActive ? 'border-brutal-accent ring-2 ring-brutal-accent/40' : 'border-brutal-black hover:border-brutal-accent'
                               }`}
                           >
-                            <div className="relative aspect-4/3 bg-[#05080d] overflow-hidden border-b-2 border-brutal-black">
+                            <div className="relative aspect-video bg-[#05080d] overflow-hidden border-b-2 border-brutal-black">
                               {eventItem.coverUrl ? (
                                 eventItem.coverUrl.match(/\.(mp4|webm|mov)(\?|$)/i) ? (
                                   <video src={eventItem.coverUrl} className="w-full h-full object-contain opacity-85" muted preload="metadata" />

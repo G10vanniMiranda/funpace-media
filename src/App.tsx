@@ -1508,7 +1508,7 @@ function PublicPhotographerPage({
               const destination = album.slug ? `/evento/${album.slug}` : `/eventos/${createEventSlug(album.name)}`;
               return (
                 <button key={album.id} type="button" onClick={() => navigate(destination)} className="group flex h-116 min-w-0 flex-col overflow-hidden bg-white text-left brutal-border brutal-shadow-hover sm:h-120">
-                  <div className="relative aspect-[16/11] w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
+                  <div className="relative aspect-video w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
                     {album.coverUrl ? (
                       <img src={album.coverUrl} alt={album.name} loading={albumIndex < 8 ? 'eager' : 'lazy'} style={{ objectPosition: album.coverPosition || 'center center' }} className="h-full w-full object-contain object-center" />
                     ) : <div className="flex h-full items-center justify-center bg-gray-100"><CalendarDays className="h-14 w-14 text-gray-300" /></div>}

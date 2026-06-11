@@ -11,6 +11,9 @@ const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || '';
 const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || 'https://99dev.pro/bucket/api').replace(/\/+$/, '');
 const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || '';
 const maxUploadBytes = Number(process.env.MEDIA_UPLOAD_MAX_BYTES || 300 * 1024 * 1024);
+const uploadProviderTimeoutMs = Number(process.env.MEDIA_UPLOAD_PROVIDER_TIMEOUT_MS || 600_000);
+const uploadVerifyTimeoutMs = Number(process.env.MEDIA_UPLOAD_VERIFY_TIMEOUT_MS || 30_000);
+const mediaUploadCorsHeaders = 'Authorization, Content-Type, X-File-Name, X-Storage-Path, X-File-Hash, X-Upload-Batch-Id';
 
 function setSecurityHeaders(res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -37,7 +40,7 @@ function setCorsHeaders(req: any, res: any) {
   }
 
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-File-Name, X-Storage-Path');
+  res.setHeader('Access-Control-Allow-Headers', mediaUploadCorsHeaders);
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
@@ -227,18 +230,32 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   if (!externalBucketToken) throw new Error('BUCKET_API_TOKEN não configurado no servidor.');
   assertMediaBucketConfigured();
 
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), uploadProviderTimeoutMs);
   const formData = new FormData();
   const safeFileName = path.split('/').pop() || fileName || 'arquivo';
   formData.set('bucket', mediaBucket);
   formData.set('arquivo', new Blob([buffer], { type: contentType || 'application/octet-stream' }), safeFileName);
 
-  const response = await fetch(`${externalBucketApiBaseUrl}/upload`, {
-    method: 'POST',
-    headers: {
-      'X-API-Token': externalBucketToken,
-    },
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${externalBucketApiBaseUrl}/upload`, {
+      method: 'POST',
+      headers: {
+        'X-API-Token': externalBucketToken,
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === 'AbortError') {
+      throw new Error(`Upload externo excedeu ${Math.round(uploadProviderTimeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const raw = await response.text();
   let payload: any = {};
@@ -254,14 +271,59 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   }
 
   const publicUrl = pickUploadedMediaUrl(payload);
+  console.info('[media-upload] provider:done', {
+    bucket: mediaBucket,
+    path,
+    status: response.status,
+    durationMs: Date.now() - startedAt,
+    returnedUrl: Boolean(publicUrl),
+  });
   return {
     path: publicUrl || payload?.path || payload?.key || path,
     publicUrl,
   };
 }
 
+async function verifyUploadedMedia(uploaded: { path: string; publicUrl?: string }) {
+  const url = uploaded.publicUrl || uploaded.path;
+  if (!/^https?:\/\//i.test(url)) {
+    return { verified: true, skipped: 'non-http-path' };
+  }
+
+  const startedAt = Date.now();
+  let lastMessage = '';
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), uploadVerifyTimeoutMs);
+    try {
+      const response = await fetch(url, { method: 'HEAD', signal: controller.signal });
+      if (response.ok) {
+        return { verified: true, status: response.status, durationMs: Date.now() - startedAt };
+      }
+      if ([403, 405].includes(response.status)) {
+        const getResponse = await fetch(url, { method: 'GET', headers: { Range: 'bytes=0-0' }, signal: controller.signal });
+        if (getResponse.ok || getResponse.status === 206) {
+          return { verified: true, status: getResponse.status, durationMs: Date.now() - startedAt };
+        }
+        lastMessage = `HTTP ${getResponse.status}`;
+      } else {
+        lastMessage = `HTTP ${response.status}`;
+      }
+    } catch (error: any) {
+      lastMessage = error?.name === 'AbortError'
+        ? `timeout ${Math.round(uploadVerifyTimeoutMs / 1000)}s`
+        : String(error?.message || error || 'falha ao verificar arquivo');
+    } finally {
+      clearTimeout(timeout);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+  }
+
+  throw new Error(`Upload gravado pelo provedor, mas a confirmacao do Storage falhou: ${lastMessage}.`);
+}
+
 export default async function handler(req: any, res: any) {
-  if (handleSecurityOptions(req, res, 'POST,OPTIONS', 'Authorization, Content-Type, X-File-Name, X-Storage-Path')) return;
+  if (handleSecurityOptions(req, res, 'POST,OPTIONS', mediaUploadCorsHeaders)) return;
   if (rateLimit(req, res, { keyPrefix: 'media-upload', windowMs: 60 * 1000, max: 120 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
@@ -273,11 +335,14 @@ export default async function handler(req: any, res: any) {
   let fileName = '';
   let contentType = '';
   let fileSize = 0;
+  const requestStartedAt = Date.now();
 
   try {
     const authUser = await getAuthenticatedRequestUser(req);
     storagePath = decodeHeaderValue(req.headers['x-storage-path']);
     fileName = decodeHeaderValue(req.headers['x-file-name']) || storagePath.split('/').pop() || 'arquivo';
+    const fileHash = String(req.headers['x-file-hash'] || '').trim().toLowerCase();
+    const uploadBatchId = String(req.headers['x-upload-batch-id'] || '').trim();
     contentType = String(req.headers['content-type'] || 'application/octet-stream');
     const fileBuffer = await readRequestBuffer(req);
     fileSize = fileBuffer.length;
@@ -308,6 +373,9 @@ export default async function handler(req: any, res: any) {
       fileName,
       contentType,
       size: fileBuffer.length,
+      photographerId: authUser.id,
+      uploadBatchId: uploadBatchId || null,
+      fileHash: fileHash || null,
     });
 
     const uploaded = usesExternalBucket()
@@ -315,16 +383,24 @@ export default async function handler(req: any, res: any) {
       : (() => {
           throw new Error('MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de mídias.');
         })();
+    const verification = await verifyUploadedMedia(uploaded);
 
     console.info('[media-upload] done', {
       bucket: mediaBucket,
       storagePath,
       publicUrl: uploaded.publicUrl || uploaded.path,
+      photographerId: authUser.id,
+      uploadBatchId: uploadBatchId || null,
+      verified: verification.verified,
+      durationMs: Date.now() - requestStartedAt,
     });
 
     return res.status(200).json({
       path: uploaded.publicUrl || uploaded.path,
       publicUrl: uploaded.publicUrl || uploaded.path,
+      fileHash: fileHash || undefined,
+      uploadBatchId: uploadBatchId || undefined,
+      verified: verification.verified,
     });
   } catch (error: any) {
     const message = error?.message || 'Não foi possível enviar a mídia.';
@@ -335,6 +411,7 @@ export default async function handler(req: any, res: any) {
       contentType,
       size: fileSize,
       provider: usesExternalBucket() ? 'external_bucket' : mediaStorageProvider,
+      durationMs: Date.now() - requestStartedAt,
       message,
     });
     const status = /excede o limite|too large|payload/i.test(message) ? 413 : 500;

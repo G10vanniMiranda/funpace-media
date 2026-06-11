@@ -292,6 +292,8 @@ const mediaStorageProvider = process.env.MEDIA_STORAGE_PROVIDER || "supabase";
 const mediaBucket = process.env.MEDIA_BUCKET || process.env.BUCKET || "";
 const externalBucketApiBaseUrl = (process.env.BUCKET_API_BASE_URL || "https://99dev.pro/bucket/api").replace(/\/+$/, "");
 const externalBucketToken = process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN || "";
+const uploadProviderTimeoutMs = Number(process.env.MEDIA_UPLOAD_PROVIDER_TIMEOUT_MS || 600_000);
+const uploadVerifyTimeoutMs = Number(process.env.MEDIA_UPLOAD_VERIFY_TIMEOUT_MS || 30_000);
 
 function usesExternalBucket() {
   return mediaStorageProvider === "external_bucket" || Boolean(process.env.BUCKET_API_TOKEN || process.env.BUCKET_X_API_TOKEN);
@@ -625,19 +627,33 @@ function cleanProviderErrorMessage(raw: string, fallback: string) {
 
 async function uploadToExternalBucket(path: string, fileName: string, contentType: string, buffer: Buffer) {
   const { baseUrl, token, bucket } = getExternalBucketConfig();
+  const startedAt = Date.now();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), uploadProviderTimeoutMs);
   const formData = new FormData();
   const safeFileName = path.split("/").pop() || fileName || "arquivo";
 
   formData.set("bucket", bucket);
   formData.set("arquivo", new Blob([buffer], { type: contentType || "application/octet-stream" }), safeFileName);
 
-  const response = await fetch(`${baseUrl}/upload`, {
-    method: "POST",
-    headers: {
-      "X-API-Token": token,
-    },
-    body: formData,
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${baseUrl}/upload`, {
+      method: "POST",
+      headers: {
+        "X-API-Token": token,
+      },
+      body: formData,
+      signal: controller.signal,
+    });
+  } catch (error: any) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Upload externo excedeu ${Math.round(uploadProviderTimeoutMs / 1000)}s.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timeout);
+  }
 
   const raw = await response.text();
   let payload: any = {};
@@ -653,11 +669,56 @@ async function uploadToExternalBucket(path: string, fileName: string, contentTyp
   }
 
   const publicUrl = pickUploadedMediaUrl(payload);
+  console.info("[media-upload] provider:done", {
+    bucket,
+    path,
+    status: response.status,
+    durationMs: Date.now() - startedAt,
+    returnedUrl: Boolean(publicUrl),
+  });
   return {
     path: publicUrl || payload?.path || payload?.key || path,
     publicUrl,
     providerPayload: payload,
   };
+}
+
+async function verifyUploadedMedia(uploaded: { path: string; publicUrl?: string }) {
+  const url = uploaded.publicUrl || uploaded.path;
+  if (!/^https?:\/\//i.test(url)) {
+    return { verified: true, skipped: "non-http-path" };
+  }
+
+  const startedAt = Date.now();
+  let lastMessage = "";
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), uploadVerifyTimeoutMs);
+    try {
+      const response = await fetch(url, { method: "HEAD", signal: controller.signal });
+      if (response.ok) {
+        return { verified: true, status: response.status, durationMs: Date.now() - startedAt };
+      }
+      if ([403, 405].includes(response.status)) {
+        const getResponse = await fetch(url, { method: "GET", headers: { Range: "bytes=0-0" }, signal: controller.signal });
+        if (getResponse.ok || getResponse.status === 206) {
+          return { verified: true, status: getResponse.status, durationMs: Date.now() - startedAt };
+        }
+        lastMessage = `HTTP ${getResponse.status}`;
+      } else {
+        lastMessage = `HTTP ${response.status}`;
+      }
+    } catch (error: any) {
+      lastMessage = error?.name === "AbortError"
+        ? `timeout ${Math.round(uploadVerifyTimeoutMs / 1000)}s`
+        : String(error?.message || error || "falha ao verificar arquivo");
+    } finally {
+      clearTimeout(timeout);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500 * attempt));
+  }
+
+  throw new Error(`Upload gravado pelo provedor, mas a confirmacao do Storage falhou: ${lastMessage}.`);
 }
 
 let bucketFileChecksumCache: { expiresAt: number; files: any[] } | null = null;
@@ -1851,6 +1912,7 @@ app.post("/api/media/upload", express.raw({
   const uploadBatchId = String(req.header("x-upload-batch-id") || "").trim();
   const contentType = String(req.header("content-type") || "application/octet-stream");
   const fileBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from([]);
+  const requestStartedAt = Date.now();
 
   if (!authUser?.id) {
     return res.status(401).json({ error: "Entre novamente no painel para enviar arquivos." });
@@ -1888,6 +1950,9 @@ app.post("/api/media/upload", express.raw({
       fileName,
       contentType,
       size: fileBuffer.length,
+      photographerId: authUser.id,
+      uploadBatchId: uploadBatchId || null,
+      fileHash: fileHash || null,
     });
 
     const uploaded = usesExternalBucket()
@@ -1895,11 +1960,16 @@ app.post("/api/media/upload", express.raw({
       : (() => {
         throw new Error("MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de midias.");
       })();
+    const verification = await verifyUploadedMedia(uploaded);
 
     console.info("[media-upload] done", {
       bucket: mediaBucket,
       storagePath,
       publicUrl: uploaded.publicUrl || uploaded.path,
+      photographerId: authUser.id,
+      uploadBatchId: uploadBatchId || null,
+      verified: verification.verified,
+      durationMs: Date.now() - requestStartedAt,
     });
 
     return res.json({
@@ -1908,9 +1978,21 @@ app.post("/api/media/upload", express.raw({
       fileHash: fileHash || undefined,
       uploadBatchId: uploadBatchId || undefined,
       reused: false,
+      verified: verification.verified,
     });
   } catch (error: any) {
-    console.error("Erro ao enviar midia:", error);
+    console.error("[media-upload] error", {
+      bucket: mediaBucket,
+      storagePath,
+      fileName,
+      contentType,
+      size: fileBuffer.length,
+      photographerId: authUser?.id || null,
+      uploadBatchId: uploadBatchId || null,
+      provider: usesExternalBucket() ? "external_bucket" : mediaStorageProvider,
+      durationMs: Date.now() - requestStartedAt,
+      message: error?.message || String(error),
+    });
     return res.status(500).json({ error: error?.message || "Nao foi possivel enviar a midia." });
   }
 });

@@ -32,6 +32,7 @@ let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
 const localEventsStorageKey = 'funpace:local-events:v1';
 const defaultUploadLimitBytes = 300 * 1024 * 1024;
 const clientUploadLimitBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadLimitBytes);
+const clientUploadTimeoutMs = Number(import.meta.env.VITE_MEDIA_UPLOAD_TIMEOUT_MS || 600_000);
 
 function apiUrl(path: string) {
   const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
@@ -307,12 +308,14 @@ async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?:
   }
 
   const uploadUrl = apiUrl('/api/media/upload');
-  const maxRetries = 3;
+  const maxRetries = 4;
   let attempt = 0;
 
   while (true) {
     attempt += 1;
     let response: Response;
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), clientUploadTimeoutMs);
     try {
       response = await fetch(uploadUrl, {
         method: 'POST',
@@ -325,18 +328,36 @@ async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?:
           ...(metadata?.uploadBatchId ? { 'X-Upload-Batch-Id': metadata.uploadBatchId } : {}),
         },
         body: file,
+        signal: controller.signal,
       });
     } catch (error) {
+      window.clearTimeout(timeout);
       const detail = error instanceof Error ? error.message : String(error || 'falha de rede');
       const fileSizeMb = Math.ceil(file.size / 1024 / 1024);
       const limitMb = Math.round(clientUploadLimitBytes / 1024 / 1024);
-      const likelyProxyDrop = /failed to fetch|networkerror|load failed/i.test(detail);
+      const isTimeout = error instanceof Error && error.name === 'AbortError';
+      const likelyProxyDrop = isTimeout || /failed to fetch|networkerror|load failed/i.test(detail);
+      if (likelyProxyDrop && attempt <= maxRetries) {
+        const delayMs = Math.min(30_000, 1000 * 2 ** (attempt - 1)) + Math.floor(Math.random() * 500);
+        console.warn('[media-upload] network retry', {
+          attempt,
+          maxRetries,
+          delayMs,
+          fileName: file.name,
+          fileSize: file.size,
+          uploadBatchId: metadata?.uploadBatchId || null,
+          detail: isTimeout ? `timeout ${Math.round(clientUploadTimeoutMs / 1000)}s` : detail,
+        });
+        await wait(delayMs);
+        continue;
+      }
       const diagnostic = likelyProxyDrop
         ? `O navegador não recebeu resposta HTTP da API. Isso costuma acontecer quando o proxy/Nginx ativo encerra o upload antes do backend, por limite de corpo ou timeout. Confira o server block ativo de api.funpace.media com client_max_body_size ${limitMb}m, proxy_read_timeout/proxy_send_timeout altos, proxy_request_buffering off e reinicie/reload do Nginx e do backend.`
         : `Verifique o limite do proxy/Nginx, timeout do proxy e se o backend foi reiniciado com MEDIA_UPLOAD_LIMIT=${limitMb}mb.`;
       throw new Error(`Não foi possível concluir o upload de ${fileSizeMb} MB em ${uploadUrl}. ${diagnostic} Detalhe: ${detail || 'falha de rede'}`);
     }
 
+    window.clearTimeout(timeout);
     const raw = await response.text();
     let payload: any = {};
     try {
@@ -356,11 +377,19 @@ async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?:
         }
       }
 
-      const shouldRetry = [429, 502, 503, 504].includes(status) && attempt <= maxRetries;
+      const shouldRetry = [408, 425, 429, 500, 502, 503, 504].includes(status) && attempt <= maxRetries;
 
       if (shouldRetry) {
-        const delayMs = Math.max(1000, retryAfterSeconds * 1000);
-        console.warn(`Tentativa ${attempt}/${maxRetries} de upload rate-limited. Repetindo em ${delayMs} ms.`);
+        const delayMs = Math.max(1000, retryAfterSeconds * 1000, 1000 * 2 ** (attempt - 1));
+        console.warn('[media-upload] http retry', {
+          attempt,
+          maxRetries,
+          delayMs,
+          status,
+          fileName: file.name,
+          fileSize: file.size,
+          uploadBatchId: metadata?.uploadBatchId || null,
+        });
         await wait(delayMs + Math.floor(Math.random() * 500));
         continue;
       }
@@ -372,6 +401,10 @@ async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?:
         .replace(/\s+/g, ' ')
         .trim();
       throw new Error(message || `Falha no upload. HTTP ${status}`);
+    }
+
+    if (payload?.verified === false) {
+      throw new Error('Upload concluido sem confirmacao do Storage. O arquivo sera mantido selecionado para nova tentativa.');
     }
 
     return {

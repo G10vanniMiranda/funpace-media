@@ -22,9 +22,9 @@ server {
   listen 80;
   server_name api.funpace.media;
 
-  client_max_body_size 300m;
-  client_body_timeout 20m;
-  send_timeout 20m;
+  client_max_body_size 300M;
+  client_body_timeout 600s;
+  send_timeout 600s;
 
   location / {
     proxy_pass http://127.0.0.1:3000;
@@ -36,9 +36,9 @@ server {
     proxy_set_header X-Forwarded-Proto $scheme;
     proxy_set_header Connection "";
 
-    proxy_read_timeout 20m;
-    proxy_send_timeout 20m;
-    proxy_connect_timeout 60s;
+    proxy_read_timeout 600s;
+    proxy_send_timeout 600s;
+    proxy_connect_timeout 600s;
     proxy_request_buffering off;
     proxy_buffering off;
     proxy_max_temp_file_size 0;
@@ -57,4 +57,4 @@ elif command -v pm2 >/dev/null 2>&1; then
   pm2 restart all --update-env
 fi
 
-echo "Nginx atualizado para uploads de ate 300 MB em api.funpace.media."
+echo "Nginx atualizado para uploads de ate 300 MB com timeouts de 600s em api.funpace.media."

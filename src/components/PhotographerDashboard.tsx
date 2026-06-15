@@ -24,12 +24,34 @@ import {
   Star,
   Video as VideoIcon,
   Trash2,
-  X
+  X,
+  Pause,
+  Play,
+  RotateCcw,
+  WifiOff
 } from 'lucide-react';
 import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
 import { calculateFileSha256, eventService, normalizePhotographerUsername, photographerDashboardService, photographerService, productService, withdrawalService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
+import {
+  clearUploadResumeManifest,
+  createResumableFileSignature,
+  pickResumableUploadFiles,
+  readUploadResumeManifest,
+  restoreFilesFromManifest,
+  supportsFileSystemUploadHandles,
+  writeUploadResumeManifest,
+  type ResumablePickedFile,
+  type ResumableUploadFileHandle,
+  type ResumableUploadItemStatus,
+  type ResumableUploadManifestItem,
+} from '../lib/resumable-upload';
+import {
+  calculateFileSha256InWorker,
+  generateImageThumbnailInWorker,
+  prepareImageForUploadInWorker,
+} from '../lib/upload-processing';
 
 interface PhotographerDashboardProps {
   photographer: Photographer;
@@ -37,13 +59,22 @@ interface PhotographerDashboardProps {
 }
 
 type UploadItem = {
+  id: string;
   file: File;
+  fileHandle?: ResumableUploadFileHandle | null;
   price: number;
   name: string;
   description: string;
   bib: string;
   previewUrl: string;
+  status: UploadItemStatus;
+  attempts: number;
+  stage: UploadPublishStage | null;
+  error: string;
+  uploadedAt: string | null;
 };
+
+type UploadItemStatus = ResumableUploadItemStatus;
 
 type DuplicateUploadAction = 'replace' | 'copy' | 'cancel';
 
@@ -147,6 +178,8 @@ const profileAvatarMaxBytes = 5 * 1024 * 1024;
 const profileCoverMaxBytes = 15 * 1024 * 1024;
 const eventCoverOptimizeThresholdBytes = 5 * 1024 * 1024;
 const profileImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
+const uploadVisibleListLimit = 160;
+const uploadOfflineRetryDelayMs = 1500;
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
@@ -273,6 +306,35 @@ function formatFileSize(bytes: number) {
   const mb = bytes / (1024 * 1024);
   if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1).replace('.', ',')} MB`;
   return `${Math.ceil(bytes / 1024)} KB`;
+}
+
+function wait(ms: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+function getUploadStatusLabel(status: UploadItemStatus) {
+  const labels: Record<UploadItemStatus, string> = {
+    queued: 'Na fila',
+    uploading: 'Enviando',
+    done: 'Enviada',
+    failed: 'Falhou',
+    paused: 'Pausada',
+    skipped: 'Ignorada',
+  };
+  return labels[status];
+}
+
+function getUploadStatusClass(status: UploadItemStatus) {
+  if (status === 'done') return 'border-green-500/30 bg-green-500/10 text-green-300';
+  if (status === 'failed') return 'border-red-500/30 bg-red-500/10 text-red-300';
+  if (status === 'uploading') return 'border-brutal-accent/40 bg-brutal-accent/10 text-brutal-accent';
+  if (status === 'paused') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
+  if (status === 'skipped') return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
+  return 'border-white/10 bg-white/5 text-gray-300';
+}
+
+function calculateUploadFileSha256(file: File) {
+  return calculateFileSha256InWorker(file, calculateFileSha256);
 }
 
 function startOfDay(date: Date) {
@@ -578,7 +640,7 @@ async function generateVideoThumbnail(file: File): Promise<File | null> {
   });
 }
 
-async function generateImageThumbnail(file: File): Promise<File | null> {
+async function generateImageThumbnailFallback(file: File): Promise<File | null> {
   if (!file.type.startsWith('image')) return null;
 
   return new Promise((resolve) => {
@@ -645,7 +707,19 @@ async function generateImageThumbnail(file: File): Promise<File | null> {
   });
 }
 
-async function prepareImageForUpload(file: File): Promise<File> {
+async function generateImageThumbnail(file: File): Promise<File | null> {
+  return generateImageThumbnailInWorker(
+    file,
+    {
+      maxSide: imagePreviewMaxSide,
+      quality: imagePreviewQuality,
+      watermarkText: 'FUNPACE MEDIA',
+    },
+    generateImageThumbnailFallback,
+  );
+}
+
+async function prepareImageForUploadFallback(file: File): Promise<File> {
   if (!file.type.startsWith('image')) return file;
 
   if (file.size <= Math.min(imageCompressionMaxBytes, clientUploadMaxBytes)) return file;
@@ -705,6 +779,20 @@ async function prepareImageForUpload(file: File): Promise<File> {
 
     image.src = objectUrl;
   });
+}
+
+async function prepareImageForUpload(file: File): Promise<File> {
+  return prepareImageForUploadInWorker(
+    file,
+    {
+      clientMaxBytes: clientUploadMaxBytes,
+      targetMaxBytes: imageCompressionMaxBytes,
+      maxSide: imageCompressionMaxSide,
+      minSide: minImageCompressionSide,
+      qualities: imageCompressionQualities,
+    },
+    prepareImageForUploadFallback,
+  );
 }
 
 function assertFileFitsUploadLimit(file: File) {
@@ -1001,6 +1089,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isUploadPaused, setIsUploadPaused] = useState(false);
+  const [isBrowserOnline, setIsBrowserOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const [publishProgress, setPublishProgress] = useState({ done: 0, total: 0 });
   const [isPreparingFiles, setIsPreparingFiles] = useState(false);
   const [filePrepareProgress, setFilePrepareProgress] = useState({ done: 0, total: 0 });
@@ -1009,6 +1099,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawalError, setWithdrawalError] = useState('');
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
+  const [resumeNotice, setResumeNotice] = useState('');
   const [duplicateConflict, setDuplicateConflict] = useState<DuplicateUploadConflict | null>(null);
   const [applyDuplicateChoiceToAll, setApplyDuplicateChoiceToAll] = useState(false);
   const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
@@ -1082,9 +1173,135 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     status: 'published',
   });
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const uploadPausedRef = React.useRef(false);
+  const browserOnlineRef = React.useRef(typeof navigator === 'undefined' ? true : navigator.onLine);
   const duplicateResolutionRef = React.useRef<((action: DuplicateUploadAction) => void) | null>(null);
   const duplicateBatchActionRef = React.useRef<Exclude<DuplicateUploadAction, 'cancel'> | null>(null);
   const currentPreview = selectedFiles[previewIndex];
+  const createUploadItemsFromPickedFiles = React.useCallback((
+    pickedFiles: ResumablePickedFile[],
+    resumeItems: ResumableUploadManifestItem[] = [],
+    price = 19.90,
+  ): UploadItem[] => {
+    const resumeByFile = new Map(
+      resumeItems.map((item) => [createResumableFileSignature(item), item]),
+    );
+
+    return pickedFiles.map(({ file, handle }) => {
+      const resumeItem = resumeByFile.get(createResumableFileSignature(file));
+      return {
+        id: `${createResumableFileSignature(file)}:${crypto.randomUUID()}`,
+        file,
+        fileHandle: handle || resumeItem?.handle || null,
+        price,
+        name: file.name,
+        description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
+        bib: '',
+        previewUrl: URL.createObjectURL(file),
+        status: resumeItem?.status === 'done'
+          ? 'skipped'
+          : resumeItem?.status === 'failed' || resumeItem?.status === 'paused'
+            ? resumeItem.status
+            : 'queued',
+        attempts: resumeItem?.attempts || 0,
+        stage: (resumeItem?.stage || null) as UploadPublishStage | null,
+        error: resumeItem?.error || '',
+        uploadedAt: resumeItem?.uploadedAt || null,
+      };
+    });
+  }, []);
+
+  React.useEffect(() => {
+    uploadPausedRef.current = isUploadPaused;
+  }, [isUploadPaused]);
+
+  React.useEffect(() => {
+    browserOnlineRef.current = isBrowserOnline;
+  }, [isBrowserOnline]);
+
+  React.useEffect(() => {
+    const handleOnline = () => {
+      browserOnlineRef.current = true;
+      setIsBrowserOnline(true);
+      setIsUploadPaused(false);
+    };
+    const handleOffline = () => {
+      browserOnlineRef.current = false;
+      setIsBrowserOnline(false);
+      setIsUploadPaused(true);
+      setSelectedFiles((current) => current.map((item) => (
+        item.status === 'uploading' || item.status === 'queued'
+          ? { ...item, status: 'paused' as const }
+          : item
+      )));
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function restorePendingUpload() {
+      const manifest = await readUploadResumeManifest(photographer.id);
+      if (cancelled || !manifest) return;
+
+      const pendingItems = manifest.items.filter((item) => item.status !== 'done' && item.status !== 'skipped');
+      if (pendingItems.length === 0) return;
+
+      setEventInput(manifest.eventInput || '');
+      setCheckpointInput(manifest.checkpointInput || 'Ponto Principal');
+      setSelectedEventId(manifest.selectedEventId || '');
+      setShowUploadModal(true);
+
+      const restoredFiles = await restoreFilesFromManifest(manifest);
+      if (cancelled) return;
+
+      if (restoredFiles.length > 0) {
+        const defaultBatchPrice = Number(batchPriceInput);
+        const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
+        const restoredItems = createUploadItemsFromPickedFiles(restoredFiles, manifest.items, resolvedPrice);
+        setSelectedFiles((current) => current.length > 0 ? current : restoredItems);
+        setResumeNotice(`Encontramos um upload incompleto e restauramos ${restoredFiles.length} arquivo(s). Clique em Continuar para enviar somente o que falta.`);
+        return;
+      }
+
+      setResumeNotice(`Encontramos um upload incompleto com ${pendingItems.length} arquivo(s) pendente(s). Selecione novamente a mesma pasta/arquivos para continuar somente o que falta.`);
+    }
+
+    void restorePendingUpload();
+    return () => {
+      cancelled = true;
+    };
+  }, [photographer.id, batchPriceInput, createUploadItemsFromPickedFiles]);
+
+  React.useEffect(() => {
+    if (selectedFiles.length === 0) return;
+    void writeUploadResumeManifest({
+      photographerId: photographer.id,
+      eventInput,
+      checkpointInput,
+      selectedEventId,
+      updatedAt: new Date().toISOString(),
+      items: selectedFiles.map((item) => ({
+        name: item.file.name,
+        size: item.file.size,
+        type: item.file.type,
+        lastModified: item.file.lastModified,
+        status: item.status,
+        attempts: item.attempts,
+        stage: item.stage,
+        error: item.error,
+        uploadedAt: item.uploadedAt,
+        handle: item.fileHandle || null,
+      })),
+    });
+  }, [selectedFiles, photographer.id, eventInput, checkpointInput, selectedEventId]);
 
   React.useEffect(() => {
     pendingProfileImagesRef.current = pendingProfileImages;
@@ -1521,7 +1738,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const publishPercent = publishProgress.total > 0
     ? Math.round((publishProgress.done / publishProgress.total) * 100)
     : 0;
-  const canPublishSelectedFiles = selectedFiles.length > 0 && !isLoading && !isPreparingFiles && !isPublishing;
+  const uploadStatusCounts = React.useMemo(() => selectedFiles.reduce((acc, item) => {
+    acc[item.status] = (acc[item.status] || 0) + 1;
+    return acc;
+  }, {} as Record<UploadItemStatus, number>), [selectedFiles]);
+  const pendingUploadCount = selectedFiles.filter((item) => item.status !== 'done' && item.status !== 'skipped').length;
+  const completedUploadCount = (uploadStatusCounts.done || 0) + (uploadStatusCounts.skipped || 0);
+  const failedUploadCount = uploadStatusCounts.failed || 0;
+  const visibleSelectedFiles = selectedFiles.slice(0, uploadVisibleListLimit);
+  const hiddenSelectedFileCount = Math.max(0, selectedFiles.length - visibleSelectedFiles.length);
+  const canPublishSelectedFiles = pendingUploadCount > 0 && !isLoading && !isPreparingFiles && !isPublishing && isBrowserOnline;
 
   const loadPhotographerContent = React.useCallback(async (showLoader = false) => {
     if (showLoader) setIsLoading(true);
@@ -1858,14 +2084,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     const defaultBatchPrice = Number(batchPriceInput);
     const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
-    const newFiles: UploadItem[] = acceptedFiles.map((file: File) => ({
-      file,
-      price: resolvedPrice,
-      name: file.name,
-      description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
-      bib: '',
-      previewUrl: URL.createObjectURL(file)
-    }));
+    const resumeManifest = await readUploadResumeManifest(photographer.id);
+    const newFiles = createUploadItemsFromPickedFiles(
+      acceptedFiles.map((file) => ({ file })),
+      resumeManifest?.items || [],
+      resolvedPrice,
+    );
 
     setSelectedFiles((current) => {
       if (current.length === 0 && newFiles.length > 0) {
@@ -1873,6 +2097,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       }
       return [...current, ...newFiles];
     });
+    setResumeNotice('');
 
     setIsPreparingFiles(true);
     setFilePrepareProgress({ done: 0, total: newFiles.length });
@@ -1887,9 +2112,63 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
   };
 
+  const handleResumableFilePicker = async () => {
+    if (!supportsFileSystemUploadHandles()) {
+      fileInputRef.current?.click();
+      return;
+    }
+
+    try {
+      const picked = await pickResumableUploadFiles();
+      if (picked.length === 0) return;
+
+      const blockedReasons = picked
+        .map(({ file }) => getSelectionBlockReason(file))
+        .filter(Boolean);
+      const acceptedPicked = picked.filter(({ file }) => !getSelectionBlockReason(file));
+
+      if (blockedReasons.length > 0) {
+        alert(`Alguns arquivos nÃ£o foram adicionados:\n\n${blockedReasons.slice(0, 5).join('\n')}${blockedReasons.length > 5 ? `\n...e mais ${blockedReasons.length - 5} arquivo(s).` : ''}`);
+      }
+
+      if (acceptedPicked.length === 0) return;
+
+      const defaultBatchPrice = Number(batchPriceInput);
+      const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
+      const resumeManifest = await readUploadResumeManifest(photographer.id);
+      const newFiles = createUploadItemsFromPickedFiles(acceptedPicked, resumeManifest?.items || [], resolvedPrice);
+
+      setSelectedFiles((current) => {
+        if (current.length === 0 && newFiles.length > 0) {
+          setPreviewIndex(0);
+        }
+        return [...current, ...newFiles];
+      });
+      setResumeNotice('Arquivos adicionados com modo retomavel. Em navegadores compativeis, o painel consegue recuperar estes arquivos apos refresh.');
+
+      setIsPreparingFiles(true);
+      setFilePrepareProgress({ done: 0, total: newFiles.length });
+
+      try {
+        for (const [index, item] of newFiles.entries()) {
+          await waitForPreviewReady(item.file, item.previewUrl);
+          setFilePrepareProgress({ done: index + 1, total: newFiles.length });
+        }
+      } finally {
+        setIsPreparingFiles(false);
+      }
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      console.error('Erro ao selecionar arquivos retomaveis:', error);
+      fileInputRef.current?.click();
+    }
+  };
+
   const clearSelectedFiles = () => {
     selectedFiles.forEach((item) => URL.revokeObjectURL(item.previewUrl));
     setSelectedFiles([]);
+    void clearUploadResumeManifest(photographer.id);
+    setResumeNotice('');
     setBatchPriceInput('19.90');
     setPreviewIndex(0);
     setIsPreparingFiles(false);
@@ -2100,6 +2379,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     }
   };
 
+  const waitUntilUploadCanContinue = async () => {
+    while (uploadPausedRef.current || !browserOnlineRef.current) {
+      await wait(uploadOfflineRetryDelayMs);
+    }
+  };
+
   const handleUpload = async () => {
     const selectedEvent = availableEvents.find((eventItem) => eventItem.id === selectedEventId);
     const normalizedEvent = selectedEvent?.name.trim() || eventInput.trim();
@@ -2120,11 +2405,21 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       return;
     }
 
-    const invalidFileIndex = selectedFiles.findIndex((item) => (
+    const uploadQueue = selectedFiles
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.status !== 'done' && item.status !== 'skipped');
+
+    if (uploadQueue.length === 0) {
+      alert('Nenhum arquivo pendente para publicar.');
+      return;
+    }
+
+    const invalidQueueItem = uploadQueue.find(({ item }) => (
       !item.description.trim() ||
       !Number.isFinite(Number(item.price)) ||
       Number(item.price) <= 0
     ));
+    const invalidFileIndex = invalidQueueItem?.index ?? -1;
 
     if (invalidFileIndex >= 0) {
       setPreviewIndex(invalidFileIndex);
@@ -2134,6 +2429,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     setIsLoading(true);
     setIsPublishing(true);
+    setIsUploadPaused(false);
+    uploadPausedRef.current = false;
     try {
       const currentUser = getCurrentUser();
       if (!isMockMode && currentUser?.id && currentUser.id !== photographer.id) {
@@ -2160,14 +2457,21 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           .map(normalizeUploadName),
       );
       duplicateBatchActionRef.current = null;
+      setPublishProgress({ done: 0, total: uploadQueue.length });
 
-      for (const [index, item] of selectedFiles.entries()) {
+      for (const [queueIndex, { item, index }] of uploadQueue.entries()) {
         let uploadStage: UploadPublishStage = 'validacao';
         try {
+          await waitUntilUploadCanContinue();
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => (
+            itemIndex === index
+              ? { ...uploadItem, status: 'uploading', attempts: uploadItem.attempts + 1, error: '', stage: uploadStage }
+              : uploadItem
+          )));
           console.info('[photographer-upload] file:start', {
             uploadBatchId,
-            index: index + 1,
-            total: selectedFiles.length,
+            index: queueIndex + 1,
+            total: uploadQueue.length,
             eventId: selectedEvent?.id || null,
             event: normalizedEvent,
             checkpoint: normalizedCheckpoint,
@@ -2190,7 +2494,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               item,
               existingProduct: existingNameProduct,
               eventName: normalizedEvent,
-              remainingCount: selectedFiles.length - index - 1,
+              remainingCount: uploadQueue.length - queueIndex - 1,
             });
 
             if (duplicateAction === 'cancel') {
@@ -2222,7 +2526,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           });
 
           uploadStage = 'hash-original';
-          const fileHash = await calculateFileSha256(uploadFile);
+          const fileHash = await calculateUploadFileSha256(uploadFile);
 
           uploadStage = 'duplicidade-conteudo';
           if (duplicateAction !== 'replace' && currentBatchHashes.has(fileHash)) {
@@ -2232,7 +2536,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               fileName: item.file.name,
               fileHash,
             });
-            setPublishProgress({ done: index + 1, total: selectedFiles.length });
+            setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'skipped', uploadedAt: new Date().toISOString(), stage: uploadStage } : uploadItem));
+            setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
             continue;
           }
           currentBatchHashes.add(fileHash);
@@ -2248,7 +2553,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               fileHash,
               productId: existingProduct.id,
             });
-            setPublishProgress({ done: index + 1, total: selectedFiles.length });
+            setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'skipped', uploadedAt: new Date().toISOString(), stage: uploadStage } : uploadItem));
+            setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
             continue;
           }
 
@@ -2285,7 +2591,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             });
           }
           uploadStage = 'hash-preview';
-          const thumbnailHash = thumbnailFile ? await calculateFileSha256(thumbnailFile) : null;
+          const thumbnailHash = thumbnailFile ? await calculateUploadFileSha256(thumbnailFile) : null;
           uploadStage = 'upload-preview';
           const uploadedThumbnail = thumbnailFile
             ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
@@ -2374,7 +2680,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               });
             });
           }
-          setPublishProgress({ done: index + 1, total: selectedFiles.length });
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'done', uploadedAt: new Date().toISOString(), error: '', stage: uploadStage } : uploadItem));
+          setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
           if (/Upload cancelado pelo fotografo/i.test(message)) {
@@ -2386,8 +2693,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           const formattedMessage = formatUploadErrorMessage(friendlyMessage, item.file);
           console.error('[photographer-upload] file:failed', {
             uploadBatchId,
-            index: index + 1,
-            total: selectedFiles.length,
+            index: queueIndex + 1,
+            total: uploadQueue.length,
             stage: uploadStage,
             stageLabel: getUploadStageLabel(uploadStage),
             eventId: selectedEvent?.id || null,
@@ -2405,7 +2712,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             message: formattedMessage,
             stage: uploadStage,
           });
-          setPublishProgress({ done: index + 1, total: selectedFiles.length });
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: browserOnlineRef.current ? 'failed' : 'paused', error: formattedMessage, stage: uploadStage } : uploadItem));
+          setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
         }
       }
 
@@ -4579,18 +4887,25 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 />
 
                 <div
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={handleResumableFilePicker}
                   className="aspect-video border border-dashed border-white/20 bg-[#080d14] flex flex-col items-center justify-center group hover:border-brutal-accent hover:bg-brutal-accent/5 transition-colors cursor-pointer mb-6"
                 >
                   <div className="bg-brutal-accent text-white p-4 border border-brutal-accent group-hover:scale-110 transition-transform mb-4">
                     <Upload className="w-6 h-6" />
                   </div>
                   <p className="font-sans font-black text-lg uppercase mb-1">Escolher Arquivos</p>
-                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">Limite por arquivo: {formatFileSize(clientUploadMaxBytes)}</p>
+                  <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest">
+                    {supportsFileSystemUploadHandles() ? 'Modo retomavel ativo' : `Limite por arquivo: ${formatFileSize(clientUploadMaxBytes)}`}
+                  </p>
                 </div>
 
                 {selectedFiles.length > 0 && (
                   <div className="space-y-3">
+                    {resumeNotice && (
+                      <div className="bg-yellow-500/10 border border-yellow-500/30 p-3 text-yellow-200">
+                        <p className="font-mono text-[10px] uppercase tracking-widest">{resumeNotice}</p>
+                      </div>
+                    )}
                     <div className="bg-[#080d14] border border-white/10 p-3 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                         <div className="flex-1">
@@ -4622,6 +4937,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
                     <h4 className="font-mono text-[10px] uppercase font-bold text-gray-500">Arquivos Selecionados ({selectedFiles.length})</h4>
                     <div className="bg-[#080d14] border border-white/10 p-3">
+                      <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Concluidas</p>
+                          <p className="font-sans text-xl font-black text-green-300">{completedUploadCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Pendentes</p>
+                          <p className="font-sans text-xl font-black text-white">{pendingUploadCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Falhas</p>
+                          <p className="font-sans text-xl font-black text-red-300">{failedUploadCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Conexao</p>
+                          <p className={`font-sans text-sm font-black uppercase ${isBrowserOnline ? 'text-green-300' : 'text-red-300'}`}>
+                            {isBrowserOnline ? 'Online' : 'Offline'}
+                          </p>
+                        </div>
+                      </div>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
                           {isPreparingFiles ? 'Analisando previews' : 'Arquivos prontos'}
@@ -4639,11 +4974,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
                         {isPreparingFiles
                           ? `${filePrepareProgress.done} de ${filePrepareProgress.total} arquivo(s) carregados para revisao.`
-                          : `${selectedFiles.length === 1 ? '1 arquivo carregado' : `${selectedFiles.length} arquivos carregados`}. Você já pode publicar.`}
+                          : `${selectedFiles.length === 1 ? '1 arquivo carregado' : `${selectedFiles.length} arquivos carregados`}. ${hiddenSelectedFileCount > 0 ? `${hiddenSelectedFileCount} ocultos para manter o painel leve.` : 'Você já pode publicar.'}`}
                       </p>
                     </div>
                     <div className="max-h-96 overflow-y-auto space-y-3 pr-2">
-                      {selectedFiles.map((item, idx) => (
+                      {visibleSelectedFiles.map((item, idx) => (
                         <div
                           key={idx}
                           onClick={() => setPreviewIndex(idx)}
@@ -4663,10 +4998,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             <div className="flex-1 min-w-0 space-y-2">
                               <div className="flex items-center justify-between gap-3">
                                 <p className="font-mono text-[9px] uppercase truncate text-gray-500">{item.name}</p>
-                                <span className="shrink-0 font-mono text-[8px] uppercase text-gray-300 bg-white/5 border border-white/10 px-2 py-1">
-                                  {item.file.type.startsWith('image') ? 'IMG' : 'VIDEO'}
+                                <span className={`shrink-0 font-mono text-[8px] uppercase border px-2 py-1 ${getUploadStatusClass(item.status)}`}>
+                                  {getUploadStatusLabel(item.status)}
                                 </span>
                               </div>
+                              {item.error && (
+                                <p className="font-mono text-[9px] uppercase text-red-300 line-clamp-2">{item.error}</p>
+                              )}
                               <input
                                 type="text"
                                 value={item.description}
@@ -4805,8 +5143,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   {(isPublishing || publishProgress.total > 0) && (
                     <div className="mb-4 bg-[#0d131c] border border-white/10 p-3">
                       <div className="mb-2 flex items-center justify-between gap-3">
-                        <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
-                          {isPublishing ? 'Publicando lote' : 'Ultimo envio'}
+                        <span className="inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                          {!isBrowserOnline && <WifiOff className="h-3.5 w-3.5 text-red-300" />}
+                          {!isBrowserOnline ? 'Offline - upload pausado' : isUploadPaused ? 'Upload pausado' : isPublishing ? 'Publicando lote' : 'Ultimo envio'}
                         </span>
                         <span className="font-mono text-[10px] uppercase font-bold text-white">
                           {publishPercent}%
@@ -4821,6 +5160,26 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
                         {publishProgress.done} de {publishProgress.total} arquivo(s) processados.
                       </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          disabled={!isPublishing || !isBrowserOnline}
+                          onClick={() => setIsUploadPaused((current) => !current)}
+                          className="inline-flex h-10 items-center justify-center gap-2 border border-white/15 bg-white/5 px-3 font-mono text-[10px] uppercase font-bold text-gray-200 transition-colors hover:border-brutal-accent disabled:opacity-50"
+                        >
+                          {isUploadPaused ? <Play className="h-4 w-4" /> : <Pause className="h-4 w-4" />}
+                          {isUploadPaused ? 'Continuar' : 'Pausar'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={isPublishing || failedUploadCount === 0}
+                          onClick={handleUpload}
+                          className="inline-flex h-10 items-center justify-center gap-2 border border-white/15 bg-white/5 px-3 font-mono text-[10px] uppercase font-bold text-gray-200 transition-colors hover:border-brutal-accent disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-4 w-4" />
+                          Reenviar erros
+                        </button>
+                      </div>
                     </div>
                   )}
                   <button
@@ -4835,8 +5194,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       </span>
                     ) : isPreparingFiles ? (
                       `Analisando ${filePreparePercent}%`
+                    ) : failedUploadCount > 0 && pendingUploadCount === failedUploadCount ? (
+                      `Reenviar ${failedUploadCount} erro${failedUploadCount === 1 ? '' : 's'}`
                     ) : (
-                      `Publicar ${selectedFiles.length || ''} Produto${selectedFiles.length === 1 ? '' : 's'}`
+                      `Publicar ${pendingUploadCount || ''} Produto${pendingUploadCount === 1 ? '' : 's'}`
                     )}
                   </button>
                   <button

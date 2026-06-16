@@ -3050,6 +3050,10 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                                 <p className="text-yellow-300 text-[9px] uppercase">
                                   Pedido: {formatCurrency(Number(order.total || 0))}
                                 </p>
+                              ) : Number(order.discountTotal || 0) > 0 ? (
+                                <p className="text-green-300 text-[9px] uppercase">
+                                  Desconto: {formatCurrency(Number(order.discountTotal || 0))}
+                                </p>
                               ) : (
                                 <p className="text-gray-600 text-[9px] uppercase">
                                   Total conciliado

@@ -1489,6 +1489,12 @@ export interface CreateCheckoutResult {
   total: number;
   subtotal: number;
   discountTotal: number;
+  discountType?: 'bulk_photo_quantity' | 'coupon' | null;
+  discountPercentage?: number | null;
+  automaticDiscountTotal?: number;
+  automaticDiscountEligible?: boolean;
+  couponCode?: string | null;
+  discountRule?: string;
   paymentMethod: CheckoutPaymentMethod;
   provider: string;
   status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
@@ -1546,6 +1552,12 @@ export const paymentService = {
       total: Number(data.total || 0),
       subtotal: Number(data.subtotal ?? data.total ?? 0),
       discountTotal: Number(data.discountTotal || 0),
+      discountType: data.discountType || null,
+      discountPercentage: data.discountPercentage === null || data.discountPercentage === undefined ? null : Number(data.discountPercentage),
+      automaticDiscountTotal: Number(data.automaticDiscountTotal || 0),
+      automaticDiscountEligible: Boolean(data.automaticDiscountEligible),
+      couponCode: data.couponCode || null,
+      discountRule: data.discountRule || undefined,
       paymentMethod: data.paymentMethod || input.paymentMethod || 'checkout',
       provider: data.provider || 'infinitepay',
       status: data.status || 'pending',

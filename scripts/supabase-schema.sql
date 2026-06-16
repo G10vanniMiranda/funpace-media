@@ -431,6 +431,8 @@ create table if not exists public.orders (
   total numeric(10, 2) not null check (total > 0),
   subtotal numeric(10, 2),
   "discountTotal" numeric(10, 2) not null default 0 check ("discountTotal" >= 0),
+  "discountType" text check ("discountType" is null or "discountType" in ('bulk_photo_quantity', 'coupon')),
+  "discountPercentage" numeric(5, 2) check ("discountPercentage" is null or ("discountPercentage" >= 0 and "discountPercentage" <= 100)),
   status text not null default 'pending' check (status in ('pending', 'paid', 'failed', 'cancelled', 'canceled', 'refused', 'refunded')),
   "paymentMethod" text not null default 'checkout' check ("paymentMethod" in ('pix', 'credit_card', 'checkout')),
   "paymentProvider" text not null default 'infinitepay',
@@ -443,6 +445,8 @@ create table if not exists public.orders (
 
 alter table public.orders add column if not exists subtotal numeric(10, 2);
 alter table public.orders add column if not exists "discountTotal" numeric(10, 2) not null default 0;
+alter table public.orders add column if not exists "discountType" text;
+alter table public.orders add column if not exists "discountPercentage" numeric(5, 2);
 alter table public.orders add column if not exists "paymentMethod" text not null default 'checkout';
 alter table public.orders add column if not exists "paidEmailSentAt" timestamptz;
 

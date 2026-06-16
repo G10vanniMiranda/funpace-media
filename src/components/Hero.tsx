@@ -30,6 +30,8 @@ interface HeroProps {
   onSelectPhoto: (product: Product) => void;
 }
 
+const heroTickerText = 'ENCONTRE SEU RITMO - MEMORIAS EM MOVIMENTO - 5+ FOTOS = 15% OFF AUTOMATICO ';
+
 export function Hero({
   eventQuery,
   onEventQueryChange,
@@ -49,14 +51,14 @@ export function Hero({
     <section className="relative overflow-hidden bg-brutal-white border-b-4 border-brutal-black">
       <div className="absolute top-0 w-full overflow-hidden bg-brutal-accent text-brutal-black py-2 border-b-2 border-brutal-black z-0 flex whitespace-nowrap">
         <div className="animate-marquee flex items-center">
-          {Array(15).fill('ENCONTRE SEU RITMO - MEMÓRIAS EM MOVIMENTO ').map((text, i) => (
+          {Array(15).fill(heroTickerText).map((text, i) => (
             <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
               {text}
             </span>
           ))}
         </div>
         <div className="animate-marquee flex items-center">
-          {Array(15).fill('ENCONTRE SEU RITMO - MEMÓRIAS EM MOVIMENTO ').map((text, i) => (
+          {Array(15).fill(heroTickerText).map((text, i) => (
             <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
               {text}
             </span>
@@ -208,3 +210,4 @@ function SearchGroup({ title, children }: { title: string; children: React.React
     </div>
   );
 }
+

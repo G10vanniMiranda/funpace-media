@@ -9,6 +9,7 @@ import cors from "cors";
 import helmet from "helmet";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
+import { BULK_PHOTO_DISCOUNT_PERCENT, calculateCartPricing, isPhotoType } from "./src/lib/cart-pricing";
 import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
 import adminApiHandler from "./api/admin";
@@ -357,6 +358,106 @@ function getBearerToken(req: express.Request) {
   const header = req.header("authorization") || "";
   const match = header.match(/^Bearer\s+(.+)$/i);
   return match?.[1]?.trim() || "";
+}
+
+function roundMoney(value: number) {
+  return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+
+function normalizeCouponCode(value: unknown) {
+  return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40);
+}
+
+async function validateCheckoutCoupon(input: { code: string; subtotal: number; itemCount: number }) {
+  const code = normalizeCouponCode(input.code);
+  if (!code) return { coupon: null as any, discountTotal: 0 };
+  if (code.length < 3) throw new Error("Cupom invalido.");
+
+  const { data: coupon, error } = await getSupabaseAdmin()
+    .from("coupons")
+    .select("*")
+    .eq("code", code)
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  if (!coupon || !(coupon as any).isActive) throw new Error("Cupom invalido ou inativo.");
+
+  const now = Date.now();
+  if ((coupon as any).startsAt && new Date((coupon as any).startsAt).getTime() > now) {
+    throw new Error("Cupom ainda nao esta valido.");
+  }
+  if ((coupon as any).expiresAt && new Date((coupon as any).expiresAt).getTime() < now) {
+    throw new Error("Cupom expirado.");
+  }
+  if ((coupon as any).maxUses !== null && (coupon as any).maxUses !== undefined && Number((coupon as any).usedCount || 0) >= Number((coupon as any).maxUses)) {
+    throw new Error("Cupom esgotado.");
+  }
+
+  const subtotalCents = Math.round(input.subtotal * 100);
+  const minimumTotalCents = Math.max(101, input.itemCount);
+  const maxDiscountCents = Math.max(0, subtotalCents - minimumTotalCents);
+  const requestedDiscountCents = (coupon as any).type === "percent"
+    ? Math.floor(subtotalCents * Math.min(100, Math.max(0, Number((coupon as any).value))) / 100)
+    : Math.round(Number((coupon as any).value) * 100);
+  const discountCents = Math.min(maxDiscountCents, Math.max(0, requestedDiscountCents));
+
+  if (discountCents <= 0) throw new Error("Cupom nao pode ser aplicado a este carrinho.");
+  return { coupon, discountTotal: roundMoney(discountCents / 100) };
+}
+
+function getAutomaticCheckoutDiscount(products: any[]) {
+  const pricing = calculateCartPricing(products.map((product) => ({
+    id: String(product.id),
+    price: Number(product.price || 0),
+    type: product.type,
+  })));
+
+  return {
+    type: pricing.automaticDiscountActive ? "bulk_photo_quantity" : null,
+    percentage: pricing.automaticDiscountPercent,
+    discountTotal: pricing.automaticDiscountTotal,
+    eligibleProductIds: new Set(products.filter((product) => isPhotoType(product.type)).map((product) => String(product.id))),
+  };
+}
+
+function applyCheckoutDiscountToProducts(products: any[], discountTotal: number, eligibleProductIds?: Set<string>) {
+  const discountCents = Math.round(discountTotal * 100);
+  if (discountCents <= 0) return products.map((product) => ({ ...product, checkoutPrice: roundMoney(Number(product.price || 0)) }));
+
+  const eligibleProducts = eligibleProductIds
+    ? products.filter((product) => eligibleProductIds.has(String(product.id)))
+    : products;
+  const subtotalCents = eligibleProducts.reduce((sum, product) => sum + Math.round(Number(product.price || 0) * 100), 0);
+  if (subtotalCents <= 0) return products.map((product) => ({ ...product, checkoutPrice: roundMoney(Number(product.price || 0)) }));
+
+  let remainingDiscount = discountCents;
+  const adjusted = products.map((product) => {
+    const originalCents = Math.round(Number(product.price || 0) * 100);
+    if (eligibleProductIds && !eligibleProductIds.has(String(product.id))) {
+      return { ...product, checkoutPrice: roundMoney(originalCents / 100) };
+    }
+
+    const eligibleIndex = eligibleProducts.findIndex((item) => String(item.id) === String(product.id));
+    const proportional = eligibleIndex === eligibleProducts.length - 1
+      ? remainingDiscount
+      : Math.floor(discountCents * originalCents / subtotalCents);
+    const itemDiscount = Math.min(Math.max(0, proportional), Math.max(0, originalCents - 1), remainingDiscount);
+    remainingDiscount -= itemDiscount;
+    return { ...product, checkoutPrice: roundMoney((originalCents - itemDiscount) / 100) };
+  });
+
+  for (const product of adjusted) {
+    if (remainingDiscount <= 0) break;
+    if (eligibleProductIds && !eligibleProductIds.has(String(product.id))) continue;
+    const cents = Math.round(Number(product.checkoutPrice || 0) * 100);
+    const extra = Math.min(remainingDiscount, Math.max(0, cents - 1));
+    if (extra > 0) {
+      product.checkoutPrice = roundMoney((cents - extra) / 100);
+      remainingDiscount -= extra;
+    }
+  }
+
+  return adjusted;
 }
 
 async function getAuthenticatedRequestUser(req: express.Request): Promise<{ id: string; email: string | null } | null> {
@@ -1593,7 +1694,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
   let orderId = "";
 
   try {
-    const { items, successUrl, cancelUrl, buyer } = req.body;
+    const { items, successUrl, cancelUrl, buyer, couponCode } = req.body;
     const paymentMethod: PaymentMethod = req.body?.paymentMethod === "pix" || req.body?.paymentMethod === "credit_card"
       ? req.body.paymentMethod
       : "checkout";
@@ -1628,7 +1729,25 @@ app.post("/api/checkout/create-session", async (req, res) => {
       return res.status(400).json({ error: "Um ou mais produtos nao estao disponiveis." });
     }
 
-    const total = products.reduce((sum: number, product: any) => sum + Number(product.price), 0);
+    const subtotal = roundMoney(products.reduce((sum: number, product: any) => sum + Number(product.price), 0));
+    let couponResult;
+    try {
+      couponResult = await validateCheckoutCoupon({ code: couponCode, subtotal, itemCount: products.length });
+    } catch (error: any) {
+      return res.status(400).json({ error: error?.message || "Cupom invalido." });
+    }
+    const automaticDiscount = getAutomaticCheckoutDiscount(products);
+    const couponDiscountTotal = Number(couponResult.discountTotal || 0);
+    const useCouponDiscount = couponResult.coupon && couponDiscountTotal >= automaticDiscount.discountTotal;
+    const discountTotal = useCouponDiscount ? couponDiscountTotal : automaticDiscount.discountTotal;
+    const discountType = discountTotal > 0 ? useCouponDiscount ? "coupon" : automaticDiscount.type : null;
+    const discountPercentage = discountType === "bulk_photo_quantity" ? BULK_PHOTO_DISCOUNT_PERCENT : null;
+    const total = roundMoney(subtotal - discountTotal);
+    const checkoutProducts = applyCheckoutDiscountToProducts(
+      products,
+      discountTotal,
+      discountType === "bulk_photo_quantity" ? automaticDiscount.eligibleProductIds : undefined,
+    );
     const buyerCpf = onlyCpfDigits(typeof buyer?.cpf === "string" ? buyer.cpf : "");
     console.info("[checkout] buyer cpf received", {
       hasCpf: buyerCpf.length > 0,
@@ -1674,8 +1793,8 @@ app.post("/api/checkout/create-session", async (req, res) => {
         buyerPhone,
         buyerCpf,
         total,
-        subtotal: total,
-        discountTotal: 0,
+        subtotal,
+        discountTotal,
         status: "pending",
         paymentMethod,
         paymentProvider: process.env.PAYMENT_PROVIDER || "infinitepay",
@@ -1692,12 +1811,12 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     const { error: orderItemsError } = await getSupabaseAdmin()
       .from("order_items")
-      .insert(products.map((product: any) => ({
+      .insert(checkoutProducts.map((product: any) => ({
         orderId,
         productId: product.id,
         name: product.name,
         type: product.type,
-        price: product.price,
+        price: product.checkoutPrice,
         url: product.url,
         vendedorId: product.vendedorId,
         bib: product.bib,
@@ -1726,10 +1845,10 @@ app.post("/api/checkout/create-session", async (req, res) => {
           phone: buyerPhone,
           cpf: buyerCpf,
         },
-        items: products.map((product: any) => ({
+        items: checkoutProducts.map((product: any) => ({
           id: product.id,
           name: product.name,
-          price: Number(product.price),
+          price: Number(product.checkoutPrice),
         })),
         paymentMethod,
         successUrl: successRedirectUrl,
@@ -1764,13 +1883,29 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     if (checkoutUrlError) throw checkoutUrlError;
 
+    if (useCouponDiscount && couponResult.coupon) {
+      await getSupabaseAdmin()
+        .from("coupons")
+        .update({ usedCount: Number((couponResult.coupon as any).usedCount || 0) + 1 })
+        .eq("id", (couponResult.coupon as any).id)
+        .then(({ error }) => {
+          if (error) console.error("Nao foi possivel atualizar uso do cupom:", error);
+        });
+    }
+
     res.json({
       url: paymentResult.checkoutUrl,
       paymentUrl: paymentResult.checkoutUrl,
       orderId,
       total,
-      subtotal: total,
-      discountTotal: 0,
+      subtotal,
+      discountTotal,
+      discountType,
+      discountPercentage,
+      couponCode: useCouponDiscount ? (couponResult.coupon as any)?.code || null : null,
+      automaticDiscountTotal: automaticDiscount.discountTotal,
+      automaticDiscountEligible: automaticDiscount.discountTotal > 0,
+      discountRule: "coupon_nao_acumula_melhor_beneficio",
       paymentMethod,
       provider: paymentResult.provider,
       status: paymentResult.status,

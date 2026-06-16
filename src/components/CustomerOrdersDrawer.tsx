@@ -961,6 +961,11 @@ export function CustomerOrdersPage({
                       <div>
                         <p className="font-mono text-[10px] text-gray-400 uppercase">Total</p>
                         <p className="font-display text-4xl">{formatCurrency(Number(order.total))}</p>
+                        {Number(order.discountTotal || 0) > 0 && (
+                          <p className="font-mono text-[10px] uppercase text-green-700">
+                            Voce economizou {formatCurrency(Number(order.discountTotal || 0))}
+                          </p>
+                        )}
                       </div>
                       <div className="flex flex-wrap gap-2 sm:justify-end">
                         {order.status === 'pending' && order.checkoutUrl && (

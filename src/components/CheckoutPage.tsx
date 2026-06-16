@@ -8,6 +8,7 @@ import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { ProtectedMedia } from './ProtectedMedia';
 import { CheckoutPaymentMethod, CreateCheckoutResult } from '../lib/services';
+import { calculateCartPricing, formatPromotionLabel } from '../lib/cart-pricing';
 
 interface CheckoutPageProps {
   cartItems: Product[];
@@ -65,8 +66,10 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
     setCpf(user?.cpf ?? '');
   }, [user?.cpf, user?.displayName, user?.email]);
 
-  const total = useMemo(() => cartItems.reduce((sum, item) => sum + Number(item.price || 0), 0), [cartItems]);
-  const meetsMinimumTotal = total > MIN_CHECKOUT_TOTAL;
+  const pricing = useMemo(() => calculateCartPricing(cartItems), [cartItems]);
+  const displayedDiscount = checkoutResult?.discountTotal ?? pricing.automaticDiscountTotal;
+  const displayedTotal = checkoutResult?.total ?? pricing.total;
+  const meetsMinimumTotal = displayedTotal > MIN_CHECKOUT_TOTAL;
   const phoneDigits = onlyWhatsappDigits(phone);
   const cpfDigits = onlyCpfDigits(cpf);
   const contactValid = fullName.trim().length >= 3 &&
@@ -316,21 +319,37 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 </p>
               )}
             </div>
+            {pricing.automaticDiscountActive && (
+              <div className="border border-brutal-accent bg-brutal-accent/10 p-3">
+                <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
+                  Parabens! Voce ganhou 15% de desconto por comprar 5 ou mais fotos.
+                </p>
+              </div>
+            )}
+            <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
+              <span>Fotos</span>
+              <span>{pricing.photoCount}</span>
+            </div>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Subtotal</span>
-              <span>R$ {total.toFixed(2).replace('.', ',')}</span>
+              <span>R$ {pricing.subtotal.toFixed(2).replace('.', ',')}</span>
             </div>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
-              <span>Descontos</span>
-              <span>{checkoutResult?.discountTotal ? `- R$ ${checkoutResult.discountTotal.toFixed(2).replace('.', ',')}` : 'R$ 0,00'}</span>
+              <span>{formatPromotionLabel(pricing)}</span>
+              <span>{displayedDiscount > 0 ? `- R$ ${displayedDiscount.toFixed(2).replace('.', ',')}` : 'R$ 0,00'}</span>
             </div>
+            {displayedDiscount > 0 && (
+              <p className="font-mono text-[10px] uppercase text-green-700">
+                Voce economizou R$ {displayedDiscount.toFixed(2).replace('.', ',')}.
+              </p>
+            )}
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Entrega</span>
               <span>Digital</span>
             </div>
             <div className="flex justify-between items-end pt-3">
               <span className="font-mono text-sm uppercase text-gray-500 font-bold tracking-widest">Total</span>
-              <span className="font-display text-4xl">R$ {(checkoutResult?.total ?? total).toFixed(2).replace('.', ',')}</span>
+              <span className="font-display text-4xl">R$ {displayedTotal.toFixed(2).replace('.', ',')}</span>
             </div>
           </div>
 

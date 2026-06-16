@@ -121,6 +121,8 @@ export interface Order {
   total: number;
   subtotal?: number | null;
   discountTotal?: number | null;
+  discountType?: 'bulk_photo_quantity' | 'coupon' | null;
+  discountPercentage?: number | null;
   status: 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
   paymentMethod?: 'pix' | 'credit_card' | 'checkout';
   paymentProvider: string;

@@ -1,4 +1,5 @@
 import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
+import { BULK_PHOTO_DISCOUNT_PERCENT, calculateCartPricing, isPhotoType } from '../../src/lib/cart-pricing.js';
 
 type PaymentMethod = 'pix' | 'credit_card' | 'checkout';
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
@@ -90,6 +91,21 @@ function roundMoney(value: number) {
 
 function normalizeCouponCode(value: unknown) {
   return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '').slice(0, 40);
+}
+
+function getAutomaticDiscount(products: any[]) {
+  const pricing = calculateCartPricing(products.map((product) => ({
+    id: String(product.id),
+    price: Number(product.price || 0),
+    type: product.type,
+  })));
+
+  return {
+    type: pricing.automaticDiscountActive ? 'bulk_photo_quantity' : null,
+    percentage: pricing.automaticDiscountPercent,
+    discountTotal: pricing.automaticDiscountTotal,
+    eligibleProductIds: new Set(products.filter((product) => isPhotoType(product.type)).map((product) => String(product.id))),
+  };
 }
 
 function isValidCartProductId(value: unknown) {
@@ -259,15 +275,25 @@ async function validateCoupon(input: { code: string; subtotal: number; itemCount
   return { coupon, discountTotal: roundMoney(discountCents / 100) };
 }
 
-function applyDiscountToProducts(products: any[], discountTotal: number) {
+function applyDiscountToProducts(products: any[], discountTotal: number, eligibleProductIds?: Set<string>) {
   const discountCents = Math.round(discountTotal * 100);
   if (discountCents <= 0) return products.map((product) => ({ ...product, checkoutPrice: roundMoney(Number(product.price || 0)) }));
 
-  const subtotalCents = products.reduce((sum, product) => sum + Math.round(Number(product.price || 0) * 100), 0);
+  const eligibleProducts = eligibleProductIds
+    ? products.filter((product) => eligibleProductIds.has(String(product.id)))
+    : products;
+  const subtotalCents = eligibleProducts.reduce((sum, product) => sum + Math.round(Number(product.price || 0) * 100), 0);
+  if (subtotalCents <= 0) return products.map((product) => ({ ...product, checkoutPrice: roundMoney(Number(product.price || 0)) }));
+
   let remainingDiscount = discountCents;
   const adjusted = products.map((product, index) => {
     const originalCents = Math.round(Number(product.price || 0) * 100);
-    const proportional = index === products.length - 1
+    if (eligibleProductIds && !eligibleProductIds.has(String(product.id))) {
+      return { ...product, checkoutPrice: roundMoney(originalCents / 100) };
+    }
+
+    const eligibleIndex = eligibleProducts.findIndex((item) => String(item.id) === String(product.id));
+    const proportional = eligibleIndex === eligibleProducts.length - 1
       ? remainingDiscount
       : Math.floor(discountCents * originalCents / subtotalCents);
     const itemDiscount = Math.min(Math.max(0, proportional), Math.max(0, originalCents - 1), remainingDiscount);
@@ -277,6 +303,7 @@ function applyDiscountToProducts(products: any[], discountTotal: number) {
 
   for (const product of adjusted) {
     if (remainingDiscount <= 0) break;
+    if (eligibleProductIds && !eligibleProductIds.has(String(product.id))) continue;
     const cents = Math.round(Number(product.checkoutPrice || 0) * 100);
     const extra = Math.min(remainingDiscount, Math.max(0, cents - 1));
     if (extra > 0) {
@@ -548,9 +575,20 @@ export default async function handler(req: any, res: any) {
     } catch (error: any) {
       return res.status(400).json({ error: error?.message || 'Cupom inválido.', requestId });
     }
-    const discountTotal = couponResult.discountTotal;
+    const automaticDiscount = getAutomaticDiscount(products);
+    const couponDiscountTotal = Number(couponResult.discountTotal || 0);
+    const useCouponDiscount = couponResult.coupon && couponDiscountTotal >= automaticDiscount.discountTotal;
+    const discountTotal = useCouponDiscount ? couponDiscountTotal : automaticDiscount.discountTotal;
+    const discountType = discountTotal > 0
+      ? useCouponDiscount ? 'coupon' : automaticDiscount.type
+      : null;
+    const discountPercentage = discountType === 'bulk_photo_quantity' ? BULK_PHOTO_DISCOUNT_PERCENT : null;
     const total = roundMoney(subtotal - discountTotal);
-    const checkoutProducts = applyDiscountToProducts(products, discountTotal);
+    const checkoutProducts = applyDiscountToProducts(
+      products,
+      discountTotal,
+      discountType === 'bulk_photo_quantity' ? automaticDiscount.eligibleProductIds : undefined,
+    );
 
     const buyerName = String(buyer.fullName).trim();
     const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
@@ -677,7 +715,7 @@ export default async function handler(req: any, res: any) {
       }),
     });
 
-    if (couponResult.coupon) {
+    if (useCouponDiscount && couponResult.coupon) {
       const nextUsedCount = Number(couponResult.coupon.usedCount || 0) + 1;
       await supabaseRequest(`/rest/v1/coupons?id=eq.${couponResult.coupon.id}`, {
         method: 'PATCH',
@@ -703,7 +741,12 @@ export default async function handler(req: any, res: any) {
       total,
       subtotal,
       discountTotal,
-      couponCode: couponResult.coupon?.code || null,
+      discountType,
+      discountPercentage,
+      couponCode: useCouponDiscount ? couponResult.coupon?.code || null : null,
+      automaticDiscountTotal: automaticDiscount.discountTotal,
+      automaticDiscountEligible: automaticDiscount.discountTotal > 0,
+      discountRule: 'coupon_nao_acumula_melhor_beneficio',
       paymentMethod,
       provider: paymentResult.provider,
       status: paymentResult.status,

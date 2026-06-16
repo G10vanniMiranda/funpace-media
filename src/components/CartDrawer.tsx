@@ -2,6 +2,7 @@ import { ArrowRight, Image as ImageIcon, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { Product } from '../types';
 import { ProtectedMedia } from './ProtectedMedia';
+import { calculateCartPricing, formatPromotionLabel } from '../lib/cart-pricing';
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -38,7 +39,7 @@ export function CartDrawer({
   onLoginRequested,
   onOpenCheckout,
 }: CartDrawerProps) {
-  const total = cartItems.reduce((sum, item) => sum + item.price, 0);
+  const pricing = calculateCartPricing(cartItems);
   const disableCheckout = cartItems.length === 0;
 
   const handleCheckoutClick = () => {
@@ -113,9 +114,35 @@ export function CartDrawer({
         </div>
 
         <div className="p-6 border-t-4 border-brutal-black bg-brutal-white">
-          <div className="flex justify-between items-end mb-6">
+          {pricing.automaticDiscountActive && (
+            <div className="mb-4 border-2 border-brutal-accent bg-brutal-accent/10 p-3">
+              <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
+                Parabens! Voce ganhou 15% de desconto por comprar 5 ou mais fotos.
+              </p>
+            </div>
+          )}
+          <div className="mb-5 space-y-2">
+            <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
+              <span>Fotos</span>
+              <span>{pricing.photoCount}</span>
+            </div>
+            <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
+              <span>Subtotal</span>
+              <span>R$ {pricing.subtotal.toFixed(2).replace('.', ',')}</span>
+            </div>
+            <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
+              <span>{formatPromotionLabel(pricing)}</span>
+              <span>{pricing.automaticDiscountTotal > 0 ? `-R$ ${pricing.automaticDiscountTotal.toFixed(2).replace('.', ',')}` : 'R$ 0,00'}</span>
+            </div>
+            {pricing.automaticDiscountTotal > 0 && (
+              <p className="font-mono text-[10px] uppercase text-green-700">
+                Voce economizou R$ {pricing.automaticDiscountTotal.toFixed(2).replace('.', ',')}.
+              </p>
+            )}
+          </div>
+          <div className="flex justify-between items-end mb-6 border-t-2 border-brutal-black pt-4">
             <span className="font-mono text-sm uppercase text-gray-500 font-bold tracking-widest">Total</span>
-            <span className="font-display text-4xl">R$ {total.toFixed(2).replace('.', ',')}</span>
+            <span className="font-display text-4xl">R$ {pricing.total.toFixed(2).replace('.', ',')}</span>
           </div>
           <button
             onClick={handleCheckoutClick}

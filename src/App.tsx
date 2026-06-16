@@ -15,6 +15,7 @@ import { PhotographerLogin } from './components/PhotographerLogin';
 import { PhotographerPasswordSetup } from './components/PhotographerPasswordSetup';
 import { AdminLogin } from './components/AdminLogin';
 import { FaceSearchModal } from './components/FaceSearchModal';
+import { WelcomeVoucherModal } from './components/WelcomeVoucherModal';
 import { PagamentoSucesso } from './routes/pagamento/sucesso';
 import { ParaFotografos } from './routes/ParaFotografos';
 import { Precos } from './routes/Precos';
@@ -773,6 +774,18 @@ function Storefront() {
     navigate('/minha-conta');
   };
 
+  const handleStartShoppingFromWelcomeVoucher = () => {
+    navigate('/');
+    window.setTimeout(() => {
+      const target = document.getElementById('eventos') || document.querySelector('[data-events-section]');
+      if (target instanceof HTMLElement) {
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        return;
+      }
+      window.scrollTo({ top: Math.round(window.innerHeight * 0.75), behavior: 'smooth' });
+    }, 80);
+  };
+
   const selectedPhotographer = null; // Replaced by profile view logic
   const photographerPhotos: Product[] = [];
 
@@ -895,6 +908,11 @@ function Storefront() {
         }}
         onOpenOrders={handleOpenOrders}
         onOpenAccount={() => user ? navigate('/minha-conta') : setIsAuthOpen(true)}
+      />
+
+      <WelcomeVoucherModal
+        userId={user?.uid || null}
+        onStartShopping={handleStartShoppingFromWelcomeVoucher}
       />
 
       {selectedPhotographer ? (

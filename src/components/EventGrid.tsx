@@ -167,7 +167,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
   }, [events, query]);
 
   return (
-    <section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pt-10 pb-8 md:w-full md:max-w-[87.5rem] md:px-6 md:py-20">
+    <section id="eventos" data-events-section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pt-10 pb-8 md:w-full md:max-w-[87.5rem] md:px-6 md:py-20">
       <div className="mb-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="max-w-3xl">
           <h2 className="text-4xl md:text-6xl mb-2">EVENTOS</h2>

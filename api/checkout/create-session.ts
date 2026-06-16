@@ -1,6 +1,9 @@
 import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
 import { BULK_PHOTO_DISCOUNT_PERCENT, calculateCartPricing, isPhotoType } from '../../src/lib/cart-pricing.js';
 
+const WELCOME_VOUCHER_CODE = 'FUNPACE10';
+const WELCOME_VOUCHER_PERCENT = 10;
+
 type PaymentMethod = 'pix' | 'credit_card' | 'checkout';
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
@@ -241,20 +244,45 @@ function extractPix(payload: any) {
   return { qrCode, qrCodeImage, expiresAt };
 }
 
-async function validateCoupon(input: { code: string; subtotal: number; itemCount: number }) {
+async function hasPaidCustomerOrder(input: { userId: string; email?: string | null }) {
+  const userId = String(input.userId || '').trim();
+  const email = String(input.email || '').trim().toLowerCase();
+  if (!userId && !email) return false;
+
+  const ownershipFilter = email
+    ? `or=${encodeURIComponent(`(userId.eq.${userId},buyerEmail.eq.${email})`)}`
+    : `userId=eq.${encodeURIComponent(userId)}`;
+  const rows = await supabaseRequest<any[]>(
+    `/rest/v1/orders?select=id&status=eq.paid&${ownershipFilter}&limit=1`,
+  );
+  return rows.length > 0;
+}
+
+async function validateCoupon(input: { code: string; subtotal: number; itemCount: number; firstPurchaseEligible?: boolean }) {
   const code = normalizeCouponCode(input.code);
   if (!code) return { coupon: null, discountTotal: 0 };
-  if (code.length < 3) throw new Error('Cupom inválido.');
+  if (code.length < 3) throw new Error('Cupom invalido.');
+  if (code === WELCOME_VOUCHER_CODE && input.firstPurchaseEligible === false) {
+    throw new Error('O cupom FUNPACE10 e valido apenas para a primeira compra.');
+  }
 
   const rows = await supabaseRequest<any[]>(
     `/rest/v1/coupons?select=*&code=eq.${encodeURIComponent(code)}&limit=1`,
   );
-  const coupon = rows[0];
-  if (!coupon || !coupon.isActive) throw new Error('Cupom inválido ou inativo.');
+  const coupon = rows[0] || (code === WELCOME_VOUCHER_CODE ? {
+    id: null,
+    code: WELCOME_VOUCHER_CODE,
+    type: 'percent',
+    value: WELCOME_VOUCHER_PERCENT,
+    usedCount: 0,
+    maxUses: null,
+    isActive: true,
+  } : null);
+  if (!coupon || !coupon.isActive) throw new Error('Cupom invalido ou inativo.');
 
   const now = Date.now();
   if (coupon.startsAt && new Date(coupon.startsAt).getTime() > now) {
-    throw new Error('Cupom ainda não está válido.');
+    throw new Error('Cupom ainda nao esta valido.');
   }
   if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) {
     throw new Error('Cupom expirado.');
@@ -271,7 +299,7 @@ async function validateCoupon(input: { code: string; subtotal: number; itemCount
     : Math.round(Number(coupon.value) * 100);
   const discountCents = Math.min(maxDiscountCents, Math.max(0, requestedDiscountCents));
 
-  if (discountCents <= 0) throw new Error('Cupom não pode ser aplicado a este carrinho.');
+  if (discountCents <= 0) throw new Error('Cupom nao pode ser aplicado a este carrinho.');
   return { coupon, discountTotal: roundMoney(discountCents / 100) };
 }
 
@@ -569,9 +597,17 @@ export default async function handler(req: any, res: any) {
     if (subtotal <= 1) {
       return res.status(400).json({ error: 'A InfinitePay exige total maior que R$ 1,00 para gerar o checkout.', requestId });
     }
+    const buyerName = String(buyer.fullName).trim();
+    const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
+    if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
+      return res.status(403).json({ error: 'Use o mesmo e-mail da conta logada para finalizar a compra.', requestId });
+    }
+
+    const buyerEmail = authUser.email || inputBuyerEmail;
+    const firstPurchaseEligible = !(await hasPaidCustomerOrder({ userId: authUser.id, email: buyerEmail }));
     let couponResult;
     try {
-      couponResult = await validateCoupon({ code: couponCode, subtotal, itemCount: products.length });
+      couponResult = await validateCoupon({ code: couponCode, subtotal, itemCount: products.length, firstPurchaseEligible });
     } catch (error: any) {
       return res.status(400).json({ error: error?.message || 'Cupom inválido.', requestId });
     }
@@ -589,14 +625,6 @@ export default async function handler(req: any, res: any) {
       discountTotal,
       discountType === 'bulk_photo_quantity' ? automaticDiscount.eligibleProductIds : undefined,
     );
-
-    const buyerName = String(buyer.fullName).trim();
-    const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
-    if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
-      return res.status(403).json({ error: 'Use o mesmo e-mail da conta logada para finalizar a compra.', requestId });
-    }
-
-    const buyerEmail = authUser.email || inputBuyerEmail;
     const buyerPhone = String(buyer.phone || 'nao_informado').trim();
     const buyerCpf = onlyCpfDigits(buyer.cpf);
 
@@ -715,7 +743,7 @@ export default async function handler(req: any, res: any) {
       }),
     });
 
-    if (useCouponDiscount && couponResult.coupon) {
+    if (useCouponDiscount && couponResult.coupon?.id) {
       const nextUsedCount = Number(couponResult.coupon.usedCount || 0) + 1;
       await supabaseRequest(`/rest/v1/coupons?id=eq.${couponResult.coupon.id}`, {
         method: 'PATCH',

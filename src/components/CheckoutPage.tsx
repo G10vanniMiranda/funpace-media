@@ -9,6 +9,7 @@ import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { ProtectedMedia } from './ProtectedMedia';
 import { CheckoutPaymentMethod, CreateCheckoutResult } from '../lib/services';
 import { calculateCartPricing, formatPromotionLabel } from '../lib/cart-pricing';
+import { WELCOME_VOUCHER_CODE, WELCOME_VOUCHER_PENDING_COUPON_KEY, recordWelcomeVoucherEvent } from '../lib/welcome-voucher';
 
 interface CheckoutPageProps {
   cartItems: Product[];
@@ -58,7 +59,13 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
   const [submittingMethod, setSubmittingMethod] = useState<CheckoutPaymentMethod | null>(null);
   const [checkoutResult, setCheckoutResult] = useState<CreateCheckoutResult | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
-  const [couponCode, setCouponCode] = useState('');
+  const [couponCode, setCouponCode] = useState(() => {
+    try {
+      return localStorage.getItem(WELCOME_VOUCHER_PENDING_COUPON_KEY) || '';
+    } catch {
+      return '';
+    }
+  });
 
   useEffect(() => {
     setFullName(user?.displayName || titleCaseFromEmail(user?.email));
@@ -102,6 +109,14 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
       const result = await onCheckout(payload, paymentMethod, normalizedCoupon || undefined);
 
       setCheckoutResult(result);
+      if (normalizedCoupon === WELCOME_VOUCHER_CODE && result.couponCode === WELCOME_VOUCHER_CODE) {
+        recordWelcomeVoucherEvent('purchase_used_voucher', { orderId: result.orderId, paymentMethod });
+        try {
+          localStorage.removeItem(WELCOME_VOUCHER_PENDING_COUPON_KEY);
+        } catch {
+          // Ignore storage failures.
+        }
+      }
       if (paymentMethod !== 'pix' || !result.pix?.qrCode) {
         window.location.href = result.paymentUrl;
       }

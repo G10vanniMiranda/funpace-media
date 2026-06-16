@@ -368,10 +368,33 @@ function normalizeCouponCode(value: unknown) {
   return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40);
 }
 
-async function validateCheckoutCoupon(input: { code: string; subtotal: number; itemCount: number }) {
+const WELCOME_VOUCHER_CODE = "FUNPACE10";
+const WELCOME_VOUCHER_PERCENT = 10;
+
+async function hasPaidCustomerOrder(input: { userId: string; email?: string | null }) {
+  const userId = String(input.userId || "").trim();
+  const email = String(input.email || "").trim().toLowerCase();
+  if (!userId && !email) return false;
+
+  let query = getSupabaseAdmin()
+    .from("orders")
+    .select("id")
+    .eq("status", "paid")
+    .limit(1);
+
+  query = email ? query.or(`userId.eq.${userId},buyerEmail.eq.${email}`) : query.eq("userId", userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+
+async function validateCheckoutCoupon(input: { code: string; subtotal: number; itemCount: number; firstPurchaseEligible?: boolean }) {
   const code = normalizeCouponCode(input.code);
   if (!code) return { coupon: null as any, discountTotal: 0 };
   if (code.length < 3) throw new Error("Cupom invalido.");
+  if (code === WELCOME_VOUCHER_CODE && input.firstPurchaseEligible === false) {
+    throw new Error("O cupom FUNPACE10 e valido apenas para a primeira compra.");
+  }
 
   const { data: coupon, error } = await getSupabaseAdmin()
     .from("coupons")
@@ -380,29 +403,38 @@ async function validateCheckoutCoupon(input: { code: string; subtotal: number; i
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  if (!coupon || !(coupon as any).isActive) throw new Error("Cupom invalido ou inativo.");
+  const resolvedCoupon = coupon || (code === WELCOME_VOUCHER_CODE ? {
+    id: null,
+    code: WELCOME_VOUCHER_CODE,
+    type: "percent",
+    value: WELCOME_VOUCHER_PERCENT,
+    usedCount: 0,
+    maxUses: null,
+    isActive: true,
+  } : null);
+  if (!resolvedCoupon || !(resolvedCoupon as any).isActive) throw new Error("Cupom invalido ou inativo.");
 
   const now = Date.now();
-  if ((coupon as any).startsAt && new Date((coupon as any).startsAt).getTime() > now) {
+  if ((resolvedCoupon as any).startsAt && new Date((resolvedCoupon as any).startsAt).getTime() > now) {
     throw new Error("Cupom ainda nao esta valido.");
   }
-  if ((coupon as any).expiresAt && new Date((coupon as any).expiresAt).getTime() < now) {
+  if ((resolvedCoupon as any).expiresAt && new Date((resolvedCoupon as any).expiresAt).getTime() < now) {
     throw new Error("Cupom expirado.");
   }
-  if ((coupon as any).maxUses !== null && (coupon as any).maxUses !== undefined && Number((coupon as any).usedCount || 0) >= Number((coupon as any).maxUses)) {
+  if ((resolvedCoupon as any).maxUses !== null && (resolvedCoupon as any).maxUses !== undefined && Number((resolvedCoupon as any).usedCount || 0) >= Number((resolvedCoupon as any).maxUses)) {
     throw new Error("Cupom esgotado.");
   }
 
   const subtotalCents = Math.round(input.subtotal * 100);
   const minimumTotalCents = Math.max(101, input.itemCount);
   const maxDiscountCents = Math.max(0, subtotalCents - minimumTotalCents);
-  const requestedDiscountCents = (coupon as any).type === "percent"
-    ? Math.floor(subtotalCents * Math.min(100, Math.max(0, Number((coupon as any).value))) / 100)
-    : Math.round(Number((coupon as any).value) * 100);
+  const requestedDiscountCents = (resolvedCoupon as any).type === "percent"
+    ? Math.floor(subtotalCents * Math.min(100, Math.max(0, Number((resolvedCoupon as any).value))) / 100)
+    : Math.round(Number((resolvedCoupon as any).value) * 100);
   const discountCents = Math.min(maxDiscountCents, Math.max(0, requestedDiscountCents));
 
   if (discountCents <= 0) throw new Error("Cupom nao pode ser aplicado a este carrinho.");
-  return { coupon, discountTotal: roundMoney(discountCents / 100) };
+  return { coupon: resolvedCoupon, discountTotal: roundMoney(discountCents / 100) };
 }
 
 function getAutomaticCheckoutDiscount(products: any[]) {
@@ -1730,9 +1762,16 @@ app.post("/api/checkout/create-session", async (req, res) => {
     }
 
     const subtotal = roundMoney(products.reduce((sum: number, product: any) => sum + Number(product.price), 0));
+    const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
+    if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
+      return res.status(403).json({ error: "Use o mesmo e-mail da conta logada para finalizar a compra." });
+    }
+
+    const buyerEmail = authUser.email || inputBuyerEmail;
+    const firstPurchaseEligible = !(await hasPaidCustomerOrder({ userId: authUser.id, email: buyerEmail }));
     let couponResult;
     try {
-      couponResult = await validateCheckoutCoupon({ code: couponCode, subtotal, itemCount: products.length });
+      couponResult = await validateCheckoutCoupon({ code: couponCode, subtotal, itemCount: products.length, firstPurchaseEligible });
     } catch (error: any) {
       return res.status(400).json({ error: error?.message || "Cupom invalido." });
     }
@@ -1757,12 +1796,6 @@ app.post("/api/checkout/create-session", async (req, res) => {
     if (!isValidCpf(buyerCpf)) {
       return res.status(400).json({ error: "Informe um CPF valido para continuar o pagamento." });
     }
-    const inputBuyerEmail = String(buyer.email).trim().toLowerCase();
-    if (authUser.email && inputBuyerEmail && inputBuyerEmail !== authUser.email) {
-      return res.status(403).json({ error: "Use o mesmo e-mail da conta logada para finalizar a compra." });
-    }
-
-    const buyerEmail = authUser.email || inputBuyerEmail;
     const buyerName = String(buyer.fullName).trim();
     const buyerPhone = String((buyer as any).phone || "nao_informado").trim();
 
@@ -1883,7 +1916,7 @@ app.post("/api/checkout/create-session", async (req, res) => {
 
     if (checkoutUrlError) throw checkoutUrlError;
 
-    if (useCouponDiscount && couponResult.coupon) {
+    if (useCouponDiscount && (couponResult.coupon as any)?.id) {
       await getSupabaseAdmin()
         .from("coupons")
         .update({ usedCount: Number((couponResult.coupon as any).usedCount || 0) + 1 })

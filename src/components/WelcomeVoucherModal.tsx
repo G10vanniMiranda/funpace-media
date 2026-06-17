@@ -68,7 +68,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
           recordWelcomeVoucherEvent('popup_viewed', { userId: userId || null });
         }
       } catch (error) {
-        console.warn('Nao foi possivel validar elegibilidade do voucher de boas-vindas:', error);
+        console.warn('Não foi possível validar elegibilidade do voucher de boas-vindas:', error);
         if (!cancelled) setIsOpen(false);
       } finally {
         if (!cancelled) setCheckingEligibility(false);
@@ -101,7 +101,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
     <AnimatePresence>
       {isOpen && (
         <motion.div
-          className="fixed inset-0 z-[140] flex items-center justify-center bg-brutal-black/70 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-8"
+          className="fixed inset-0 z-140 flex items-center justify-center bg-brutal-black/70 px-3 py-3 backdrop-blur-sm sm:px-4 sm:py-8"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -147,7 +147,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
                   Bem-vindo a Funpace Media!
                 </h2>
                 <p className="mx-auto mt-3 max-w-sm font-mono text-[10px] uppercase leading-relaxed text-gray-600 sm:mt-4 sm:text-xs">
-                  Como forma de boas-vindas, preparamos um presente para voce.
+                  Como forma de boas-vindas, preparamos um presente para você.
                 </p>
               </div>
 
@@ -160,7 +160,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
                   {WELCOME_VOUCHER_CODE}
                 </div>
                 <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-gray-500 sm:text-[9px] sm:tracking-widest">
-                  Valido apenas para a primeira compra.
+                  Válido apenas para a primeira compra.
                 </p>
               </div>
 
@@ -168,7 +168,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
                 <button
                   type="button"
                   onClick={copyCoupon}
-                  className="min-h-13 w-full inline-flex items-center justify-center gap-2 brutal-border bg-brutal-accent px-4 py-3 font-display text-sm uppercase tracking-[0.1em] text-white transition-colors hover:bg-brutal-black sm:min-h-14 sm:px-5 sm:text-base sm:tracking-[0.14em]"
+                  className="min-h-13 w-full inline-flex items-center justify-center gap-2 brutal-border bg-brutal-accent px-4 py-3 font-display text-sm uppercase tracking-widest text-white transition-colors hover:bg-brutal-black sm:min-h-14 sm:px-5 sm:text-base sm:tracking-[0.14em]"
                 >
                   <Copy className="h-4 w-4 shrink-0 sm:h-5 sm:w-5" />
                   <span className="whitespace-nowrap leading-none">Copiar Cupom</span>
@@ -179,9 +179,9 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
                     close('start_shopping');
                     onStartShopping();
                   }}
-                  className="min-h-13 w-full inline-flex items-center justify-center brutal-border bg-white px-4 py-3 font-display text-sm uppercase tracking-[0.1em] text-brutal-black transition-colors hover:bg-gray-50 sm:min-h-14 sm:px-5 sm:text-base sm:tracking-[0.14em]"
+                  className="min-h-13 w-full inline-flex items-center justify-center brutal-border bg-white px-4 py-3 font-display text-sm uppercase tracking-widest text-brutal-black transition-colors hover:bg-gray-50 sm:min-h-14 sm:px-5 sm:text-base sm:tracking-[0.14em]"
                 >
-                  <span className="whitespace-nowrap leading-none">Comecar a Comprar</span>
+                  <span className="whitespace-nowrap leading-none">Começar a Comprar</span>
                 </button>
               </div>
             </div>

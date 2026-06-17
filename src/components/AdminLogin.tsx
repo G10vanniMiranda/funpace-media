@@ -36,7 +36,7 @@ export function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) {
         onLoginSuccess();
       } else {
         await logout();
-        setError('ACESSO RESTRITO: usuario autenticado nao possui permissao de administrador.');
+        setError('ACESSO RESTRITO: usuário autenticado não possui permissão de administrador.');
       }
     } catch (err: any) {
       setError(err?.message || 'ACESSO RESTRITO: credenciais invalidas para o Painel Administrativo.');

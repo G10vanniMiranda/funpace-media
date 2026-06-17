@@ -30,7 +30,7 @@ function getSupabaseConfig() {
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
 
   if (!supabaseUrl || !supabaseKey) {
-    throw new Error('Supabase Service Role nao configurado.');
+    throw new Error('Supabase Service Role não configurado.');
   }
 
   return {
@@ -129,7 +129,7 @@ export default async function handler(req: any, res: any) {
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
 
   try {
@@ -149,7 +149,7 @@ export default async function handler(req: any, res: any) {
 
     return res.status(200).json({ urls: Object.fromEntries(entries) });
   } catch (error: any) {
-    const safe = publicError(error, 'Nao foi possivel assinar midias.');
+    const safe = publicError(error, 'Não foi possível assinar mídias.');
     return res.status(safe.statusCode).json({ error: safe.message });
   }
 }

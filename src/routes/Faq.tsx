@@ -63,7 +63,7 @@ export function Faq() {
               Suporte
             </p>
             <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
-              Duvidas frequentes
+              Dúvidas frequentes
             </h1>
             <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
               Respostas rápidas para quem compra fotos e para fotógrafos que publicam coberturas na Funpace.

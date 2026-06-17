@@ -282,7 +282,7 @@ async function validateCoupon(input: { code: string; subtotal: number; itemCount
 
   const now = Date.now();
   if (coupon.startsAt && new Date(coupon.startsAt).getTime() > now) {
-    throw new Error('Cupom ainda nao esta valido.');
+    throw new Error('Cupom ainda não está válido.');
   }
   if (coupon.expiresAt && new Date(coupon.expiresAt).getTime() < now) {
     throw new Error('Cupom expirado.');
@@ -299,7 +299,7 @@ async function validateCoupon(input: { code: string; subtotal: number; itemCount
     : Math.round(Number(coupon.value) * 100);
   const discountCents = Math.min(maxDiscountCents, Math.max(0, requestedDiscountCents));
 
-  if (discountCents <= 0) throw new Error('Cupom nao pode ser aplicado a este carrinho.');
+  if (discountCents <= 0) throw new Error('Cupom não pode ser aplicado a este carrinho.');
   return { coupon, discountTotal: roundMoney(discountCents / 100) };
 }
 

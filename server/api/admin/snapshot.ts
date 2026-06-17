@@ -32,7 +32,7 @@ function getSupabaseConfig() {
     serviceRoleKey;
 
   if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase Service Role nao configurado.');
+    throw new Error('Supabase Service Role não configurado.');
   }
 
   return {
@@ -95,11 +95,11 @@ export default async function handler(req: any, res: any) {
   setCors(req, res);
 
   if (req.method === 'OPTIONS') return res.status(204).end();
-  if (req.method !== 'GET') return res.status(405).json({ error: 'Metodo nao permitido.' });
+  if (req.method !== 'GET') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     const adminUser = await getAuthenticatedAdminUser(req);
-    if (!adminUser) return res.status(403).json({ error: 'Acesso admin nao autorizado.' });
+    if (!adminUser) return res.status(403).json({ error: 'Acesso admin não autorizado.' });
 
     const [
       photographers,

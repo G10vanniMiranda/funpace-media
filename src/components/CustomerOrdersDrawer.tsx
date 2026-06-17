@@ -409,7 +409,7 @@ export function CustomerOrdersDrawer({
                   <ReceiptText className="w-14 h-14 text-gray-300 mb-4" />
                   <h3 className="font-display text-2xl uppercase mb-2">Nenhuma compra</h3>
                   <p className="font-mono text-xs text-gray-500 uppercase leading-relaxed">
-                    Suas compras aparecerao aqui depois que um pedido for criado.
+                    Suas compras aparecerão aqui depois que um pedido for criado.
                   </p>
                 </div>
               )}
@@ -820,14 +820,14 @@ export function CustomerOrdersPage({
               'bg-red-50 text-red-700'
             }`}>
             <p className="font-display text-2xl uppercase">
-              {paymentStatus === 'paid' ? 'Pagamento confirmado' : paymentStatus === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
+              {paymentStatus === 'paid' ? 'Pagamento confirmado' : paymentStatus === 'pending' ? 'Confirmação pendente' : 'Pagamento cancelado'}
             </p>
             <p className="mt-2 font-mono text-xs uppercase leading-relaxed">
               {paymentStatus === 'paid'
                 ? 'Seu pedido está liberado. Baixe os arquivos ou copie o recibo abaixo.'
                 : paymentStatus === 'pending'
-                  ? 'Estamos aguardando a confirmacao da operadora. Voce pode atualizar o status em alguns instantes.'
-                  : 'O pedido continua disponivel para uma nova tentativa de pagamento.'}
+                  ? 'Estamos aguardando a confirmação da operadora. Você pode atualizar o status em alguns instantes.'
+                  : 'O pedido continua disponível para uma nova tentativa de pagamento.'}
             </p>
             {highlightedOrderId && (
               <p className="mt-3 font-mono text-[10px] uppercase text-gray-500">Pedido #{highlightedOrderId.slice(0, 8)}</p>
@@ -921,7 +921,7 @@ export function CustomerOrdersPage({
                   <div className="bg-white border border-slate-200 p-10 text-center">
                     <ReceiptText className="w-14 h-14 text-gray-300 mx-auto mb-4" />
                     <h2 className="font-display text-2xl uppercase">{sortedOrders.length === 0 ? 'Nenhuma compra' : 'Nada encontrado'}</h2>
-                    <p className="mt-2 font-mono text-xs uppercase text-gray-500">{sortedOrders.length === 0 ? 'Seus pedidos aparecerao aqui depois do checkout.' : 'Ajuste os filtros ou limpe a busca para ver mais resultados.'}</p>
+                    <p className="mt-2 font-mono text-xs uppercase text-gray-500">{sortedOrders.length === 0 ? 'Seus pedidos aparecerão aqui depois do checkout.' : 'Ajuste os filtros ou limpe a busca para ver mais resultados.'}</p>
                   </div>
                 )}
 
@@ -963,7 +963,7 @@ export function CustomerOrdersPage({
                         <p className="font-display text-4xl">{formatCurrency(Number(order.total))}</p>
                         {Number(order.discountTotal || 0) > 0 && (
                           <p className="font-mono text-[10px] uppercase text-green-700">
-                            Voce economizou {formatCurrency(Number(order.discountTotal || 0))}
+                            Você economizou {formatCurrency(Number(order.discountTotal || 0))}
                           </p>
                         )}
                       </div>
@@ -1045,7 +1045,7 @@ export function CustomerOrdersPage({
                   <div className="mt-4 space-y-3">
                     <div className="flex items-start gap-3 border border-slate-200 bg-slate-50 p-3">
                       <ShieldCheck className="mt-0.5 w-4 h-4 text-green-600" />
-                      <p className="font-mono text-[10px] uppercase leading-relaxed text-slate-500">Downloads passam por autorizacao do pedido pago antes de abrir o arquivo.</p>
+                      <p className="font-mono text-[10px] uppercase leading-relaxed text-slate-500">Downloads passam por autorização do pedido pago antes de abrir o arquivo.</p>
                     </div>
                     <div className="flex items-start gap-3 border border-slate-200 bg-slate-50 p-3">
                       <CalendarDays className="mt-0.5 w-4 h-4 text-brutal-accent" />

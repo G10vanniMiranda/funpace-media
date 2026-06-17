@@ -37,7 +37,7 @@ function originalMediaUrl(photo: BackfillPhoto) {
   if (!source) throw new Error('Foto sem URL original configurada.');
   if (/^https?:\/\//i.test(source)) return source;
   const baseUrl = String(process.env.MEDIA_PUBLIC_BASE_URL || process.env.VITE_MEDIA_PUBLIC_BASE_URL || '').replace(/\/+$/, '');
-  if (!baseUrl) throw new Error('MEDIA_PUBLIC_BASE_URL nao configurado para baixar a foto original.');
+  if (!baseUrl) throw new Error('MEDIA_PUBLIC_BASE_URL não configurado para baixar a foto original.');
   return `${baseUrl}/${encodeURI(source.replace(/^\/+/, ''))}`;
 }
 
@@ -55,7 +55,7 @@ async function downloadOriginalPhoto(photo: BackfillPhoto) {
     if (buffer.length > config.maxImageBytes) throw new Error('Foto original excede o limite do backfill.');
     const contentType = String(response.headers.get('content-type') || 'image/jpeg').split(';')[0].trim().toLowerCase();
     if (!['image/jpeg', 'image/jpg', 'image/png'].includes(contentType)) {
-      throw new Error(`Formato original nao suportado pelo Rekognition: ${contentType || 'desconhecido'}.`);
+      throw new Error(`Formato original não suportado pelo Rekognition: ${contentType || 'desconhecido'}.`);
     }
     return { buffer, contentType };
   } finally {
@@ -67,7 +67,7 @@ async function processPhoto(photo: BackfillPhoto): Promise<'indexed' | 'no_face'
   const startedAt = Date.now();
   try {
     const eventId = await resolvePhotoEventId(photo);
-    if (!eventId) throw new Error('Evento da foto nao encontrado para indexacao facial.');
+    if (!eventId) throw new Error('Evento da foto não encontrado para indexação facial.');
     if (!photo.eventId) await updatePhotoEventId(photo.id, eventId);
 
     console.info('[face-backfill] photo:download:start', { photoId: photo.id, eventId });

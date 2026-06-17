@@ -435,7 +435,7 @@ async function recordSecurityLog(req: any, action: string, metadata: Record<stri
       },
     }),
   }).catch((error) => {
-    console.error('Nao foi possivel registrar log de seguranca:', error);
+    console.error('Não foi possível registrar log de segurança:', error);
   });
 }
 

@@ -13,7 +13,7 @@ import {
 
 function getHandle() {
   const handle = process.env.INFINITEPAY_HANDLE;
-  if (!handle) throw new Error('INFINITEPAY_HANDLE nao configurado.');
+  if (!handle) throw new Error('INFINITEPAY_HANDLE não configurado.');
   return handle;
 }
 

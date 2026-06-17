@@ -71,7 +71,7 @@ function openUploadDb(): Promise<IDBDatabase> {
         db.createObjectStore(storeName);
       }
     };
-    request.onerror = () => reject(request.error || new Error('Nao foi possivel abrir IndexedDB.'));
+    request.onerror = () => reject(request.error || new Error('Não foi possível abrir IndexedDB.'));
     request.onsuccess = () => resolve(request.result);
   });
 }

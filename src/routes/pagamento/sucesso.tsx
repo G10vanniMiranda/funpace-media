@@ -58,8 +58,8 @@ function getDisplayStatus(status: PaymentStatus, message: string): PaymentStatus
 function getTitleLines(status: PaymentStatus) {
   if (status === 'checking') return ['Confirmando'];
   if (status === 'paid') return ['Pagamento', 'confirmado'];
-  if (status === 'pending') return ['Confirmacao', 'pendente'];
-  return ['Falha na', 'confirmacao'];
+  if (status === 'pending') return ['Confirmação', 'pendente'];
+  return ['Falha na', 'confirmação'];
 }
 
 export function PagamentoSucesso() {

@@ -150,10 +150,10 @@ async function reconcileOrder(order: any) {
 
 export default async function handler(req: any, res: any) {
   if (req.method !== 'GET' && req.method !== 'POST') {
-    return res.status(405).json({ error: 'Metodo nao permitido.' });
+    return res.status(405).json({ error: 'Método não permitido.' });
   }
   if (!isAuthorized(req)) {
-    return res.status(401).json({ error: 'Nao autorizado.' });
+    return res.status(401).json({ error: 'Não autorizado.' });
   }
 
   const limit = Math.min(Math.max(Number(req.query?.limit || 50), 1), 200);

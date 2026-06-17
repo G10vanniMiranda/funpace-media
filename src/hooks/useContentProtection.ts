@@ -103,7 +103,7 @@ export function useContentProtection({ enabled = true, scope = 'public-gallery' 
         }),
       }))
       .catch((error) => {
-        console.warn('Nao foi possivel registrar tentativa de protecao de conteudo:', error);
+        console.warn('Não foi possível registrar tentativa de proteção de conteúdo:', error);
       });
   }, [enabled, scope]);
 

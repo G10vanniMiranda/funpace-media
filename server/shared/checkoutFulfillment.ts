@@ -26,7 +26,7 @@ export async function recordPayment(input: {
       updatedAt: new Date().toISOString(),
     }),
   }).catch((error) => {
-    console.error('Nao foi possivel registrar payment:', error);
+    console.error('Não foi possível registrar payment:', error);
   });
 }
 
@@ -98,7 +98,7 @@ export async function registerPhotographerTransactions(orderId: string) {
     body: JSON.stringify(transactions),
   }).catch((error) => {
     if (!/duplicate|unique/i.test(String(error?.message || error))) {
-      console.error('Nao foi possivel registrar transacoes do fotografo:', error);
+      console.error('Não foi possível registrar transações do fotógrafo:', error);
     }
   });
 
@@ -174,7 +174,7 @@ export async function sendPaidOrderEmailOnce(orderId: string) {
       body: JSON.stringify({ paidEmailSentAt: new Date().toISOString() }),
     });
   } catch (error) {
-    console.error('Nao foi possivel enviar e-mail de pedido pago:', error);
+    console.error('Não foi possível enviar e-mail de pedido pago:', error);
   }
 }
 

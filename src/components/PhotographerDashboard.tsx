@@ -850,7 +850,7 @@ function isMissingLocalUploadFileError(message: string) {
 
 function getMissingLocalUploadFileMessage(file?: File) {
   const fileName = file?.name ? ` (${file.name})` : '';
-  return `Nao foi possivel localizar o arquivo local${fileName} durante a publicacao. Verifique se as fotos ainda existem no armazenamento, deixe o arquivo disponivel offline, selecione a foto novamente e tente publicar.`;
+  return `Não foi possível localizar o arquivo local${fileName} durante a publicação. Verifique se as fotos ainda existem no armazenamento, deixe o arquivo disponível offline, selecione a foto novamente e tente publicar.`;
 }
 
 function getUploadStageLabel(stage: UploadPublishStage) {
@@ -1717,7 +1717,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     if (dashboardMetrics.availableBalance > 0) {
       notifications.push({
         id: 'available-balance',
-        title: 'Saldo disponivel para saque',
+        title: 'Saldo disponível para saque',
         detail: formatCurrency(dashboardMetrics.availableBalance),
         tab: 'earnings',
       });
@@ -2719,7 +2719,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       if (publishedCount === 0 && failedUploads.length > 0) {
         const firstFailure = failedUploads[0];
-        throw new Error(`Nao foi possivel localizar alguns arquivos durante a publicacao. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
+        throw new Error(`Não foi possível localizar alguns arquivos durante a publicação. Verifique se as fotos ainda existem no armazenamento e tente novamente. Publicadas: 0 fotos. Falharam: ${failedUploads.length} fotos. Primeiro erro: ${firstFailure.name} - etapa ${getUploadStageLabel(firstFailure.stage)} - ${firstFailure.message}`);
       }
 
       const updatedProducts = await productService.getVendedorProducts(photographer.id);
@@ -2939,7 +2939,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               {showNotifications && (
                 <div className="absolute right-0 top-14 z-50 w-[320px] max-w-[calc(100vw-2rem)] bg-[#0d131c] border border-white/15 shadow-2xl">
                   <div className="p-4 border-b border-white/10">
-                    <p className="font-sans font-black text-sm uppercase text-white">Notificacoes</p>
+                    <p className="font-sans font-black text-sm uppercase text-white">Notificações</p>
                     <p className="font-mono text-[10px] uppercase text-gray-500">
                       {photographerNotifications.length === 1 ? '1 item do painel' : `${photographerNotifications.length} itens do painel`}
                     </p>
@@ -2948,7 +2948,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     {photographerNotifications.length === 0 ? (
                       <div className="p-5 text-center">
                         <CheckCircle2 className="w-8 h-8 text-green-400 mx-auto mb-3" />
-                        <p className="font-mono text-[10px] uppercase text-gray-400">Nenhuma notificacao no momento.</p>
+                        <p className="font-mono text-[10px] uppercase text-gray-400">Nenhuma notificação no momento.</p>
                       </div>
                     ) : photographerNotifications.map((notification) => (
                       <button
@@ -3164,7 +3164,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 <div className="bg-[#0d131c] border border-white/10 overflow-hidden">
                   <div className="p-6 border-b border-white/10">
                     <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-3">Eventos</p>
-                    <h3 className="font-sans font-black text-2xl uppercase text-white leading-none">Organize sua operacao</h3>
+                    <h3 className="font-sans font-black text-2xl uppercase text-white leading-none">Organize sua operação</h3>
                     <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500 mt-3">
                       Crie páginas por prova, defina a publicação e escolha uma capa para destacar o catálogo.
                     </p>
@@ -3596,7 +3596,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
                           <div className="grid grid-cols-3 gap-3">
                             <div className="bg-[#080d14] border border-white/10 p-3">
-                              <p className="font-mono text-[9px] uppercase text-gray-500">Midias</p>
+                              <p className="font-mono text-[9px] uppercase text-gray-500">Mídias</p>
                               <p className="font-sans font-black text-2xl text-white">{selectedProductEventCard?.items || scopedFilteredProducts.length}</p>
                             </div>
                             <div className="bg-[#080d14] border border-white/10 p-3">
@@ -3928,7 +3928,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <DollarSign className="w-3.5 h-3.5" />
                     Carteira do fotógrafo
                   </div>
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saldo disponivel para repasse</p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Saldo disponível para repasse</p>
                   <p className="font-sans font-black text-5xl md:text-6xl text-brutal-accent leading-none">
                     {formatCurrency(dashboardMetrics.availableBalance)}
                   </p>
@@ -4007,7 +4007,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   <div className="p-5 border-b border-white/10 flex items-center justify-between">
                     <div>
                       <h3 className="font-sans font-black text-base uppercase text-white">Histórico financeiro</h3>
-                      <p className="font-mono text-[10px] uppercase text-gray-500">Vendas confirmadas e solicitacoes de saque</p>
+                      <p className="font-mono text-[10px] uppercase text-gray-500">Vendas confirmadas e solicitações de saque</p>
                     </div>
                     <DollarSign className="w-5 h-5 text-gray-500" />
                   </div>
@@ -4035,7 +4035,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <div className="py-8 text-center">
                         <p className="font-sans font-black text-xl uppercase text-white">Nenhuma venda paga ainda</p>
                         <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest mt-2">
-                          As movimentacoes aparecem quando pagamentos forem confirmados.
+                          As movimentações aparecem quando pagamentos forem confirmados.
                         </p>
                       </div>
                     ) : periodSales.map((sale) => (
@@ -4293,7 +4293,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
 
                   <div className="md:col-span-2">
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Descricao</label>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Descrição</label>
                     <textarea
                       value={eventForm.description}
                       onChange={(event) => setEventForm((current) => ({ ...current, description: event.target.value }))}
@@ -4446,7 +4446,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 </div>
 
                 <label className="h-14 px-4 bg-[#05080d] border border-white/15 flex items-center justify-between gap-3 cursor-pointer">
-                  <span className="font-mono text-[10px] uppercase text-gray-300">Publicado na operacao</span>
+                  <span className="font-mono text-[10px] uppercase text-gray-300">Publicado na operação</span>
                   <input
                     type="checkbox"
                     checked={eventForm.isPublished}
@@ -4616,7 +4616,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Preco</label>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Preço</label>
                       <input
                         type="number"
                         min="0"
@@ -4644,7 +4644,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
 
                   <div>
-                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Evento / Colecao</label>
+                    <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Evento / Coleção</label>
                     <input
                       type="text"
                       value={editForm.event}
@@ -5103,7 +5103,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     </div>
 
                     <div>
-                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Colecao</label>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Nome do Evento / Coleção</label>
                       <input
                         type="text"
                         value={eventInput}
@@ -5115,7 +5115,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     </div>
 
                     <div>
-                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint / Localizacao</label>
+                      <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Checkpoint / Localização</label>
                       <input
                         type="text"
                         value={checkpointInput}

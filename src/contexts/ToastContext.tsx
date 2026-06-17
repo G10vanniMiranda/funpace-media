@@ -61,7 +61,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                   type="button"
                   onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}
                   className="shrink-0 text-current opacity-60 hover:opacity-100"
-                  aria-label="Fechar notificacao"
+                  aria-label="Fechar notificação"
                 >
                   <X className="w-4 h-4" />
                 </button>

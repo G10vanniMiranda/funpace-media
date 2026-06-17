@@ -1905,7 +1905,7 @@ function PaymentNoticeModal({
                   Retorno da InfinitePay
                 </p>
                 <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] wrap-break-word">
-                  {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmacao pendente' : 'Pagamento cancelado'}
+                  {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmação pendente' : 'Pagamento cancelado'}
                 </h2>
                 <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">
                   {notice.message}

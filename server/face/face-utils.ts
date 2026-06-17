@@ -13,7 +13,7 @@ export function validateImage(buffer: Buffer, contentType: string) {
     throw Object.assign(new Error('Formato invalido. Envie uma imagem JPG ou PNG.'), { statusCode: 415 });
   }
   if (buffer.length === 0) {
-    throw Object.assign(new Error('Imagem vazia ou nao enviada.'), { statusCode: 400 });
+    throw Object.assign(new Error('Imagem vazia ou não enviada.'), { statusCode: 400 });
   }
   if (buffer.length > maxFaceImageBytes) {
     throw Object.assign(new Error(`Imagem excede o limite de ${Math.round(maxFaceImageBytes / 1024 / 1024)} MB.`), { statusCode: 413 });
@@ -65,7 +65,7 @@ export function parseSelfieMultipart(req: any): Promise<{ eventId: string; sessi
     parser.on('error', reject);
     parser.on('finish', () => {
       if (fileCount === 0) {
-        reject(Object.assign(new Error('Campo selfie nao enviado.'), { statusCode: 400 }));
+        reject(Object.assign(new Error('Campo selfie não enviado.'), { statusCode: 400 }));
         return;
       }
       resolve({
@@ -103,7 +103,7 @@ export function faceError(error: any, fallback: string) {
     return { statusCode: 422, message: 'Nenhum rosto detectado na imagem enviada.' };
   }
   if (name === 'InvalidS3ObjectException' || name === 'InvalidImageFormatException') {
-    return { statusCode: 422, message: 'A imagem esta corrompida ou nao pode ser processada.' };
+    return { statusCode: 422, message: 'A imagem está corrompida ou não pode ser processada.' };
   }
   if (name === 'AbortError' || /abort|timeout/i.test(String(error?.message || ''))) {
     return { statusCode: 504, message: 'A AWS excedeu o tempo limite de processamento.' };

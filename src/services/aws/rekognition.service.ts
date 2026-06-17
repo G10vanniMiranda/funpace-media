@@ -43,8 +43,8 @@ export function getRekognitionConfig() {
   const maxSearchFaces = Math.min(4096, Math.max(1, Number(process.env.FACE_SEARCH_MAX_CANDIDATES || 1000)));
   const configuredTimeout = Number(process.env.AWS_REQUEST_TIMEOUT_MS || 20_000);
 
-  if (!region) throw new Error('AWS_REGION nao configurado.');
-  if (!collectionId) throw new Error('AWS_REKOGNITION_COLLECTION nao configurado.');
+  if (!region) throw new Error('AWS_REGION não configurado.');
+  if (!collectionId) throw new Error('AWS_REKOGNITION_COLLECTION não configurado.');
 
   return {
     collectionId,

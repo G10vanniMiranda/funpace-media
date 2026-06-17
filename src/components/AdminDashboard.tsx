@@ -897,7 +897,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       notifications.push({
         id: 'missing-thumbnails',
         title: `${missingThumbnailCount} preview(s) ausente(s)`,
-        detail: 'Midias precisam de thumbnail dedicado',
+        detail: 'Mídias precisam de thumbnail dedicado',
         tab: 'overview',
       });
     }
@@ -982,7 +982,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           status: 'active' as const,
           coverImage: eventItem.coverImage,
           cover_position: 'center center',
-          source: 'Midias',
+          source: 'Mídias',
           mediaLabel: `${eventItem.photoCount} foto(s) / ${eventItem.videoCount} video(s)`,
           canEdit: true,
         })),
@@ -1593,7 +1593,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         targetId: 'default',
         metadata: settingsForm,
       });
-      alert('Configuracoes salvas com sucesso.');
+      alert('Configurações salvas com sucesso.');
     } catch (error) {
       console.error(error);
       alert('Erro ao salvar configuracoes.');
@@ -1860,7 +1860,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         <div class="section">
           <h2>Produtos do periodo</h2>
           <table>
-            <thead><tr><th>Nome</th><th>Tipo</th><th>Status</th><th>Preco</th><th>Evento</th><th>Data</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Tipo</th><th>Status</th><th>Preço</th><th>Evento</th><th>Data</th></tr></thead>
             <tbody>${productRows || '<tr><td colspan="6">Sem produtos no periodo.</td></tr>'}</tbody>
           </table>
         </div>
@@ -2026,7 +2026,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                 {showNotifications && (
                   <div className="absolute right-0 top-12 z-50 w-[320px] max-w-[calc(100vw-2rem)] bg-[#0d131c] border border-white/15 shadow-2xl">
                     <div className="p-4 border-b border-white/10">
-                      <p className="font-sans font-black text-sm uppercase text-white">Notificacoes</p>
+                      <p className="font-sans font-black text-sm uppercase text-white">Notificações</p>
                       <p className="font-mono text-[10px] uppercase text-gray-500">
                         {adminNotifications.length === 1 ? '1 item requer atenção' : `${adminNotifications.length} itens requerem atenção`}
                       </p>
@@ -2325,7 +2325,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <div className="bg-[#0d131c] border border-white/10">
                 <div className="p-5 border-b border-white/10 flex flex-col md:flex-row gap-4 md:items-center md:justify-between">
                   <div>
-                    <h3 className="font-sans font-black text-base uppercase">Usuarios e clientes</h3>
+                    <h3 className="font-sans font-black text-base uppercase">Usuários e clientes</h3>
                     <p className="font-mono text-[10px] uppercase text-gray-500">Compras, gasto total e origem do cadastro</p>
                   </div>
                   <div className="relative w-full md:w-80">
@@ -2468,7 +2468,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       <tr>
                         <th className="p-6">Fotógrafo</th>
                         <th className="p-6">Status</th>
-                        <th className="p-6 text-center">Midias</th>
+                        <th className="p-6 text-center">Mídias</th>
                         <th className="p-6 text-center">Receita Gerada</th>
                         <th className="p-6 text-center">Score</th>
                         <th className="p-6"></th>
@@ -2653,7 +2653,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <div className="bg-[#0d131c] border border-white/10 p-5 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-brutal-accent mb-2">Gestao de eventos</p>
-                  <h3 className="font-sans font-black text-xl uppercase text-white">Cadastro e edicao</h3>
+                  <h3 className="font-sans font-black text-xl uppercase text-white">Cadastro e edição</h3>
                   <p className="font-mono text-[10px] uppercase text-gray-500 mt-1">Crie eventos oficiais ou edite dados de eventos ja cadastrados.</p>
                 </div>
                 <button
@@ -2726,7 +2726,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           {activeTab === 'media' && (
             <motion.div key="media" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
-                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Midias</p><p className="font-sans font-black text-3xl">{allMedia.length}</p></div>
+                <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Mídias</p><p className="font-sans font-black text-3xl">{allMedia.length}</p></div>
                 <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Publicadas</p><p className="font-sans font-black text-3xl text-green-400">{allMedia.filter((item) => (item.status ?? 'published') === 'published').length}</p></div>
                 <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Ocultas</p><p className="font-sans font-black text-3xl text-yellow-400">{allMedia.filter((item) => item.status === 'hidden').length}</p></div>
                 <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Sem preview</p><p className="font-sans font-black text-3xl text-red-300">{productsMissingThumbnails.length}</p></div>
@@ -2983,7 +2983,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <div className="px-5 py-12 text-center">
                     <DollarSign className="w-10 h-10 text-gray-600 mx-auto mb-4" />
                     <p className="font-sans font-black text-sm uppercase text-white">Nenhum saque pendente</p>
-                    <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Novas solicitacoes Pix aparecem aqui.</p>
+                    <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Novas solicitações Pix aparecem aqui.</p>
                   </div>
                 )}
               </div>
@@ -3156,7 +3156,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <p className="font-mono text-[10px] uppercase text-gray-400 mt-3">Cobrada por solicitação Pix</p>
                 </div>
                 <div className="bg-[#0d131c] border border-white/10 p-5">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Seguranca</p>
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Segurança</p>
                   <p className={`font-sans font-black text-3xl ${settingsForm.autoBlockSuspicious ? 'text-green-400' : 'text-yellow-400'}`}>
                     {settingsForm.autoBlockSuspicious ? 'ON' : 'OFF'}
                   </p>
@@ -3210,7 +3210,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <div className="bg-[#0d131c] border border-white/10">
                 <div className="px-5 py-4 border-b border-white/10 flex items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-sans font-black text-base uppercase text-white">Seguranca Operacional</h3>
+                    <h3 className="font-sans font-black text-base uppercase text-white">Segurança Operacional</h3>
                     <p className="font-mono text-[10px] uppercase text-gray-500">Regras de protecao para comportamento suspeito</p>
                   </div>
                   <ShieldCheck className="w-5 h-5 text-gray-500" />

@@ -51,7 +51,7 @@ export default async function handler(_req: any, res: any) {
     });
   } catch (error) {
     console.error('[events:media-counts] failed', error);
-    return res.status(500).json({ error: 'Nao foi possivel carregar as contagens dos eventos.' });
+    return res.status(500).json({ error: 'Não foi possível carregar as contagens dos eventos.' });
   } finally {
     await pool.end();
   }

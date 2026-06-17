@@ -13,8 +13,8 @@ export function getAwsS3Config() {
   const region = String(process.env.AWS_REGION || '').trim();
   const timeoutMs = Number(process.env.AWS_REQUEST_TIMEOUT_MS || 20_000);
 
-  if (!bucket) throw new Error('AWS_BUCKET_NAME nao configurado.');
-  if (!region) throw new Error('AWS_REGION nao configurado.');
+  if (!bucket) throw new Error('AWS_BUCKET_NAME não configurado.');
+  if (!region) throw new Error('AWS_REGION não configurado.');
 
   return {
     bucket,

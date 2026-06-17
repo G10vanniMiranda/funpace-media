@@ -1,22 +1,22 @@
 # FunPace Media
 
-Plataforma para venda de fotos e videos de eventos esportivos. O fluxo conecta atletas, fotografos e administradores em uma aplicacao Vite/React com backend Node/Express, Supabase para auth/banco e provider externo para armazenamento de midias.
+Plataforma para venda de fotos e vídeos de eventos esportivos. O fluxo conecta atletas, fotógrafos e administradores em uma aplicação Vite/React com backend Node/Express, Supabase para auth/banco e provider externo para armazenamento de mídias.
 
 ## Principais Fluxos
 
 - Vitrine publica com busca por numero de peito, eventos, favoritos, likes e compartilhamento.
 - Carrinho e checkout com InfinitePay via `/api/checkout/create-session`.
-- Retorno de pagamento, confirmacao e liberacao de downloads protegidos.
+- Retorno de pagamento, confirmação e liberação de downloads protegidos.
 - Area do cliente em `/minhas-compras`, com pedidos, recibo minimo, favoritos e downloads.
-- Painel do fotografo para upload, edicao, remocao de produtos, vendas, downloads e solicitacoes de saque.
-- Painel administrativo para fotografos, pedidos, metricas, configuracoes, storage e processamento manual de saques.
+- Painel do fotógrafo para upload, edição, remoção de produtos, vendas, downloads e solicitações de saque.
+- Painel administrativo para fotógrafos, pedidos, métricas, configurações, storage e processamento manual de saques.
 
 ## Requisitos
 
 - Node.js
 - Projeto Supabase configurado
 - Bucket externo configurado quando `MEDIA_STORAGE_PROVIDER=external_bucket`
-- Credenciais InfinitePay para checkout e verificacao de pagamento
+- Credenciais InfinitePay para checkout e verificação de pagamento
 
 ## Configuracao
 
@@ -69,7 +69,7 @@ npm run supabase:admin:set -- email@exemplo.com
 npm run payments:reconcile -- --apply
 ```
 
-O job depende de `transaction_nsu` e `slug` salvos no retorno, webhook, pagamento ou URL da InfinitePay. Pedidos antigos que nao tenham esses identificadores continuam exigindo conferencia manual no painel administrativo.
+O job depende de `transaction_nsu` e `slug` salvos no retorno, webhook, pagamento ou URL da InfinitePay. Pedidos antigos que não tenham esses identificadores continuam exigindo conferência manual no painel administrativo.
 
 ## Validacao Antes De Deploy
 
@@ -85,12 +85,12 @@ npm audit
 Tambem valide manualmente:
 
 - login/cadastro de cliente;
-- upload e publicacao por fotografo;
+- upload e publicação por fotógrafo;
 - compra InfinitePay;
 - retorno de pagamento;
 - download protegido em `/minhas-compras`;
-- metricas do fotografo e admin;
-- saque manual e configuracoes administrativas.
+- métricas do fotógrafo e admin;
+- saque manual e configurações administrativas.
 
 ## Pendencias Operacionais
 

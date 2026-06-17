@@ -87,6 +87,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   const [isCameraLoading, setIsCameraLoading] = React.useState(false);
   const [isCameraReady, setIsCameraReady] = React.useState(false);
   const [isCapturing, setIsCapturing] = React.useState(false);
+  const [captureFlash, setCaptureFlash] = React.useState(false);
   const [consent, setConsent] = React.useState<StoredConsent | null>(null);
   const [showConsent, setShowConsent] = React.useState(true);
 
@@ -285,6 +286,8 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       }
 
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      setCaptureFlash(true);
+      window.setTimeout(() => setCaptureFlash(false), 140);
       const blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9));
       console.log('Blob criado', blob);
       if (!blob || blob.size === 0) {
@@ -356,9 +359,10 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
           />
 
           <motion.div
-            initial={{ opacity: 0, y: 30, scale: 0.98 }}
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 30, scale: 0.98 }}
+            exit={{ opacity: 0, y: 16, scale: 0.96 }}
+            transition={{ duration: 0.24, ease: 'easeOut' }}
             className="relative max-h-[95vh] w-full max-w-3xl overflow-y-auto bg-white brutal-border brutal-shadow-heavy"
           >
             <div className="border-b-2 border-brutal-black bg-brutal-accent p-5 sm:p-7">
@@ -433,13 +437,20 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
               <div>
                 {previewUrl ? (
                   <div className="relative aspect-square max-h-105 overflow-hidden bg-gray-100 brutal-border">
-                    <img src={previewUrl} alt="Preview da selfie" className="h-full w-full object-cover" />
+                    <motion.img
+                      src={previewUrl}
+                      alt="Preview da selfie"
+                      initial={{ opacity: 0, scale: 0.97 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      transition={{ duration: 0.22, ease: 'easeOut' }}
+                      className="h-full w-full object-cover"
+                    />
                     {!isSearching && (
                       <div className="absolute bottom-4 left-4 right-4 grid grid-cols-2 gap-2">
                         <button
                           type="button"
                           onClick={() => galleryInputRef.current?.click()}
-                          className="inline-flex min-h-12 items-center justify-center gap-2 bg-white px-3 font-display text-xs uppercase brutal-border brutal-shadow-hover sm:text-sm"
+                          className="premium-button inline-flex min-h-12 items-center justify-center gap-2 bg-white px-3 font-display text-xs uppercase brutal-border sm:text-sm"
                         >
                           <ImagePlus className="h-4 w-4" />
                           Trocar selfie
@@ -447,7 +458,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                         <button
                           type="button"
                           onClick={openCamera}
-                          className="inline-flex min-h-12 items-center justify-center gap-2 bg-brutal-black px-3 font-display text-xs uppercase text-white brutal-border brutal-shadow-hover sm:text-sm"
+                          className="premium-button inline-flex min-h-12 items-center justify-center gap-2 bg-brutal-black px-3 font-display text-xs uppercase text-white brutal-border sm:text-sm"
                         >
                           <RotateCcw className="h-4 w-4" />
                           Tirar novamente
@@ -456,9 +467,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                     )}
                     {isSearching && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 bg-brutal-black/80 p-6 text-center text-white backdrop-blur-sm">
-                        <Loader2 className="h-12 w-12 animate-spin text-brutal-accent" />
-                        <span className="font-display text-xl uppercase tracking-widest">Procurando suas fotos...</span>
-                        <span className="font-mono text-[10px] uppercase tracking-widest text-white/70">Comparando seu rosto com as fotos do evento</span>
+                        <FaceSearchProgress />
                       </div>
                     )}
                   </div>
@@ -474,20 +483,23 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                         onLoadedMetadata={() => setIsCameraReady(true)}
                         onCanPlay={() => setIsCameraReady(true)}
                       />
+                      {captureFlash && <div className="pointer-events-none absolute inset-0 bg-white/85" />}
                       {(isCameraLoading || isCapturing || !isCameraReady) && (
                         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-brutal-black/80 text-white">
-                          <Loader2 className="h-10 w-10 animate-spin text-brutal-accent" />
+                          <div className="h-1 w-36 overflow-hidden bg-white/15">
+                            <div className="h-full w-2/3 bg-brutal-accent transition-transform duration-300" />
+                          </div>
                           <span className="font-mono text-[10px] uppercase tracking-widest">{isCapturing ? 'Capturando selfie...' : isCameraLoading ? 'Abrindo câmera...' : 'Preparando câmera...'}</span>
                         </div>
                       )}
                     </div>
                     <span className="font-mono text-[10px] uppercase leading-relaxed tracking-widest text-gray-500">Câmera frontal quando disponível</span>
                     <div className="mt-2 grid w-full max-w-sm gap-3 sm:grid-cols-2">
-                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading || isCapturing} className="inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border brutal-shadow-hover disabled:opacity-50">
+                      <button type="button" onClick={captureSelfie} disabled={isSearching || isCameraLoading || isCapturing} className="premium-button inline-flex min-h-13 items-center justify-center gap-2 bg-brutal-accent px-4 font-display text-sm uppercase text-white brutal-border disabled:opacity-50">
                         {isCapturing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Camera className="h-5 w-5" />}
                         {isCapturing ? 'Capturando...' : 'Tirar selfie'}
                       </button>
-                      <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={isSearching} className="inline-flex min-h-13 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border brutal-shadow-hover disabled:opacity-50">
+                      <button type="button" onClick={() => galleryInputRef.current?.click()} disabled={isSearching} className="premium-button inline-flex min-h-13 items-center justify-center gap-2 bg-white px-4 font-display text-sm uppercase brutal-border disabled:opacity-50">
                         <ImagePlus className="h-5 w-5" />
                         Carregar foto
                       </button>
@@ -524,7 +536,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                   type="button"
                   onClick={submit}
                   disabled={isSearching || isCapturing}
-                  className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-3 bg-brutal-black px-5 font-display text-base uppercase tracking-widest text-white brutal-border brutal-shadow-hover hover:bg-brutal-accent disabled:cursor-wait disabled:opacity-70 md:mt-auto"
+                  className="premium-button mt-6 inline-flex min-h-14 w-full items-center justify-center gap-3 bg-brutal-black px-5 font-display text-base uppercase tracking-widest text-white brutal-border hover:bg-brutal-accent disabled:cursor-wait disabled:opacity-70 md:mt-auto"
                 >
                   {isSearching ? (
                     <>
@@ -545,5 +557,28 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
         </div>
       )}
     </AnimatePresence>
+  );
+}
+
+function FaceSearchProgress() {
+  const steps = ['Detectando rosto...', 'Comparando imagens...', 'Encontrando correspondências...'];
+  return (
+    <div className="w-full max-w-xs text-center">
+      <div className="mb-5 h-1 overflow-hidden bg-white/15">
+        <motion.div
+          initial={{ width: '22%' }}
+          animate={{ width: ['22%', '62%', '88%'] }}
+          transition={{ duration: 2.4, repeat: Infinity, repeatType: 'reverse', ease: 'easeInOut' }}
+          className="h-full bg-brutal-accent"
+        />
+      </div>
+      <div className="space-y-2">
+        {steps.map((step, index) => (
+          <p key={step} className="font-mono text-[10px] uppercase tracking-widest text-white/80">
+            {index < 2 ? '✓ ' : ''}{step}
+          </p>
+        ))}
+      </div>
+    </div>
   );
 }

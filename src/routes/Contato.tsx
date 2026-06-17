@@ -42,7 +42,7 @@ export function Contato() {
         <section className="max-w-[1400px] mx-auto py-10 md:py-16">
           <button
             onClick={() => navigate('/')}
-            className="font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-8 flex items-center gap-2"
+            className="premium-button font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-8 flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar para loja
@@ -70,7 +70,7 @@ export function Contato() {
                     <input
                       type="text"
                       name="name"
-                      className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm outline-none focus:bg-white"
+                      className="premium-input h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm outline-none focus:bg-white"
                       placeholder="Seu nome"
                     />
                   </label>
@@ -79,7 +79,7 @@ export function Contato() {
                     <input
                       type="email"
                       name="email"
-                      className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm outline-none focus:bg-white"
+                      className="premium-input h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm outline-none focus:bg-white"
                       placeholder="voce@email.com"
                     />
                   </label>
@@ -87,7 +87,7 @@ export function Contato() {
 
                 <label className="block">
                   <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Assunto</span>
-                  <select name="subject" className="h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm uppercase outline-none focus:bg-white">
+                  <select name="subject" className="premium-input h-14 w-full bg-gray-50 brutal-border px-4 font-mono text-sm uppercase outline-none focus:bg-white">
                     <option>Compra ou pagamento</option>
                     <option>Download de mídia</option>
                     <option>Cadastro de fotógrafo</option>
@@ -100,14 +100,14 @@ export function Contato() {
                   <span className="mb-2 block font-mono text-[10px] uppercase tracking-widest text-gray-500">Mensagem</span>
                   <textarea
                     name="message"
-                    className="min-h-36 w-full resize-y bg-gray-50 brutal-border p-4 font-mono text-sm outline-none focus:bg-white"
+                    className="premium-input min-h-36 w-full resize-y bg-gray-50 brutal-border p-4 font-mono text-sm outline-none focus:bg-white"
                     placeholder="Descreva o que aconteceu..."
                   />
                 </label>
 
                 <button
                   type="submit"
-                  className="min-h-14 bg-brutal-black text-white brutal-border brutal-shadow-hover font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2 px-6"
+                  className="premium-button min-h-14 bg-brutal-black text-white brutal-border font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2 px-6"
                 >
                   <Send className="w-5 h-5" />
                   Enviar mensagem
@@ -139,7 +139,7 @@ export function Contato() {
                   href: '',
                 },
               ].map((item) => (
-                <article key={item.title} className="bg-white brutal-border brutal-shadow-hover p-6">
+                <article key={item.title} className="premium-card bg-white brutal-border p-6">
                   <div className="mb-5 inline-flex bg-brutal-accent text-white brutal-border p-3">
                     <item.icon className="w-6 h-6" />
                   </div>

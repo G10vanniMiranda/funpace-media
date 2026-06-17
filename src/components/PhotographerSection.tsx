@@ -35,14 +35,14 @@ export function PhotographerSection({ photographers, onSelectPhotographer }: Pho
               key={photographer.id}
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: Math.min(index * 0.04, 0.16), duration: 0.22, ease: 'easeOut' }}
               viewport={{ once: true }}
               onClick={() => onSelectPhotographer(photographer.id)}
-              className="group bg-white brutal-border brutal-shadow-hover p-8 cursor-pointer transition-all hover:-translate-x-1 hover:-translate-y-1"
+              className="premium-card group bg-white brutal-border p-8 cursor-pointer"
             >
               <div className="flex flex-col sm:flex-row gap-8 items-start sm:items-center">
                 <div className="relative">
-                  <div className="w-32 h-32 brutal-border overflow-hidden grayscale group-hover:grayscale-0 transition-all">
+                  <div className="w-32 h-32 brutal-border overflow-hidden grayscale transition-all duration-200 group-hover:grayscale-0">
                     <img
                       src={photographer.avatar}
                       alt={photographer.name}
@@ -85,14 +85,14 @@ export function PhotographerSection({ photographers, onSelectPhotographer }: Pho
                 </div>
 
                 <div className="hidden sm:flex self-stretch items-center justify-center pl-4 border-l-2 border-dashed border-gray-100">
-                  <ArrowRight className="w-8 h-8 text-gray-200 group-hover:text-brutal-accent group-hover:translate-x-2 transition-all" />
+                  <ArrowRight className="w-8 h-8 text-gray-200 transition-all duration-200 group-hover:translate-x-1 group-hover:text-brutal-accent" />
                 </div>
               </div>
             </motion.div>
           ))}
 
           {/* Future slot placeholder */}
-          <div className="bg-gray-50 brutal-border border-dashed p-8 flex flex-col items-center justify-center text-center group cursor-help">
+          <div className="premium-card bg-gray-50 brutal-border border-dashed p-8 flex flex-col items-center justify-center text-center group cursor-help">
             <div className="w-20 h-20 rounded-full border-2 border-dashed border-gray-300 flex items-center justify-center mb-4 group-hover:bg-white transition-colors">
               <Camera className="w-8 h-8 text-gray-300" />
             </div>

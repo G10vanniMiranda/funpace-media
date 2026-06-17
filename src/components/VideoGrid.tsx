@@ -99,7 +99,7 @@ export function VideoGrid({
             initial={{ opacity: 0, y: 20 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            className="group relative bg-white brutal-border brutal-shadow hover:-translate-x-1 hover:-translate-y-1 hover:shadow-heavy transition-all"
+            className="premium-card group relative bg-white brutal-border"
           >
             <div className="relative aspect-video overflow-hidden bg-brutal-black">
               <ProtectedVideoPreview
@@ -107,14 +107,14 @@ export function VideoGrid({
                 poster={video.thumbnailUrl || video.watermarkUrl}
                 alt={video.name}
                 watermark={`FUNPACE ${video.bib || video.id.slice(0, 6)}`}
-                imgClassName="w-full h-full object-cover opacity-85 transition-transform duration-500 group-hover:scale-[1.04]"
+                imgClassName="w-full h-full object-cover opacity-90 transition-transform duration-300 ease-out group-hover:scale-[1.03]"
               />
 
               <div className="absolute inset-0 bg-linear-to-t from-brutal-black/80 via-transparent to-transparent opacity-60 group-hover:opacity-40 transition-opacity" />
 
               {/* Video Badge */}
               <div className="absolute top-4 left-4 bg-brutal-accent text-white px-3 py-1 brutal-border font-mono text-[10px] uppercase font-bold tracking-widest flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-full bg-white/90" />
                 VÍDEO
               </div>
 
@@ -122,7 +122,7 @@ export function VideoGrid({
                 <button
                   type="button"
                   onClick={() => onToggleFavorite?.(video)}
-                  className={`h-10 min-w-10 px-3 brutal-border flex items-center justify-center gap-1 transition-colors cursor-pointer ${favoriteIds.has(video.id) || likedIds.has(video.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
+                  className={`premium-button h-10 min-w-10 px-3 brutal-border flex items-center justify-center gap-1 transition-colors cursor-pointer ${favoriteIds.has(video.id) || likedIds.has(video.id) ? 'bg-brutal-accent text-white' : 'bg-white text-brutal-black hover:bg-brutal-accent hover:text-white'
                     }`}
                   title={favoriteIds.has(video.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
                   aria-label={favoriteIds.has(video.id) ? 'Remover dos favoritos' : 'Favoritar para comprar depois'}
@@ -139,7 +139,7 @@ export function VideoGrid({
               <div
                 className="pointer-events-none absolute inset-0 flex items-center justify-center group/play"
               >
-                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md brutal-border flex items-center justify-center transform group-hover/play:scale-110 group-hover:opacity-0 transition-all">
+                <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-md brutal-border flex items-center justify-center transform transition-all duration-200 group-hover:scale-[1.04] group-hover:opacity-0">
                   <Play className="w-8 h-8 text-white fill-white ml-1" />
                 </div>
               </div>
@@ -171,7 +171,7 @@ export function VideoGrid({
               <button
                 type="button"
                 onClick={() => shareVideo(video)}
-                className="mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-brutal-accent transition-colors cursor-pointer font-mono text-[10px] uppercase"
+                className="premium-button mb-4 inline-flex items-center gap-2 text-gray-500 hover:text-brutal-accent transition-colors cursor-pointer font-mono text-[10px] uppercase"
               >
                 <Share2 className="w-4 h-4" />
                 {copiedId === video.id ? 'Link copiado' : 'Compartilhar video'}
@@ -186,9 +186,9 @@ export function VideoGrid({
                 <button
                   onClick={() => onAddToCart(video)}
                   disabled={isVideoInCart(video.id)}
-                  className={`flex items-center gap-2 px-6 py-3 brutal-border font-display text-sm uppercase tracking-widest transition-all cursor-pointer ${isVideoInCart(video.id)
+                  className={`premium-button flex items-center gap-2 px-6 py-3 brutal-border font-display text-sm uppercase tracking-widest transition-all cursor-pointer ${isVideoInCart(video.id)
                       ? 'bg-brutal-white text-gray-400 cursor-default'
-                      : 'bg-brutal-black text-white hover:bg-brutal-accent hover:-translate-x-1 hover:-translate-y-1'
+                      : 'bg-brutal-black text-white hover:bg-brutal-accent'
                     }`}
                 >
                   {isVideoInCart(video.id) ? (

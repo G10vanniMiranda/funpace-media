@@ -1,4 +1,5 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
+import crypto from 'crypto';
+import { assertRequestSize, getClientIp, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -85,6 +86,16 @@ function isValidCpf(value: string | null | undefined) {
   return calcDigit(9) === Number(cpf[9]) && calcDigit(10) === Number(cpf[10]);
 }
 
+function normalizeReferralCode(value: string | null | undefined) {
+  return String(value || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
+}
+
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
@@ -97,6 +108,56 @@ function getSupabaseConfig() {
     supabaseUrl: supabaseUrl.replace(/\/+$/, ''),
     supabaseKey,
   };
+}
+
+async function registerPendingReferral(input: {
+  referralCode?: string | null;
+  referredPhotographerId: string;
+  referredEmail: string;
+  referredCpf: string;
+  referredPhone: string;
+  ipHash: string | null;
+  userAgent: string | null;
+}) {
+  const code = normalizeReferralCode(input.referralCode);
+  if (!code) return;
+
+  const referrers = await supabaseRequest<any[]>(
+    `/rest/v1/photographers?select=id,email,cpf,phone,referralCode,username,slug&or=(referralCode.eq.${encodeURIComponent(code)},username.eq.${encodeURIComponent(code)},slug.eq.${encodeURIComponent(code)})&verified=eq.true&limit=1`,
+  ).catch(() => []);
+  const referrer = referrers[0];
+  if (!referrer?.id || referrer.id === input.referredPhotographerId) return;
+
+  const sameEmail = String(referrer.email || '').toLowerCase() === input.referredEmail.toLowerCase();
+  const sameCpf = referrer.cpf && String(referrer.cpf) === input.referredCpf;
+  const samePhone = referrer.phone && String(referrer.phone).replace(/\D/g, '') === input.referredPhone;
+  if (sameEmail || sameCpf || samePhone) return;
+
+  await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(input.referredPhotographerId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ referredByPhotographerId: referrer.id }),
+  }).catch(() => undefined);
+
+  await supabaseRequest('/rest/v1/photographer_referrals?on_conflict=referredPhotographerId', {
+    method: 'POST',
+    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    body: JSON.stringify({
+      referrerPhotographerId: referrer.id,
+      referredPhotographerId: input.referredPhotographerId,
+      referralCode: code,
+      status: 'pending',
+      rewardAmount: 0,
+      rewardStatus: 'none',
+      audit: {
+        referredEmail: input.referredEmail,
+        referredCpf: input.referredCpf,
+        referredPhone: input.referredPhone,
+        ipHash: input.ipHash,
+        userAgent: input.userAgent,
+      },
+    }),
+  }).catch(() => undefined);
 }
 
 async function supabaseRequest<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -207,7 +268,7 @@ export default async function handler(req: any, res: any) {
   try {
     step = 'parse_body';
     assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
-    const { userId, email, name, instagram, bio, cpf, phone, avatar } = getJsonBody(req);
+    const { userId, email, name, instagram, bio, cpf, phone, avatar, referralCode } = getJsonBody(req);
 
     step = 'validacao';
     if (typeof email !== 'string' || !email.includes('@') || email.length > 256) {
@@ -301,6 +362,16 @@ export default async function handler(req: any, res: any) {
         });
       }
     }
+
+    await registerPendingReferral({
+      referralCode,
+      referredPhotographerId: resolvedId,
+      referredEmail: normalizedEmail,
+      referredCpf: cpfDigits,
+      referredPhone: phoneDigits,
+      ipHash: crypto.createHash('sha256').update(getClientIp(req)).digest('hex'),
+      userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
+    });
 
     return res.status(200).json({ ok: true, id: resolvedId });
   } catch (error: any) {

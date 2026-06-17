@@ -12,6 +12,7 @@ import { isValidCpf, onlyCpfDigits } from "./src/lib/cpf";
 import { BULK_PHOTO_DISCOUNT_PERCENT, calculateCartPricing, isPhotoType } from "./src/lib/cart-pricing";
 import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
+import { ensurePhotographerReferralCode, markReferralApproved, registerPendingReferral } from "./server/shared/referrals";
 import adminApiHandler from "./api/admin";
 import eventMediaCountsHandler from "./server/api/events/media-counts";
 import type { PaymentMethod } from "./server/payments/providers/types";
@@ -1648,7 +1649,7 @@ async function handleAdminPhotographerStatus(req: express.Request, res: express.
     const supabase = getSupabaseAdmin();
     const existing = await supabase
       .from("photographers")
-      .select("id,name,email,verified,blockedAt")
+      .select("id,name,email,verified,blockedAt,referralCode,username,slug,displayName")
       .eq("id", id)
       .maybeSingle();
     if (existing.error) throw existing.error;
@@ -1666,6 +1667,10 @@ async function handleAdminPhotographerStatus(req: express.Request, res: express.
       .maybeSingle();
     if (error) throw error;
     if (!data?.id) return res.status(404).json({ error: "Fotografo nao encontrado." });
+    if (action === "reactivate") {
+      await ensurePhotographerReferralCode(data);
+      await markReferralApproved(id);
+    }
 
     return res.json({
       ok: true,
@@ -1684,6 +1689,57 @@ app.patch("/api/admin/photographers/:id/disable", (req, res) => {
 
 app.patch("/api/admin/photographers/:id/reactivate", (req, res) => {
   return handleAdminPhotographerStatus(req, res, "reactivate");
+});
+
+app.patch("/api/admin/referrals/:id/:action", async (req, res) => {
+  try {
+    const adminUser = await getAuthenticatedAdminUser(req);
+    if (!adminUser) {
+      return res.status(403).json({ error: "Apenas administradores podem alterar indicacoes." });
+    }
+
+    const id = String(req.params.id || "").trim();
+    const action = String(req.params.action || "").trim();
+    if (!isUuid(id)) return res.status(400).json({ error: "ID da indicacao invalido." });
+
+    const now = new Date().toISOString();
+    let patch: Record<string, any> | null = null;
+    if (action === "approve") {
+      patch = { status: "approved", approvedAt: now };
+    } else if (action === "cancel") {
+      patch = { status: "canceled", rewardStatus: "canceled", canceledAt: now };
+    } else if (action === "mark_paid") {
+      patch = { status: "rewarded", rewardStatus: "paid", paidAt: now };
+    }
+
+    if (!patch) return res.status(400).json({ error: "Acao invalida." });
+
+    const { data, error } = await getSupabaseAdmin()
+      .from("photographer_referrals")
+      .update(patch)
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
+    if (error) throw error;
+    if (!data?.id) return res.status(404).json({ error: "Indicacao nao encontrada." });
+
+    await getSupabaseAdmin().from("admin_activity_logs").insert({
+      actorId: adminUser.id,
+      actorEmail: adminUser.email,
+      action: `referral_${action}`,
+      targetType: "photographer_referral",
+      targetId: id,
+      metadata: patch,
+      createdAt: now,
+    }).then(({ error: logError }) => {
+      if (logError) console.warn("Nao foi possivel registrar auditoria da indicacao:", logError);
+    });
+
+    return res.json({ ok: true, referral: data });
+  } catch (error: any) {
+    console.error("Erro ao atualizar indicacao:", error);
+    return res.status(500).json({ error: error?.message || "Nao foi possivel atualizar a indicacao." });
+  }
 });
 
 app.delete("/api/admin/photographers/:id", async (req, res) => {
@@ -2674,7 +2730,7 @@ app.post("/api/photographers/request", async (req, res) => {
   let pool: pg.Pool | null = null;
 
   try {
-    const { userId, email, name, instagram, bio, cpf, avatar } = req.body ?? {};
+    const { userId, email, name, instagram, bio, cpf, phone, avatar, referralCode } = req.body ?? {};
 
     if (typeof email !== "string" || !email.includes("@") || email.length > 256) {
       return res.status(400).json({ error: "Email invalido." });
@@ -2697,6 +2753,7 @@ app.post("/api/photographers/request", async (req, res) => {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    const phoneDigits = String(phone || "").replace(/\D/g, "").slice(0, 11);
     const resolvedId = typeof userId === "string" && userId.trim().length >= 8
       ? userId.trim()
       : `pending:${normalizedEmail}`;
@@ -2717,7 +2774,9 @@ app.post("/api/photographers/request", async (req, res) => {
           email,
           bio,
           avatar,
+          phone,
           cpf,
+          "referredByPhotographerId",
           verified,
           stats,
           "createdAt",
@@ -2727,10 +2786,12 @@ app.post("/api/photographers/request", async (req, res) => {
           $1,
           $2,
           $3,
-          $3,
           $4,
           $5,
           $6,
+          $7,
+          $8,
+          null,
           false,
           jsonb_build_object(
             'photos', 0,
@@ -2750,13 +2811,23 @@ app.post("/api/photographers/request", async (req, res) => {
           bio = excluded.bio,
           avatar = excluded.avatar,
           cpf = excluded.cpf,
+          phone = excluded.phone,
           verified = false,
           "updatedAt" = now()
       `,
-      [resolvedId, name.trim(), safeInstagram, normalizedEmail, safeBio, safeAvatar, cpfDigits],
+      [resolvedId, name.trim(), safeInstagram, normalizedEmail, safeBio, safeAvatar, phoneDigits, cpfDigits],
     );
 
     await pool.query("commit");
+    await registerPendingReferral({
+      referralCode,
+      referredPhotographerId: resolvedId,
+      referredEmail: normalizedEmail,
+      referredCpf: cpfDigits,
+      referredPhone: phoneDigits,
+      ipHash: crypto.createHash("sha256").update(getClientIp(req)).digest("hex"),
+      userAgent: String(req.header("user-agent") || "").slice(0, 500),
+    });
     res.json({ ok: true });
   } catch (error: any) {
     if (pool) {

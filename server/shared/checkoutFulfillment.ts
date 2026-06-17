@@ -1,5 +1,6 @@
 import { supabaseRequest } from './utils.js';
 import { paidOrderEmailTemplate } from './emailTemplates.js';
+import { markReferralFirstSale } from './referrals.js';
 
 type OrderStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
@@ -113,6 +114,16 @@ export async function registerPhotographerTransactions(orderId: string) {
       body: JSON.stringify({ salesCount: nextSalesCount }),
     }).catch(() => undefined);
   }
+
+  const saleAmountByPhotographer = new Map<string, number>();
+  for (const item of newItems) {
+    const photographerId = String(item.vendedorId || '');
+    if (!photographerId) continue;
+    saleAmountByPhotographer.set(photographerId, (saleAmountByPhotographer.get(photographerId) || 0) + Number(item.price || 0));
+  }
+  await Promise.all(Array.from(saleAmountByPhotographer.entries()).map(([photographerId, saleAmount]) => (
+    markReferralFirstSale(photographerId, saleAmount)
+  )));
 }
 
 function getFrontendUrl() {

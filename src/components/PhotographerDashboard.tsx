@@ -28,10 +28,12 @@ import {
   Pause,
   Play,
   RotateCcw,
-  WifiOff
+  WifiOff,
+  Link as LinkIcon,
+  Copy
 } from 'lucide-react';
-import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerSale, WithdrawalRequest } from '../types';
-import { calculateFileSha256, eventService, normalizePhotographerUsername, photographerDashboardService, photographerService, productService, withdrawalService } from '../lib/services';
+import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerReferral, PhotographerSale, WithdrawalRequest } from '../types';
+import { calculateFileSha256, eventService, normalizePhotographerUsername, photographerDashboardService, photographerService, productService, referralService, withdrawalService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
 import {
@@ -111,7 +113,7 @@ type ProductEditForm = {
 type ProductTypeFilter = 'all' | Product['type'];
 type ProductStatusFilter = 'all' | NonNullable<Product['status']>;
 type PhotographerPeriodKey = 'today' | 'week' | 'month' | 'year' | 'custom';
-type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings' | 'profile';
+type PhotographerTab = 'overview' | 'events' | 'products' | 'earnings' | 'referrals' | 'profile';
 
 type PhotographerCatalogEvent = {
   name: string;
@@ -1087,6 +1089,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [recentSales, setRecentSales] = useState<PhotographerSale[]>([]);
   const [productPerformance, setProductPerformance] = useState<PhotographerProductPerformance[]>([]);
   const [withdrawals, setWithdrawals] = useState<WithdrawalRequest[]>([]);
+  const [referrals, setReferrals] = useState<PhotographerReferral[]>([]);
+  const [referralCopyMessage, setReferralCopyMessage] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isUploadPaused, setIsUploadPaused] = useState(false);
@@ -1748,6 +1752,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const visibleSelectedFiles = selectedFiles.slice(0, uploadVisibleListLimit);
   const hiddenSelectedFileCount = Math.max(0, selectedFiles.length - visibleSelectedFiles.length);
   const canPublishSelectedFiles = pendingUploadCount > 0 && !isLoading && !isPreparingFiles && !isPublishing && isBrowserOnline;
+  const referralUrl = referralService.buildReferralUrl(currentPhotographer);
+  const referralTotals = React.useMemo(() => ({
+    total: referrals.length,
+    pending: referrals.filter((referral) => referral.status === 'pending').length,
+    approved: referrals.filter((referral) => ['approved', 'active', 'rewarded'].includes(referral.status)).length,
+    accumulated: referrals.reduce((sum, referral) => sum + Number(referral.rewardAmount || 0), 0),
+    paid: referrals.filter((referral) => referral.rewardStatus === 'paid').reduce((sum, referral) => sum + Number(referral.rewardAmount || 0), 0),
+  }), [referrals]);
+
+  const handleCopyReferralLink = async () => {
+    await navigator.clipboard?.writeText(referralUrl);
+    setReferralCopyMessage('Link copiado com sucesso!');
+    window.setTimeout(() => setReferralCopyMessage(''), 2500);
+  };
 
   const loadPhotographerContent = React.useCallback(async (showLoader = false) => {
     if (showLoader) setIsLoading(true);
@@ -1757,6 +1775,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setProducts(visibleProducts);
       const dashboard = await photographerDashboardService.getDashboard(photographer.id, visibleProducts);
       const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
+      const pReferrals = await referralService.getPhotographerReferrals(photographer.id).catch(() => []);
       const events = await eventService.getPhotographerEvents(photographer.id);
       console.info('[event-cover] dashboard:events-loaded', {
         photographerId: photographer.id,
@@ -1772,6 +1791,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setRecentSales(dashboard.recentSales);
       setProductPerformance(dashboard.productPerformance);
       setWithdrawals(pWithdrawals);
+      setReferrals(pReferrals);
       setAvailableEvents(events);
     } catch (error) {
       console.error("Error loading photographer content:", error);
@@ -2814,6 +2834,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             onClick={() => setActiveTab('earnings')}
           />
           <SidebarLink
+            icon={<LinkIcon />}
+            label="Indicações"
+            active={activeTab === 'referrals'}
+            onClick={() => setActiveTab('referrals')}
+          />
+          <SidebarLink
             icon={<Settings />}
             label="Perfil Publico"
             active={activeTab === 'profile'}
@@ -2852,6 +2878,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               {activeTab === 'events' && 'Eventos'}
               {activeTab === 'products' && 'Produtos'}
               {activeTab === 'earnings' && 'Meus Ganhos'}
+              {activeTab === 'referrals' && 'Minhas Indicações'}
               {activeTab === 'profile' && 'Perfil Publico'}
             </h2>
             <p className="font-sans text-sm text-gray-400">Bem-vindo de volta, {currentPhotographer.name.split(' ')[0]}!</p>
@@ -3911,6 +3938,83 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   </div>
                 </div>
               </aside>
+            </motion.div>
+          )}
+
+          {activeTab === 'referrals' && (
+            <motion.div key="referrals" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="bg-[#0d131c] border border-white/10 p-6">
+                <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5">
+                  <div>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 bg-brutal-accent/10 border border-brutal-accent/30 text-brutal-accent font-mono text-[10px] uppercase tracking-widest mb-4">
+                      <LinkIcon className="w-3.5 h-3.5" />
+                      Programa de indicação
+                    </div>
+                    <h3 className="font-sans font-black text-2xl uppercase text-white">Convide fotógrafos para a Funpace</h3>
+                    <p className="font-mono text-xs uppercase leading-relaxed text-gray-400 mt-2 max-w-2xl">
+                      Convide fotógrafos para a Funpace e ganhe recompensas quando eles começarem a vender.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleCopyReferralLink}
+                    className="h-12 inline-flex items-center justify-center gap-2 bg-brutal-accent border border-brutal-accent px-5 font-sans font-black text-xs uppercase text-white hover:bg-white hover:text-brutal-accent transition-colors"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copiar meu link
+                  </button>
+                </div>
+                <div className="mt-5 bg-[#080d14] border border-white/10 p-4">
+                  <p className="break-all font-mono text-xs text-gray-300">{referralUrl}</p>
+                  {referralCopyMessage && <p className="mt-3 font-mono text-[10px] uppercase text-green-400">{referralCopyMessage}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                {[
+                  ['Total de indicados', referralTotals.total],
+                  ['Pendentes', referralTotals.pending],
+                  ['Aprovadas', referralTotals.approved],
+                  ['Bônus acumulado', formatCurrency(referralTotals.accumulated)],
+                  ['Bônus pago', formatCurrency(referralTotals.paid)],
+                ].map(([label, value]) => (
+                  <div key={String(label)} className="bg-[#0d131c] border border-white/10 p-5">
+                    <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">{label}</p>
+                    <p className="font-sans font-black text-2xl text-white">{value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-[#0d131c] border border-white/10">
+                <div className="p-5 border-b border-white/10">
+                  <h3 className="font-sans font-black text-base uppercase text-white">Histórico de indicações</h3>
+                  <p className="font-mono text-[10px] uppercase text-gray-500">{referrals.length} registro(s)</p>
+                </div>
+                <div className="divide-y divide-white/10">
+                  {referrals.length === 0 ? (
+                    <div className="p-8 text-center">
+                      <p className="font-sans font-black text-xl uppercase text-white">Nenhuma indicação ainda</p>
+                      <p className="font-mono text-[10px] uppercase text-gray-500 mt-2">Compartilhe seu link para começar.</p>
+                    </div>
+                  ) : referrals.map((referral) => (
+                    <div key={referral.id} className="p-5 grid gap-3 md:grid-cols-[1fr_auto_auto] md:items-center">
+                      <div className="min-w-0">
+                        <p className="font-sans font-black text-sm uppercase text-white truncate">Indicado #{referral.referredPhotographerId.slice(0, 8)}</p>
+                        <p className="font-mono text-[10px] uppercase text-gray-500">
+                          Criado em {new Date(referral.createdAt).toLocaleDateString('pt-BR')} - Código {referral.referralCode}
+                        </p>
+                      </div>
+                      <span className="w-fit border border-white/10 bg-white/5 px-3 py-1 font-mono text-[10px] uppercase text-gray-300">
+                        {referral.status}
+                      </span>
+                      <div className="text-left md:text-right">
+                        <p className="font-sans font-black text-lg text-brutal-accent">{formatCurrency(Number(referral.rewardAmount || 0))}</p>
+                        <p className="font-mono text-[10px] uppercase text-gray-500">{referral.rewardStatus}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </motion.div>
           )}
 

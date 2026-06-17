@@ -1,4 +1,5 @@
 import { CalendarDays, Camera, Image as ImageIcon, MapPin, Search, UserCircle } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import React, { FormEvent } from 'react';
 import type { Photographer, Product } from '../types';
 
@@ -49,7 +50,7 @@ export function Hero({
 
   return (
     <section className="relative overflow-hidden bg-brutal-white border-b-4 border-brutal-black">
-      <div className="absolute top-0 w-full overflow-hidden bg-brutal-accent text-brutal-black py-2 border-b-2 border-brutal-black z-0 flex whitespace-nowrap">
+      <div className="absolute top-0 w-full overflow-hidden bg-brutal-accent text-brutal-black py-2 border-b-2 border-brutal-black z-0 flex whitespace-nowrap opacity-95">
         <div className="animate-marquee flex items-center">
           {Array(15).fill(heroTickerText).map((text, i) => (
             <span key={i} className="font-display text-lg px-8 shrink-0 tracking-wider">
@@ -89,18 +90,25 @@ export function Hero({
                 placeholder="Buscar fotógrafo, evento, cidade ou número de peito"
                 value={eventQuery}
                 onChange={(event) => onEventQueryChange(event.target.value)}
-                className="w-full h-14 pl-12 pr-4 bg-gray-100 brutal-border font-mono text-base md:text-lg focus:outline-none focus:ring-0 focus:bg-white transition-colors uppercase placeholder:text-gray-400 placeholder:normal-case placeholder:font-mono"
+                className="premium-input w-full h-14 pl-12 pr-4 bg-gray-100 brutal-border font-mono text-base md:text-lg focus:outline-none focus:ring-0 focus:bg-white uppercase placeholder:text-gray-400 placeholder:normal-case placeholder:font-mono"
               />
             </div>
             <button
               type="submit"
-              className="h-14 px-8 bg-brutal-black text-brutal-white brutal-border font-display text-lg hover:bg-brutal-accent hover:text-brutal-white transition-colors brutal-shadow-hover flex items-center justify-center sm:min-w-35"
+              className="premium-button h-14 px-8 bg-brutal-black text-brutal-white brutal-border font-display text-lg hover:bg-brutal-accent hover:text-brutal-white transition-colors flex items-center justify-center sm:min-w-35"
             >
               BUSCAR
             </button>
           </form>
+          <AnimatePresence>
           {hasQuery && (
-            <div className="bg-white brutal-border text-left">
+            <motion.div
+              initial={{ opacity: 0, y: -6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.18, ease: 'easeOut' }}
+              className="bg-white brutal-border text-left"
+            >
               {isSearching ? (
                 <p className="p-4 font-mono text-xs uppercase tracking-widest text-gray-400">Buscando...</p>
               ) : hasResults ? (
@@ -115,7 +123,7 @@ export function Hero({
                             key={photographer.id}
                             type="button"
                             onClick={() => onSelectPhotographer(photographer)}
-                            className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
+                            className="premium-button flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
                           >
                             <div className="h-12 w-12 shrink-0 overflow-hidden brutal-border bg-gray-100">
                               {profilePhoto ? (
@@ -146,7 +154,7 @@ export function Hero({
                           key={event.name}
                           type="button"
                           onClick={() => onSelectEvent(event.name)}
-                          className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
+                          className="premium-button flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
                         >
                           <CalendarDays className="h-5 w-5 shrink-0 text-brutal-accent" />
                           <div className="min-w-0 flex-1">
@@ -165,7 +173,7 @@ export function Hero({
                           key={photo.id}
                           type="button"
                           onClick={() => onSelectPhoto(photo)}
-                          className="flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
+                          className="premium-button flex w-full items-center gap-3 p-3 text-left transition-colors hover:bg-gray-100"
                         >
                           <div className="h-12 w-12 shrink-0 overflow-hidden brutal-border bg-gray-100">
                             {photo.thumbnailUrl || photo.url ? (
@@ -191,8 +199,9 @@ export function Hero({
               ) : (
                 <p className="p-4 font-mono text-xs uppercase tracking-widest text-gray-400">Nenhum resultado encontrado.</p>
               )}
-            </div>
+            </motion.div>
           )}
+          </AnimatePresence>
         </div>
       </div>
     </section>

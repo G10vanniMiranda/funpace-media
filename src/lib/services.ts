@@ -18,6 +18,8 @@ import {
   AdminActivityLog,
   FaceSearchMatch,
   FaceSearchResponse,
+  PhotographerReferral,
+  ReferralSettings,
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
@@ -29,6 +31,7 @@ type SupabaseRow<T> = T & { id: string };
 const selectAll = 'select=*';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
 let mockPhotographers = [...MOCK_PHOTOGRAPHERS];
+let mockReferrals: PhotographerReferral[] = [];
 const localEventsStorageKey = 'funpace:local-events:v1';
 const defaultUploadLimitBytes = 300 * 1024 * 1024;
 const clientUploadLimitBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadLimitBytes);
@@ -99,6 +102,19 @@ function createPhotographerSlug(value: string) {
 
   return normalized || `fotografo-${Date.now()}`;
 }
+
+function createReferralCode(value: string) {
+  return normalizePhotographerUsername(value).slice(0, 80) || `fotografo-${Date.now()}`;
+}
+
+const defaultReferralSettings: ReferralSettings = {
+  enabled: true,
+  rewardRuleType: 'first_sale_fixed',
+  approvalRewardAmount: 50,
+  firstSaleRewardAmount: 100,
+  recurringCommissionPercent: 5,
+  recurringCommissionMonths: 3,
+};
 
 export const reservedPublicSlugs = new Set([
   'admin',
@@ -1992,6 +2008,7 @@ export const platformSettingsService = {
         withdrawalFee: 5,
         autoBlockSuspicious: true,
         supportEmail: FUNPACE_CONTACT_EMAIL,
+        referralSettings: defaultReferralSettings,
       };
     }
 
@@ -2009,10 +2026,11 @@ export const platformSettingsService = {
     return {
       ...settings,
       supportEmail: settings.supportEmail || FUNPACE_CONTACT_EMAIL,
+      referralSettings: settings.referralSettings ?? defaultReferralSettings,
     };
   },
 
-  async updateSettings(settings: Partial<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>): Promise<PlatformSettings> {
+  async updateSettings(settings: Partial<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes' | 'referralSettings'>>): Promise<PlatformSettings> {
     if (isMockMode) {
       return {
         id: 'default',
@@ -2023,6 +2041,7 @@ export const platformSettingsService = {
         brandName: settings.brandName,
         supportEmail: settings.supportEmail,
         maxUploadBytes: settings.maxUploadBytes,
+        referralSettings: settings.referralSettings ?? defaultReferralSettings,
       };
     }
 
@@ -2037,24 +2056,110 @@ export const platformSettingsService = {
     return updated;
   },
 
-  async getPublicSettings(): Promise<Pick<PlatformSettings, 'platformFeePercent'>> {
+  async getPublicSettings(): Promise<Pick<PlatformSettings, 'platformFeePercent' | 'referralSettings'>> {
     if (isMockMode) {
-      return { platformFeePercent: 30 };
+      return { platformFeePercent: 30, referralSettings: defaultReferralSettings };
     }
 
     try {
       const params = new URLSearchParams({
-        select: 'platformFeePercent',
+        select: 'platformFeePercent,referralSettings',
         id: 'eq.default',
         limit: '1',
       });
-      const [settings] = await supabaseRest.get<Pick<PlatformSettings, 'platformFeePercent'>[]>(
+      const [settings] = await supabaseRest.get<Pick<PlatformSettings, 'platformFeePercent' | 'referralSettings'>[]>(
         `/rest/v1/platform_settings?${params.toString()}`,
       );
-      return { platformFeePercent: Number(settings?.platformFeePercent ?? 30) };
+      return {
+        platformFeePercent: Number(settings?.platformFeePercent ?? 30),
+        referralSettings: settings?.referralSettings ?? defaultReferralSettings,
+      };
     } catch {
-      return { platformFeePercent: 30 };
+      return { platformFeePercent: 30, referralSettings: defaultReferralSettings };
     }
+  },
+};
+
+export const referralService = {
+  defaultSettings: defaultReferralSettings,
+
+  getReferralCode(photographer: Pick<Photographer, 'referralCode' | 'username' | 'slug' | 'displayName' | 'name'>) {
+    return photographer.referralCode || createReferralCode(photographer.username || photographer.slug || photographer.displayName || photographer.name);
+  },
+
+  buildReferralUrl(photographer: Pick<Photographer, 'referralCode' | 'username' | 'slug' | 'displayName' | 'name'>) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://funpace.media';
+    return `${origin.replace(/\/+$/, '')}/indicar/${encodeURIComponent(this.getReferralCode(photographer))}`;
+  },
+
+  storeReferralCode(code: string) {
+    const normalized = createReferralCode(code);
+    if (!normalized) return;
+    localStorage.setItem('funpace:photographer-referral-code', normalized);
+    localStorage.setItem('funpace:photographer-referral-captured-at', new Date().toISOString());
+  },
+
+  getStoredReferralCode() {
+    return localStorage.getItem('funpace:photographer-referral-code') || '';
+  },
+
+  clearStoredReferralCode() {
+    localStorage.removeItem('funpace:photographer-referral-code');
+    localStorage.removeItem('funpace:photographer-referral-captured-at');
+  },
+
+  async getPhotographerReferrals(photographerId: string): Promise<PhotographerReferral[]> {
+    if (isMockMode) {
+      return mockReferrals.filter((referral) => referral.referrerPhotographerId === photographerId);
+    }
+
+    const params = new URLSearchParams({
+      select: '*',
+      referrerPhotographerId: `eq.${photographerId}`,
+      order: 'createdAt.desc',
+      limit: '500',
+    });
+    return supabaseRest.get<SupabaseRow<PhotographerReferral>[]>(`/rest/v1/photographer_referrals?${params.toString()}`, true);
+  },
+
+  async getAdminReferrals(): Promise<PhotographerReferral[]> {
+    if (isMockMode) return mockReferrals;
+
+    const params = new URLSearchParams({
+      select: '*',
+      order: 'createdAt.desc',
+      limit: '1000',
+    });
+    return supabaseRest.get<SupabaseRow<PhotographerReferral>[]>(`/rest/v1/photographer_referrals?${params.toString()}`, true);
+  },
+
+  async updateReferralAdmin(id: string, action: 'approve' | 'cancel' | 'mark_paid'): Promise<PhotographerReferral> {
+    if (isMockMode) {
+      const existing = mockReferrals.find((referral) => referral.id === id);
+      if (!existing) throw new Error('Indicacao nao encontrada.');
+      const now = new Date().toISOString();
+      const updated: PhotographerReferral = {
+        ...existing,
+        status: action === 'cancel' ? 'canceled' : action === 'approve' ? 'approved' : 'rewarded',
+        approvedAt: action === 'approve' ? existing.approvedAt || now : existing.approvedAt,
+        rewardStatus: action === 'cancel' ? 'canceled' : action === 'mark_paid' ? 'paid' : existing.rewardStatus,
+        paidAt: action === 'mark_paid' ? now : existing.paidAt,
+        canceledAt: action === 'cancel' ? now : existing.canceledAt,
+      };
+      mockReferrals = mockReferrals.map((referral) => referral.id === id ? updated : referral);
+      return updated;
+    }
+
+    const token = await getCurrentAccessToken();
+    if (!token) throw new Error('Sessao admin expirada.');
+
+    const response = await fetch(apiUrl(`/api/admin/referrals/${encodeURIComponent(id)}/${action}`), {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || payload?.message || 'Nao foi possivel atualizar a indicacao.');
+    return payload.referral as PhotographerReferral;
   },
 };
 

@@ -30,7 +30,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
             initial={{ opacity: 0, x: -20 }}
             animate={{ opacity: 1, x: 0 }}
             onClick={onBack}
-            className="mb-8 flex items-center gap-2 text-white font-mono text-sm uppercase hover:text-brutal-accent transition-colors cursor-pointer"
+            className="premium-button mb-8 flex items-center gap-2 text-white font-mono text-sm uppercase hover:text-brutal-accent transition-colors cursor-pointer"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar para a Galeria
@@ -76,10 +76,10 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
               transition={{ delay: 0.3 }}
               className="flex gap-4"
             >
-              <button className="bg-white text-brutal-black p-4 brutal-border hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer">
+              <button className="premium-button bg-white text-brutal-black p-4 brutal-border hover:bg-brutal-accent hover:text-white transition-colors cursor-pointer">
                 <Share2 className="w-6 h-6" />
               </button>
-              <button className="bg-brutal-accent text-white px-8 py-4 brutal-border font-display text-sm uppercase tracking-widest hover:translate-x-1 hover:translate-y-1 transition-all cursor-pointer">
+              <button className="premium-button bg-brutal-accent text-white px-8 py-4 brutal-border font-display text-sm uppercase tracking-widest transition-all cursor-pointer">
                 Seguir Artista
               </button>
             </motion.div>
@@ -102,17 +102,17 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
             </div>
 
             <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-              <div className="bg-white p-6 brutal-border">
+              <div className="premium-card bg-white p-6 brutal-border">
                 <Camera className="w-6 h-6 text-brutal-accent mb-2" />
                 <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">Fotos</p>
                 <p className="font-display text-3xl">{photographer.stats.photos}</p>
               </div>
-              <div className="bg-white p-6 brutal-border">
+              <div className="premium-card bg-white p-6 brutal-border">
                 <Calendar className="w-6 h-6 text-brutal-accent mb-2" />
                 <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">Eventos</p>
                 <p className="font-display text-3xl">{photographer.stats.events}</p>
               </div>
-              <div className="hidden md:block bg-white p-6 brutal-border">
+              <div className="premium-card hidden md:block bg-white p-6 brutal-border">
                 <Award className="w-6 h-6 text-brutal-accent mb-2" />
                 <p className="font-mono text-[10px] text-gray-400 uppercase tracking-widest">Anos</p>
                 <p className="font-display text-3xl">8+</p>
@@ -125,7 +125,7 @@ export function PhotographerProfile({ photographer, photos, onBack, onAddToCart,
             <p className="font-mono text-sm mb-6">
               Deseja fotos exclusivas para seu evento ou ensaio pessoal? Nossa rede de fotógrafos está disponível para projetos customizados.
             </p>
-            <button className="w-full bg-brutal-black text-white py-4 brutal-border font-mono text-xs font-bold uppercase hover:bg-white hover:text-brutal-black transition-colors cursor-pointer">
+            <button className="premium-button w-full bg-brutal-black text-white py-4 brutal-border font-mono text-xs font-bold uppercase hover:bg-white hover:text-brutal-black transition-colors cursor-pointer">
               Solicitar Orçamento
             </button>
           </div>

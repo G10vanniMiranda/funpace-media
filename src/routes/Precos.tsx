@@ -22,7 +22,7 @@ export function Precos() {
         <section className="max-w-[1400px] mx-auto py-10 md:py-16">
           <button
             onClick={() => navigate('/')}
-            className="font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-8 flex items-center gap-2"
+            className="premium-button font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-8 flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar para loja
@@ -83,7 +83,7 @@ export function Precos() {
                 text: 'As vendas pagas entram no painel do fotógrafo. O saldo disponível considera comissão e regras de liberação da plataforma.',
               },
             ].map((item) => (
-              <article key={item.title} className="bg-white brutal-border brutal-shadow-hover p-6">
+              <article key={item.title} className="premium-card bg-white brutal-border p-6">
                 <div className="mb-5 inline-flex bg-brutal-accent text-white brutal-border p-3">
                   <item.icon className="w-6 h-6" />
                 </div>

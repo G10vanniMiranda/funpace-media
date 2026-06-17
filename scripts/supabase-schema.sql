@@ -126,6 +126,15 @@ alter table public.photographers add column if not exists "displayName" text;
 alter table public.photographers add column if not exists "profilePhoto" text;
 alter table public.photographers add column if not exists "coverPhoto" text;
 alter table public.photographers add column if not exists city text;
+alter table public.photographers add column if not exists "referralCode" text;
+alter table public.photographers add column if not exists "referredByPhotographerId" text references public.photographers(id) on delete set null;
+
+create unique index if not exists photographers_referral_code_key
+on public.photographers ("referralCode")
+where "referralCode" is not null;
+
+create index if not exists photographers_referred_by_idx
+on public.photographers ("referredByPhotographerId");
 
 do $$
 begin
@@ -650,6 +659,14 @@ create table if not exists public.platform_settings (
   "brandName" text not null default 'Funpace Media',
   "supportEmail" text,
   "maxUploadBytes" bigint not null default 314572800,
+  "referralSettings" jsonb not null default jsonb_build_object(
+    'enabled', true,
+    'rewardRuleType', 'first_sale_fixed',
+    'approvalRewardAmount', 50,
+    'firstSaleRewardAmount', 100,
+    'recurringCommissionPercent', 5,
+    'recurringCommissionMonths', 3
+  ),
   "createdAt" timestamptz not null default now(),
   "updatedAt" timestamptz not null default now()
 );
@@ -658,6 +675,37 @@ alter table public.platform_settings add column if not exists "paymentProvider" 
 alter table public.platform_settings add column if not exists "brandName" text not null default 'Funpace Media';
 alter table public.platform_settings add column if not exists "supportEmail" text;
 alter table public.platform_settings add column if not exists "maxUploadBytes" bigint not null default 314572800;
+alter table public.platform_settings add column if not exists "referralSettings" jsonb not null default jsonb_build_object(
+  'enabled', true,
+  'rewardRuleType', 'first_sale_fixed',
+  'approvalRewardAmount', 50,
+  'firstSaleRewardAmount', 100,
+  'recurringCommissionPercent', 5,
+  'recurringCommissionMonths', 3
+);
+
+create table if not exists public.photographer_referrals (
+  id uuid primary key default gen_random_uuid(),
+  "referrerPhotographerId" text not null references public.photographers(id) on update cascade on delete cascade,
+  "referredPhotographerId" text not null references public.photographers(id) on update cascade on delete cascade,
+  "referralCode" text not null,
+  status text not null default 'pending' check (status in ('pending', 'approved', 'active', 'rewarded', 'canceled')),
+  "createdAt" timestamptz not null default now(),
+  "approvedAt" timestamptz,
+  "firstSaleAt" timestamptz,
+  "rewardAmount" numeric(12, 2) not null default 0 check ("rewardAmount" >= 0),
+  "rewardStatus" text not null default 'none' check ("rewardStatus" in ('none', 'pending', 'available', 'paid', 'canceled')),
+  "paidAt" timestamptz,
+  "canceledAt" timestamptz,
+  audit jsonb not null default '{}'::jsonb,
+  constraint photographer_referrals_no_self_referral check ("referrerPhotographerId" <> "referredPhotographerId")
+);
+
+create unique index if not exists photographer_referrals_referred_key
+on public.photographer_referrals ("referredPhotographerId");
+
+create index if not exists photographer_referrals_referrer_status_idx
+on public.photographer_referrals ("referrerPhotographerId", status, "createdAt" desc);
 
 create index if not exists products_bib_idx on public.products (bib);
 create index if not exists products_published_bib_idx on public.products (bib) where status = 'published';
@@ -823,6 +871,7 @@ alter table public.user_sessions enable row level security;
 alter table public.downloads enable row level security;
 alter table public.withdrawal_requests enable row level security;
 alter table public.platform_settings enable row level security;
+alter table public.photographer_referrals enable row level security;
 alter table public.photographer_wallets enable row level security;
 alter table public.photographer_transactions enable row level security;
 alter table public.media_processing_jobs enable row level security;
@@ -1212,6 +1261,23 @@ drop policy if exists "platform_settings_update_admin_only" on public.platform_s
 create policy "platform_settings_update_admin_only"
 on public.platform_settings
 for update
+using (public.is_admin())
+with check (public.is_admin());
+
+drop policy if exists "photographer_referrals_select_owner_or_admin" on public.photographer_referrals;
+create policy "photographer_referrals_select_owner_or_admin"
+on public.photographer_referrals
+for select
+using (
+  public.is_admin()
+  or "referrerPhotographerId" = auth.uid()::text
+  or "referredPhotographerId" = auth.uid()::text
+);
+
+drop policy if exists "photographer_referrals_admin_all" on public.photographer_referrals;
+create policy "photographer_referrals_admin_all"
+on public.photographer_referrals
+for all
 using (public.is_admin())
 with check (public.is_admin());
 

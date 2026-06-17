@@ -38,9 +38,10 @@ import {
   PauseCircle,
   FolderOpen,
   Trash2,
+  Link as LinkIcon,
 } from 'lucide-react';
-import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, PaymentRecoveryIssue, Photographer, PlatformSettings, Product, WithdrawalRequest } from '../types';
-import { adminService, eventService, photographerService, platformSettingsService, productService, withdrawalService, orderService } from '../lib/services';
+import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, PaymentRecoveryIssue, Photographer, PhotographerReferral, PlatformSettings, Product, ReferralSettings, WithdrawalRequest } from '../types';
+import { adminService, eventService, photographerService, platformSettingsService, productService, referralService, withdrawalService, orderService } from '../lib/services';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { getCurrentAccessToken } from '../lib/supabase';
 import { FUNPACE_CONTACT_EMAIL } from '../lib/contact';
@@ -71,7 +72,7 @@ type StorageStats = {
   updatedAt: string;
 };
 
-type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'coupons' | 'logs' | 'settings';
+type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'referrals' | 'coupons' | 'logs' | 'settings';
 type PhotographerStatusFilter = 'all' | 'active' | 'pending' | 'disabled';
 type PhotographerAdminAction = 'disable' | 'reactivate' | 'delete';
 const EVENT_COVER_POSITION_OPTIONS = [
@@ -507,6 +508,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [showAllOrderLogs, setShowAllOrderLogs] = useState(false);
   const [storageStats, setStorageStats] = useState<StorageStats | null>(null);
   const [storageStatsError, setStorageStatsError] = useState('');
+  const [referrals, setReferrals] = useState<PhotographerReferral[]>([]);
+  const [updatingReferralId, setUpdatingReferralId] = useState<string | null>(null);
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [isCreatingEvent, setIsCreatingEvent] = useState(false);
@@ -521,7 +524,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     coverImage: '',
     cover_position: 'center center',
   });
-  const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes'>>({
+  const [settingsForm, setSettingsForm] = useState<Pick<PlatformSettings, 'platformFeePercent' | 'withdrawalFee' | 'autoBlockSuspicious' | 'paymentProvider' | 'brandName' | 'supportEmail' | 'maxUploadBytes' | 'referralSettings'>>({
     platformFeePercent: 30,
     withdrawalFee: 5,
     autoBlockSuspicious: true,
@@ -529,6 +532,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     brandName: 'Funpace Media',
     supportEmail: FUNPACE_CONTACT_EMAIL,
     maxUploadBytes: 314572800,
+    referralSettings: referralService.defaultSettings,
   });
   const [isSavingSettings, setIsSavingSettings] = useState(false);
   const platformFeeRate = Math.max(0, Math.min(100, Number(settingsForm.platformFeePercent) || 0)) / 100;
@@ -747,6 +751,23 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       JSON.stringify(log.metadata || {}),
     ].some((value) => String(value || '').toLowerCase().includes(normalized)));
   }, [logSearch, operationalLogs]);
+  const referralRanking = React.useMemo(() => {
+    const rows = new Map<string, { photographer: Photographer | undefined; total: number; rewarded: number }>();
+    for (const referral of referrals) {
+      const row = rows.get(referral.referrerPhotographerId) ?? {
+        photographer: photographerById.get(referral.referrerPhotographerId),
+        total: 0,
+        rewarded: 0,
+      };
+      row.total += 1;
+      row.rewarded += Number(referral.rewardAmount || 0);
+      rows.set(referral.referrerPhotographerId, row);
+    }
+    return Array.from(rows.entries())
+      .map(([id, row]) => ({ id, ...row }))
+      .sort((left, right) => right.total - left.total || right.rewarded - left.rewarded)
+      .slice(0, 10);
+  }, [photographerById, referrals]);
   const periodWithdrawals = React.useMemo(
     () => withdrawals.filter((withdrawal) => isWithinPeriod(withdrawal.createdAt, periodRange.start, periodRange.end)),
     [withdrawals, periodRange],
@@ -1197,6 +1218,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           brandName: settings.brandName || 'Funpace Media',
           supportEmail: settings.supportEmail || FUNPACE_CONTACT_EMAIL,
           maxUploadBytes: Number(settings.maxUploadBytes || 314572800),
+          referralSettings: settings.referralSettings || referralService.defaultSettings,
         });
       } catch (error) {
         console.error('Erro ao carregar configuracoes:', error);
@@ -1205,6 +1227,15 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
     loadSettings();
   }, []);
+
+  const loadReferrals = React.useCallback(async () => {
+    const rows = await referralService.getAdminReferrals().catch(() => []);
+    setReferrals(rows);
+  }, []);
+
+  React.useEffect(() => {
+    loadReferrals();
+  }, [loadReferrals]);
 
   React.useEffect(() => {
     async function loadStorageStats() {
@@ -1575,9 +1606,24 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       return;
     }
 
+    const referralSettings = {
+      ...referralService.defaultSettings,
+      ...(settingsForm.referralSettings || {}),
+    };
+    if (
+      referralSettings.approvalRewardAmount < 0 ||
+      referralSettings.firstSaleRewardAmount < 0 ||
+      referralSettings.recurringCommissionPercent < 0 ||
+      referralSettings.recurringCommissionPercent > 100 ||
+      referralSettings.recurringCommissionMonths < 1
+    ) {
+      alert('Revise os valores do programa de indicacao.');
+      return;
+    }
+
     setIsSavingSettings(true);
     try {
-      const updated = await platformSettingsService.updateSettings(settingsForm);
+      const updated = await platformSettingsService.updateSettings({ ...settingsForm, referralSettings });
       setSettingsForm({
         platformFeePercent: Number(updated.platformFeePercent),
         withdrawalFee: Number(updated.withdrawalFee),
@@ -1586,6 +1632,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
         brandName: updated.brandName || settingsForm.brandName,
         supportEmail: updated.supportEmail || '',
         maxUploadBytes: Number(updated.maxUploadBytes || settingsForm.maxUploadBytes),
+        referralSettings: updated.referralSettings || referralSettings,
       });
       await adminService.logAction({
         action: 'platform_settings_updated',
@@ -1599,6 +1646,19 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       alert('Erro ao salvar configuracoes.');
     } finally {
       setIsSavingSettings(false);
+    }
+  };
+
+  const handleReferralAction = async (referral: PhotographerReferral, action: 'approve' | 'cancel' | 'mark_paid') => {
+    setUpdatingReferralId(referral.id);
+    try {
+      await referralService.updateReferralAdmin(referral.id, action);
+      await loadReferrals();
+      await onRefresh();
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Nao foi possivel atualizar a indicacao.');
+    } finally {
+      setUpdatingReferralId(null);
     }
   };
 
@@ -1940,6 +2000,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
             onClick={() => setActiveTab('sales')}
           />
           <AdminSidebarLink
+            icon={<LinkIcon />}
+            label="Indicações"
+            active={activeTab === 'referrals'}
+            onClick={() => setActiveTab('referrals')}
+          />
+          <AdminSidebarLink
             icon={<TicketPercent />}
             label="Cupons"
             active={activeTab === 'coupons'}
@@ -1990,6 +2056,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               {activeTab === 'orders' && 'Pedidos'}
               {activeTab === 'payments' && 'Pagamentos'}
               {activeTab === 'sales' && 'Fluxo de Caixa'}
+              {activeTab === 'referrals' && 'Indicações de Fotógrafos'}
               {activeTab === 'coupons' && 'Cupons e Promoções'}
               {activeTab === 'logs' && 'Logs e Auditoria'}
               {activeTab === 'settings' && 'Preferências'}
@@ -3094,6 +3161,115 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     }) : (
                       <div className="text-xs font-mono text-gray-500 uppercase">Nenhum saque processado.</div>
                     )}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+
+          {activeTab === 'referrals' && (
+            <motion.div key="referrals" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Indicações</p>
+                  <p className="font-sans font-black text-3xl text-white">{referrals.length}</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Pendentes</p>
+                  <p className="font-sans font-black text-3xl text-yellow-300">{referrals.filter((referral) => referral.status === 'pending').length}</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Bônus disponível</p>
+                  <p className="font-sans font-black text-3xl text-brutal-accent">{formatCurrency(referrals.filter((referral) => referral.rewardStatus === 'available').reduce((sum, referral) => sum + Number(referral.rewardAmount || 0), 0))}</p>
+                </div>
+                <div className="bg-[#0d131c] border border-white/10 p-5">
+                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mb-2">Bônus pago</p>
+                  <p className="font-sans font-black text-3xl text-green-400">{formatCurrency(referrals.filter((referral) => referral.rewardStatus === 'paid').reduce((sum, referral) => sum + Number(referral.rewardAmount || 0), 0))}</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-5">
+                <div className="bg-[#0d131c] border border-white/10">
+                  <div className="p-5 border-b border-white/10">
+                    <h3 className="font-sans font-black text-base uppercase text-white">Indicações de Fotógrafos</h3>
+                    <p className="font-mono text-[10px] uppercase text-gray-500">Auditoria, aprovação e pagamento de bônus</p>
+                  </div>
+                  <div className="divide-y divide-white/10">
+                    {referrals.length === 0 ? (
+                      <div className="p-8 text-center font-mono text-[10px] uppercase text-gray-500">Nenhuma indicação registrada.</div>
+                    ) : referrals.map((referral) => {
+                      const referrer = photographerById.get(referral.referrerPhotographerId);
+                      const referred = photographerById.get(referral.referredPhotographerId);
+                      return (
+                        <div key={referral.id} className="p-5 grid gap-4 lg:grid-cols-[1.2fr_1fr_auto] lg:items-center">
+                          <div className="min-w-0">
+                            <p className="font-sans font-black text-sm uppercase text-white truncate">{referrer?.name || referral.referrerPhotographerId}</p>
+                            <p className="font-mono text-[10px] uppercase text-gray-500 truncate">indicou {referred?.name || referral.referredPhotographerId}</p>
+                            <p className="font-mono text-[10px] uppercase text-gray-600 mt-1">Código {referral.referralCode} - {new Date(referral.createdAt).toLocaleString('pt-BR')}</p>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <span className="border border-white/10 bg-white/5 px-2 py-1 font-mono text-[10px] uppercase text-gray-300">{referral.status}</span>
+                            <span className="border border-brutal-accent/30 bg-brutal-accent/10 px-2 py-1 font-mono text-[10px] uppercase text-brutal-accent">{formatCurrency(Number(referral.rewardAmount || 0))} / {referral.rewardStatus}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 justify-start lg:justify-end">
+                            <button disabled={updatingReferralId === referral.id || referral.status === 'approved'} onClick={() => handleReferralAction(referral, 'approve')} className="h-9 px-3 border border-white/15 font-mono text-[10px] uppercase hover:border-green-400 disabled:opacity-40">Aprovar</button>
+                            <button disabled={updatingReferralId === referral.id || referral.rewardStatus !== 'available'} onClick={() => handleReferralAction(referral, 'mark_paid')} className="h-9 px-3 border border-white/15 font-mono text-[10px] uppercase hover:border-brutal-accent disabled:opacity-40">Pago</button>
+                            <button disabled={updatingReferralId === referral.id || referral.status === 'canceled'} onClick={() => handleReferralAction(referral, 'cancel')} className="h-9 px-3 border border-white/15 font-mono text-[10px] uppercase hover:border-red-400 disabled:opacity-40">Cancelar</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="space-y-5">
+                  <div className="bg-[#0d131c] border border-white/10 p-5">
+                    <h3 className="font-sans font-black text-base uppercase text-white mb-4">Ranking</h3>
+                    <div className="space-y-3">
+                      {referralRanking.length === 0 ? <p className="font-mono text-[10px] uppercase text-gray-500">Sem ranking ainda.</p> : referralRanking.map((row, index) => (
+                        <div key={row.id} className="flex items-center justify-between gap-3 border-b border-white/10 pb-3 last:border-0 last:pb-0">
+                          <div className="min-w-0">
+                            <p className="font-sans font-black text-sm uppercase text-white truncate">#{index + 1} {row.photographer?.name || row.id}</p>
+                            <p className="font-mono text-[10px] uppercase text-gray-500">{row.total} indicação(ões)</p>
+                          </div>
+                          <p className="font-sans font-black text-brutal-accent">{formatCurrency(row.rewarded)}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="bg-[#0d131c] border border-white/10 p-5 space-y-4">
+                    <h3 className="font-sans font-black text-base uppercase text-white">Regra de recompensa</h3>
+                    <select
+                      value={(settingsForm.referralSettings as ReferralSettings)?.rewardRuleType || 'first_sale_fixed'}
+                      onChange={(event) => setSettingsForm((current) => ({ ...current, referralSettings: { ...referralService.defaultSettings, ...(current.referralSettings || {}), rewardRuleType: event.target.value as ReferralSettings['rewardRuleType'] } }))}
+                      className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs uppercase outline-none focus:border-brutal-accent"
+                    >
+                      <option value="approval_fixed">Bônus fixo por aprovação</option>
+                      <option value="first_sale_fixed">Bônus após primeira venda</option>
+                      <option value="recurring_commission">Comissão recorrente</option>
+                    </select>
+                    {[
+                      ['approvalRewardAmount', 'Bônus aprovação (R$)'],
+                      ['firstSaleRewardAmount', 'Bônus primeira venda (R$)'],
+                      ['recurringCommissionPercent', 'Comissão recorrente (%)'],
+                      ['recurringCommissionMonths', 'Meses de comissão'],
+                    ].map(([key, label]) => (
+                      <label key={key} className="block space-y-2">
+                        <span className="font-mono text-[10px] uppercase text-gray-500">{label}</span>
+                        <input
+                          type="number"
+                          min="0"
+                          step={key === 'recurringCommissionMonths' ? '1' : '0.01'}
+                          value={Number((settingsForm.referralSettings as any)?.[key] ?? (referralService.defaultSettings as any)[key])}
+                          onChange={(event) => setSettingsForm((current) => ({ ...current, referralSettings: { ...referralService.defaultSettings, ...(current.referralSettings || {}), [key]: Number(event.target.value) } }))}
+                          className="w-full h-12 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent"
+                        />
+                      </label>
+                    ))}
+                    <button onClick={handleSaveSettings} disabled={isSavingSettings} className="w-full h-12 bg-brutal-accent border border-brutal-accent text-white font-sans font-black text-xs uppercase hover:bg-white hover:text-brutal-accent disabled:opacity-60">
+                      {isSavingSettings ? 'Salvando...' : 'Salvar regra'}
+                    </button>
                   </div>
                 </div>
               </div>

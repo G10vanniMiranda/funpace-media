@@ -22,7 +22,7 @@ export function ParaFotografos() {
         <section className="max-w-[1400px] mx-auto py-10 md:py-16">
           <button
             onClick={() => navigate('/')}
-            className="font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-8 flex items-center gap-2"
+            className="premium-button font-mono text-xs md:text-sm tracking-widest uppercase text-gray-500 hover:text-brutal-accent transition-colors mb-8 flex items-center gap-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Voltar para loja
@@ -41,7 +41,7 @@ export function ParaFotografos() {
               </p>
               <button
                 onClick={() => navigate('/fotografo')}
-                className="mt-8 min-h-14 px-6 bg-brutal-accent text-white brutal-border brutal-shadow-hover font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                className="premium-button mt-8 min-h-14 px-6 bg-brutal-accent text-white brutal-border font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2"
               >
                 <Camera className="w-5 h-5" />
                 Acessar painel

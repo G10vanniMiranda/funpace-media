@@ -32,7 +32,7 @@ if (!process.env.DATABASE_URL && dbConfig.host && /[a-z]/i.test(dbConfig.host)) 
 }
 
 const requiredColumns = {
-  photographers: ["id", "slug", "username", "isPublic", "displayName", "profilePhoto", "coverPhoto", "city", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "role", "commissionPercent", "blockedAt", "lastLoginAt", "stats", "createdAt", "updatedAt"],
+  photographers: ["id", "slug", "username", "isPublic", "displayName", "profilePhoto", "coverPhoto", "city", "name", "email", "bio", "avatar", "phone", "cpf", "verified", "role", "commissionPercent", "referralCode", "referredByPhotographerId", "blockedAt", "lastLoginAt", "stats", "createdAt", "updatedAt"],
   customers: ["id", "email", "name", "phone", "cpf", "avatarUrl", "preferences", "createdAt", "updatedAt"],
   events: ["id", "photographerId", "name", "slug", "description", "date", "location", "checkpoint", "coverImage", "coverMediaId", "bannerImage", "cover_position", "isPublished", "isFeatured", "moderationStatus", "status", "createdAt", "updatedAt"],
   products: ["id", "name", "price", "url", "type", "vendedorId", "bib", "event", "checkpoint", "thumbnailUrl", "watermarkUrl", "duration", "storagePath", "fileHash", "fileSize", "originalFileName", "thumbnailHash", "uploadBatchId", "status", "viewCount", "salesCount", "createdAt", "updatedAt"],
@@ -45,6 +45,7 @@ const requiredColumns = {
   user_sessions: ["id", "userId", "userAgent", "createdAt"],
   downloads: ["id", "userId", "orderId", "photoId", "downloadedAt"],
   withdrawal_requests: ["id", "photographerId", "amount", "pixKey", "status", "note", "createdAt", "updatedAt", "processedAt"],
+  photographer_referrals: ["id", "referrerPhotographerId", "referredPhotographerId", "referralCode", "status", "createdAt", "approvedAt", "firstSaleAt", "rewardAmount", "rewardStatus", "paidAt", "canceledAt", "audit"],
   photographer_wallets: ["id", "photographerId", "balance", "pendingBalance", "updatedAt"],
   photographer_transactions: ["id", "photographerId", "orderId", "orderItemId", "grossAmount", "platformFee", "netAmount", "status", "createdAt"],
   media_processing_jobs: ["id", "productId", "photographerId", "kind", "status", "sourceUrl", "outputUrl", "error", "createdAt", "updatedAt"],
@@ -81,6 +82,8 @@ const requiredPolicies = [
   "withdrawal_requests_select_owner_or_admin",
   "withdrawal_requests_insert_owner",
   "withdrawal_requests_update_admin_only",
+  "photographer_referrals_select_owner_or_admin",
+  "photographer_referrals_admin_all",
   "photographer_wallets_select_owner_or_admin",
   "photographer_transactions_select_owner_or_admin",
   "media_processing_jobs_select_owner_or_admin",
@@ -101,6 +104,10 @@ const requiredIndexes = [
   "orders_pending_provider_created_at_idx",
   "payment_events_order_provider_created_at_idx",
   "payments_order_provider_updated_at_idx",
+  "photographers_referral_code_key",
+  "photographers_referred_by_idx",
+  "photographer_referrals_referred_key",
+  "photographer_referrals_referrer_status_idx",
 ];
 
 const requiredStorageBuckets = [

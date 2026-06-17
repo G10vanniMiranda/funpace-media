@@ -193,7 +193,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
               key={event.name}
               type="button"
               onClick={() => onSelectEvent(event.name)}
-              className="group flex h-full min-w-0 flex-col bg-white brutal-border brutal-shadow-hover overflow-hidden text-left transition-all"
+              className="premium-card group flex h-full min-w-0 flex-col overflow-hidden bg-white text-left brutal-border"
             >
               <div className="relative aspect-video w-full shrink-0 overflow-hidden border-b-2 border-brutal-black bg-[#111318]">
                 {event.coverUrl ? (
@@ -204,14 +204,15 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
                     decoding="async"
                     sizes="(min-width: 1280px) 25vw, (min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
                     style={{ objectPosition: event.coverPosition || 'center center' }}
-                    className="block h-full w-full object-contain object-center"
+                    onLoad={(event) => event.currentTarget.classList.add('media-fade-in')}
+                    className="block h-full w-full object-contain object-center transition-transform duration-300 ease-out group-hover:scale-[1.03]"
                   />
                 ) : (
                   <div className="w-full h-full bg-gray-100 flex items-center justify-center">
                     <CalendarDays className="w-16 h-16 text-gray-300" />
                   </div>
                 )}
-                <div className="absolute inset-0 z-[2] bg-linear-to-t from-brutal-black/70 via-transparent to-transparent" />
+                <div className="absolute inset-0 z-[2] bg-linear-to-t from-brutal-black/70 via-transparent to-transparent transition-opacity duration-200 group-hover:opacity-90" />
                 <div className="absolute bottom-4 left-4 right-4 z-[3] flex flex-wrap gap-2">
                   <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[10px] uppercase font-bold">
                     <Camera className="w-3 h-3" />
@@ -238,7 +239,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
                   <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
                     {event.items === 1 ? '1 mídia' : `${event.items} mídias`}
                   </p>
-                  <span className="shrink-0 whitespace-nowrap font-display text-sm uppercase text-brutal-accent">
+                  <span className="shrink-0 whitespace-nowrap font-display text-sm uppercase text-brutal-accent opacity-80 transition-opacity duration-200 group-hover:opacity-100">
                     Ver evento
                   </span>
                 </div>

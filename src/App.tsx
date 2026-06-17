@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import type { HeroSearchResults } from './components/Hero';
@@ -27,7 +27,7 @@ import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, C
 import type { Event } from './types';
 import { useAuth } from './contexts/AuthContext';
 import { isMockMode } from './lib/config';
-import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService, eventService, normalizePhotographerUsername, reservedPublicSlugs } from './lib/services';
+import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService, eventService, normalizePhotographerUsername, reservedPublicSlugs, referralService } from './lib/services';
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
 import { AnimatePresence, motion } from 'motion/react';
@@ -967,7 +967,8 @@ function Storefront() {
                 />
               )}
 
-              {isLoading && (
+              {isLoading && <StorefrontSkeleton />}
+              {false && isLoading && (
                 <div className="flex flex-col items-center justify-center py-20">
                   <Loader2 className="w-12 h-12 text-brutal-accent animate-spin mb-4" />
                   <p className="font-mono text-sm uppercase tracking-widest text-gray-500 animate-pulse">Carregando conteúdo...</p>
@@ -2234,6 +2235,26 @@ function PhotographerRoute() {
   );
 }
 
+function ReferralRoute() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const params = useParams();
+
+  React.useEffect(() => {
+    const query = new URLSearchParams(location.search);
+    const code = params.code || query.get('ref') || '';
+    if (code) referralService.storeReferralCode(code);
+    navigate('/fotografo?cadastro=1', { replace: true });
+  }, [location.search, navigate, params.code]);
+
+  return (
+    <div className="min-h-screen bg-brutal-white flex flex-col items-center justify-center p-6">
+      <Loader2 className="w-12 h-12 text-brutal-accent animate-spin mb-4" />
+      <p className="font-mono text-sm uppercase tracking-widest text-gray-500">Abrindo cadastro de fotógrafo...</p>
+    </div>
+  );
+}
+
 // Admin Route Wrapper
 function AdminRoute() {
   const { user } = useAuth();
@@ -2456,6 +2477,8 @@ export default function App() {
         <Routes>
           <Route path="/admin" element={<AdminRoute />} />
           <Route path="/fotografo/definir-senha" element={<PhotographerPasswordSetup />} />
+          <Route path="/indicar" element={<ReferralRoute />} />
+          <Route path="/indicar/:code" element={<ReferralRoute />} />
           <Route path="/fotografo/:slug" element={<Storefront />} />
           <Route path="/fotografo" element={<PhotographerRoute />} />
           <Route path="/checkout" element={<Storefront />} />
@@ -2488,6 +2511,30 @@ function RouteLoadingFallback() {
       <Loader2 className="w-10 h-10 text-brutal-accent animate-spin mb-4" />
       <p className="font-mono text-xs uppercase tracking-widest text-gray-400">Carregando...</p>
     </div>
+  );
+}
+
+function StorefrontSkeleton() {
+  return (
+    <section className="mx-auto w-full max-w-350 px-4 py-12 md:px-6 md:py-20">
+      <div className="mb-10 max-w-3xl">
+        <div className="skeleton mb-4 h-12 w-56 brutal-border" />
+        <div className="skeleton h-4 w-80 max-w-full" />
+      </div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        {Array.from({ length: 8 }).map((_, index) => (
+          <div key={index} className="bg-white brutal-border">
+            <div className="skeleton aspect-video border-b-2 border-brutal-black" />
+            <div className="space-y-4 p-5">
+              <div className="skeleton h-4 w-28" />
+              <div className="skeleton h-7 w-full" />
+              <div className="skeleton h-7 w-4/5" />
+              <div className="skeleton h-4 w-36" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 

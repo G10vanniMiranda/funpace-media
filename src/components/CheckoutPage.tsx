@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowRight, Copy, CreditCard, ExternalLink, Image as ImageIcon, Loader2, QrCode, ShieldCheck, Smartphone, Tag, Trash2 } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
 import { Buyer, Product } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { isValidAuthEmail, normalizeAuthEmail } from '../lib/supabase';
@@ -174,7 +175,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             </div>
           )}
 
-          <section className="bg-white brutal-border p-6 space-y-5">
+          <motion.section layout className="bg-white brutal-border p-6 space-y-5">
             <div className="flex items-center justify-between border-b-2 border-brutal-black pb-3">
               <h2 className="font-display text-2xl uppercase">Contato</h2>
               <span className="font-mono text-[10px] uppercase text-gray-400">Etapa 1 de 2</span>
@@ -202,9 +203,9 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 maxLength={15}
               />
             </div>
-          </section>
+          </motion.section>
 
-          <section className="bg-white brutal-border p-6 space-y-5">
+          <motion.section layout className="bg-white brutal-border p-6 space-y-5">
             <div className="flex items-center justify-between border-b-2 border-brutal-black pb-3">
               <h2 className="font-display text-2xl uppercase">Pagamento</h2>
               <span className="font-mono text-[10px] uppercase text-gray-400">Etapa 2 de 2</span>
@@ -227,8 +228,15 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 onClick={() => handlePay('credit_card')}
               />
             </div>
+            <AnimatePresence>
             {checkoutResult?.paymentMethod === 'pix' && (
-              <div className="bg-white brutal-border p-4 space-y-3">
+              <motion.div
+                initial={{ opacity: 0, y: 8, scale: 0.985 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 8, scale: 0.985 }}
+                transition={{ duration: 0.22, ease: 'easeOut' }}
+                className="bg-white brutal-border p-4 space-y-3"
+              >
                 <div className="flex items-start gap-3">
                   <QrCode className="w-5 h-5 text-brutal-accent shrink-0" />
                   <div>
@@ -251,7 +259,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                     <button
                       type="button"
                       onClick={copyPixCode}
-                      className="min-h-11 w-full bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
+                    className="premium-button min-h-11 w-full bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors inline-flex items-center justify-center gap-2"
                     >
                       <Copy className="w-4 h-4" />
                       {copiedPix ? 'Código copiado' : 'Copiar código PIX'}
@@ -265,21 +273,22 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 {checkoutResult.paymentUrl && (
                   <a
                     href={checkoutResult.paymentUrl}
-                    className="min-h-11 w-full bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors inline-flex items-center justify-center gap-2"
+                    className="premium-button min-h-11 w-full bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors inline-flex items-center justify-center gap-2"
                   >
                     Abrir checkout seguro
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 )}
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
             <div className="bg-gray-50 brutal-border-thin p-4 flex items-start gap-3">
               <ShieldCheck className="w-5 h-5 text-brutal-accent shrink-0 mt-0.5" />
               <p className="font-mono text-[10px] uppercase leading-relaxed text-gray-500">
                 O pagamento acontece na InfinitePay. A Funpace não armazena dados de cartão e não solicita endereço de entrega.
               </p>
             </div>
-          </section>
+          </motion.section>
         </section>
 
         <aside className="lg:sticky lg:top-6 h-fit bg-white brutal-border brutal-shadow p-6 space-y-5">
@@ -298,12 +307,12 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
           ) : (
             <div className="space-y-3 max-h-[42vh] overflow-y-auto pr-1">
               {cartItems.map((item) => (
-                <div key={item.id} className="flex gap-3 bg-gray-50 brutal-border-thin p-3">
+                <div key={item.id} className="premium-card flex gap-3 bg-gray-50 brutal-border-thin p-3">
                   <ProductThumbnail item={item} />
                   <div className="min-w-0 flex-1">
                     <div className="flex justify-between items-start gap-2">
                       <p className="font-mono text-xs uppercase font-bold truncate">{item.name}</p>
-                      <button onClick={() => onRemoveItem(item.id)} className="text-gray-400 hover:text-red-500 cursor-pointer">
+                      <button onClick={() => onRemoveItem(item.id)} className="premium-button text-gray-400 hover:text-red-500 cursor-pointer">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -334,13 +343,20 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 </p>
               )}
             </div>
+            <AnimatePresence>
             {pricing.automaticDiscountActive && (
-              <div className="border border-brutal-accent bg-brutal-accent/10 p-3">
+              <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 6 }}
+                className="border border-brutal-accent bg-brutal-accent/10 p-3"
+              >
                 <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
                   Parabéns! Você ganhou 15% de desconto por comprar 5 ou mais fotos.
                 </p>
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">
               <span>Fotos</span>
               <span>{pricing.photoCount}</span>
@@ -371,9 +387,9 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
           <button
             onClick={() => handlePay('checkout')}
             disabled={!canPay}
-            className={`w-full h-16 flex items-center justify-center gap-2 font-display text-xl tracking-widest border-2 border-brutal-black transition-all ${
+            className={`premium-button w-full h-16 flex items-center justify-center gap-2 font-display text-xl tracking-widest border-2 border-brutal-black transition-all ${
               canPay
-                ? 'bg-brutal-black text-white hover:bg-brutal-accent brutal-shadow-hover cursor-pointer'
+                ? 'bg-brutal-black text-white hover:bg-brutal-accent cursor-pointer'
                 : 'bg-gray-200 text-gray-400 opacity-70 cursor-not-allowed'
             }`}
           >
@@ -447,7 +463,7 @@ function CheckoutInput({
         placeholder={placeholder}
         inputMode={inputMode}
         maxLength={maxLength}
-        className="w-full h-12 px-4 bg-white brutal-border font-mono text-sm focus:bg-gray-50 outline-none"
+        className="premium-input w-full h-12 px-4 bg-white brutal-border font-mono text-sm focus:bg-gray-50 outline-none"
       />
     </div>
   );
@@ -473,7 +489,7 @@ function PaymentAction({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-24 brutal-border-thin p-4 text-left transition-colors ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50 cursor-pointer'}`}
+      className={`premium-card min-h-24 brutal-border-thin p-4 text-left transition-colors ${disabled ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white hover:bg-gray-50 cursor-pointer'}`}
     >
       <span className="mb-3 inline-flex text-brutal-accent">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : icon}</span>
       <span className="block font-display text-lg uppercase">{title}</span>

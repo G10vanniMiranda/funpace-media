@@ -49,10 +49,11 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
           {toasts.map((toast) => (
             <motion.div
               key={toast.id}
-              initial={{ opacity: 0, y: -12, scale: 0.98 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.98 }}
-              className={`brutal-border shadow-lg ${toneClasses[toast.tone]}`}
+              initial={{ opacity: 0, x: 14, scale: 0.98 }}
+              animate={{ opacity: 1, x: 0, scale: 1 }}
+              exit={{ opacity: 0, x: 14, scale: 0.98 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className={`brutal-border shadow-[0_14px_32px_rgba(5,5,5,0.14)] ${toneClasses[toast.tone]}`}
             >
               <div className="flex items-start gap-3 p-4">
                 <span className="mt-0.5 shrink-0">{toneIcons[toast.tone]}</span>
@@ -60,7 +61,7 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 <button
                   type="button"
                   onClick={() => setToasts((current) => current.filter((item) => item.id !== toast.id))}
-                  className="shrink-0 text-current opacity-60 hover:opacity-100"
+                  className="premium-button shrink-0 text-current opacity-60 hover:opacity-100"
                   aria-label="Fechar notificação"
                 >
                   <X className="w-4 h-4" />

@@ -1,8 +1,9 @@
 import { useState, FormEvent } from 'react';
+import { useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { Camera, Lock, Mail, ArrowRight, Loader2, AlertCircle, Check } from 'lucide-react';
 import { Photographer } from '../types';
-import { photographerService } from '../lib/services';
+import { photographerService, referralService } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { loginWithEmail, registerWithEmail } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
@@ -14,7 +15,8 @@ interface PhotographerLoginProps {
 }
 
 export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginProps) {
-  const [isRegistering, setIsRegistering] = useState(false);
+  const location = useLocation();
+  const [isRegistering, setIsRegistering] = useState(() => new URLSearchParams(location.search).get('cadastro') === '1');
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [instagram, setInstagram] = useState('');
@@ -40,10 +42,11 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
     cpf: string;
     avatar: string;
   }) {
+    const referralCode = referralService.getStoredReferralCode();
     const pendingResponse = await fetch('/api/photographers/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
+      body: JSON.stringify({ ...input, referralCode: referralCode || null }),
     });
 
     if (!pendingResponse.ok) {
@@ -129,6 +132,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
             }
           });
           setSuccess('CADASTRO MOCK ENVIADO: aprove no painel admin para testar o fluxo.');
+          referralService.clearStoredReferralCode();
           setIsRegistering(false);
           return;
         }
@@ -179,11 +183,13 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
         if (!authUser?.id || requiresEmailConfirmation) {
           setSuccess('SOLICITAÇÃO ENVIADA: confirme seu e-mail e aguarde a aprovação do administrador para acessar o painel.');
+          referralService.clearStoredReferralCode();
           setIsRegistering(false);
           return;
         }
 
         setSuccess('CADASTRO ENVIADO: aguarde a aprovação do administrador para acessar o painel.');
+        referralService.clearStoredReferralCode();
         setIsRegistering(false);
       } else {
         if (isMockMode) {

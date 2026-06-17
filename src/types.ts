@@ -17,6 +17,8 @@ export interface Photographer {
   verified: boolean;
   role?: 'photographer';
   commissionPercent?: number | null;
+  referralCode?: string | null;
+  referredByPhotographerId?: string | null;
   blockedAt?: string | null;
   lastLoginAt?: string | null;
   createdAt?: string;
@@ -28,6 +30,35 @@ export interface Photographer {
     pendingEarnings: number;
     salesCount: number;
   };
+}
+
+export type ReferralStatus = 'pending' | 'approved' | 'active' | 'rewarded' | 'canceled';
+export type ReferralRewardStatus = 'none' | 'pending' | 'available' | 'paid' | 'canceled';
+export type ReferralRewardRuleType = 'approval_fixed' | 'first_sale_fixed' | 'recurring_commission';
+
+export interface PhotographerReferral {
+  id: string;
+  referrerPhotographerId: string;
+  referredPhotographerId: string;
+  referralCode: string;
+  status: ReferralStatus;
+  createdAt: string;
+  approvedAt?: string | null;
+  firstSaleAt?: string | null;
+  rewardAmount: number;
+  rewardStatus: ReferralRewardStatus;
+  paidAt?: string | null;
+  canceledAt?: string | null;
+  audit?: Record<string, unknown> | null;
+}
+
+export interface ReferralSettings {
+  enabled: boolean;
+  rewardRuleType: ReferralRewardRuleType;
+  approvalRewardAmount: number;
+  firstSaleRewardAmount: number;
+  recurringCommissionPercent: number;
+  recurringCommissionMonths: number;
 }
 
 export type ProductType = 'IMG' | 'VIEW' | 'VIDEO';
@@ -172,6 +203,7 @@ export interface PlatformSettings {
   brandName?: string;
   supportEmail?: string;
   maxUploadBytes?: number;
+  referralSettings?: ReferralSettings | null;
   createdAt?: string;
   updatedAt?: string;
 }

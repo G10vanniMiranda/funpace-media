@@ -1,0 +1,45 @@
+{
+  "version": 1.1,
+  "atDirectives": [
+    {
+      "name": "@apply",
+      "description": "Tailwind CSS directive for inlining utility classes."
+    },
+    {
+      "name": "@config",
+      "description": "Tailwind CSS directive for loading a configuration file."
+    },
+    {
+      "name": "@custom-variant",
+      "description": "Tailwind CSS directive for defining a custom variant."
+    },
+    {
+      "name": "@layer",
+      "description": "Tailwind CSS directive for grouping styles into cascade layers."
+    },
+    {
+      "name": "@plugin",
+      "description": "Tailwind CSS directive for loading a plugin."
+    },
+    {
+      "name": "@reference",
+      "description": "Tailwind CSS directive for importing theme variables and custom utilities as references."
+    },
+    {
+      "name": "@source",
+      "description": "Tailwind CSS directive for explicitly registering source files."
+    },
+    {
+      "name": "@theme",
+      "description": "Tailwind CSS directive for defining design tokens."
+    },
+    {
+      "name": "@utility",
+      "description": "Tailwind CSS directive for defining custom utilities."
+    },
+    {
+      "name": "@variant",
+      "description": "Tailwind CSS directive for applying variant styles."
+    }
+  ]
+}

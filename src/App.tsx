@@ -985,7 +985,7 @@ function Storefront() {
                   </button>
                   <div className="w-full max-w-full bg-brutal-black p-5 text-white brutal-border brutal-shadow sm:inline-block sm:w-auto sm:p-6">
                     <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
-                    <p className="max-w-full break-words font-display text-[clamp(1.8rem,8.5vw,2.45rem)] leading-[0.98] sm:text-5xl">
+                    <p className="max-w-full wrap-break-word font-display text-[clamp(1.8rem,8.5vw,2.45rem)] leading-[0.98] sm:text-5xl">
                       {searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : `PEITO ${searchBib}`}
                     </p>
                     {searchType === 'selfie' && (
@@ -1119,23 +1119,23 @@ function Storefront() {
 
               {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
                 searchType === 'selfie' ? (
-                <PhotoGrid
-                  title={`FOTOS ENCONTRADAS (${displayPhotos.length})`}
-                  subtitle={searchType === 'selfie'
-                    ? displayPhotos.length > 0
-                      ? `Encontramos ${displayPhotos.length} ${displayPhotos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento.`
-                      : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'
-                    : searchType ? 'Resultados filtrados por número de peito.' : selectedEventName ? 'Mídias organizadas por evento' : 'FOTOS DOS ÚLTIMOS EVENTOS'}
-                  photos={displayPhotos}
-                  onAddToCart={handleAddToCart}
-                  cartItems={cart}
-                  activeView={activeView}
-                  onViewChange={setActiveView}
-                  favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
-                  likedIds={likedProductIds}
-                  heartCounts={heartCounts}
-                  onToggleFavorite={handleToggleFavorite}
-                />
+                  <PhotoGrid
+                    title={`FOTOS ENCONTRADAS (${displayPhotos.length})`}
+                    subtitle={searchType === 'selfie'
+                      ? displayPhotos.length > 0
+                        ? `Encontramos ${displayPhotos.length} ${displayPhotos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento.`
+                        : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'
+                      : searchType ? 'Resultados filtrados por número de peito.' : selectedEventName ? 'Mídias organizadas por evento' : 'FOTOS DOS ÚLTIMOS EVENTOS'}
+                    photos={displayPhotos}
+                    onAddToCart={handleAddToCart}
+                    cartItems={cart}
+                    activeView={activeView}
+                    onViewChange={setActiveView}
+                    favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+                    likedIds={likedProductIds}
+                    heartCounts={heartCounts}
+                    onToggleFavorite={handleToggleFavorite}
+                  />
                 ) : null
               ) : (
                 <VideoGrid
@@ -1519,7 +1519,7 @@ function PublicPhotographerPage({
       </section>
 
       {activeView === 'events' ? (
-        <section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pb-16 md:w-full md:max-w-[75rem] md:px-6">
+        <section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pb-16 md:w-full md:max-w-300 md:px-6">
           <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             {filteredAlbums.map((album, albumIndex) => {
               const videoTotal = album.products.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW').length;
@@ -1533,7 +1533,7 @@ function PublicPhotographerPage({
                   </div>
                   <div className="flex min-w-0 flex-1 flex-col p-4">
                     <p className="mb-2 font-mono text-[10px] uppercase tracking-widest text-gray-500">{formatPublicDate(album.date)}</p>
-                    <h2 className="min-h-18 max-w-64 break-words font-display text-lg uppercase leading-tight sm:max-w-full sm:text-xl">{album.name}</h2>
+                    <h2 className="min-h-18 max-w-64 wrap-break-word font-display text-lg uppercase leading-tight sm:max-w-full sm:text-xl">{album.name}</h2>
                     <p className="mt-3 flex items-center gap-2 font-mono text-[9px] uppercase tracking-widest text-gray-500"><MapPin className="h-3.5 w-3.5 text-brutal-accent" />{album.city || 'Local a confirmar'}</p>
                     <div className="mt-auto flex min-w-0 flex-col items-start justify-between gap-3 border-t border-gray-100 pt-4 font-mono text-[10px] uppercase tracking-widest sm:flex-row sm:items-center">
                       <span>{videoTotal} videos</span>
@@ -1731,22 +1731,22 @@ function PublicEventPage({
 
       {activeView === 'photos' ? (
         faceMatches ? (
-        <PhotoGrid
-          title={`Fotos Encontradas (${photos.length})`}
-          subtitle={photos.length > 0
+          <PhotoGrid
+            title={`Fotos Encontradas (${photos.length})`}
+            subtitle={photos.length > 0
               ? `Encontramos ${photos.length} ${photos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento`
               : 'Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.'}
-          photos={photos}
-          onAddToCart={onAddToCart}
-          cartItems={cartItems}
-          activeView={activeView}
-          onViewChange={setActiveView}
-          favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
-          likedIds={likedProductIds}
-          heartCounts={heartCounts}
-          onToggleFavorite={onToggleFavorite}
-          compact
-        />
+            photos={photos}
+            onAddToCart={onAddToCart}
+            cartItems={cartItems}
+            activeView={activeView}
+            onViewChange={setActiveView}
+            favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+            likedIds={likedProductIds}
+            heartCounts={heartCounts}
+            onToggleFavorite={onToggleFavorite}
+            compact
+          />
         ) : null
       ) : (
         <VideoGrid

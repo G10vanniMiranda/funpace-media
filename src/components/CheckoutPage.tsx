@@ -152,8 +152,8 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
       <div className="max-w-7xl mx-auto px-6 py-10 grid grid-cols-1 lg:grid-cols-[1fr_420px] gap-8">
         <section className="space-y-8">
           <div>
-            <h1 className="font-display text-5xl md:text-7xl uppercase tracking-tighter">Finalizar Compra</h1>
-            <p className="font-mono text-sm uppercase tracking-widest text-gray-500 mt-2">
+            <h1 className="font-display text-4xl md:text-6xl uppercase">Finalizar Compra</h1>
+            <p className="font-mono text-xs uppercase tracking-widest text-gray-500 mt-2">
               Fotos e vídeos digitais liberados após a confirmação do pagamento.
             </p>
           </div>
@@ -161,7 +161,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
           {!user && (
             <div className="bg-white brutal-border p-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
-                <h2 className="font-display text-2xl uppercase">Entre para continuar</h2>
+                <h2 className="font-display text-xl uppercase">Entre para continuar</h2>
                 <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">
                   Seu e-mail será usado para liberar os downloads comprados.
                 </p>
@@ -177,7 +177,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
 
           <motion.section layout className="bg-white brutal-border p-6 space-y-5">
             <div className="flex items-center justify-between border-b-2 border-brutal-black pb-3">
-              <h2 className="font-display text-2xl uppercase">Contato</h2>
+              <h2 className="font-display text-xl uppercase">Contato</h2>
               <span className="font-mono text-[10px] uppercase text-gray-400">Etapa 1 de 2</span>
             </div>
 
@@ -207,7 +207,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
 
           <motion.section layout className="bg-white brutal-border p-6 space-y-5">
             <div className="flex items-center justify-between border-b-2 border-brutal-black pb-3">
-              <h2 className="font-display text-2xl uppercase">Pagamento</h2>
+              <h2 className="font-display text-xl uppercase">Pagamento</h2>
               <span className="font-mono text-[10px] uppercase text-gray-400">Etapa 2 de 2</span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
@@ -293,7 +293,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
 
         <aside className="lg:sticky lg:top-6 h-fit bg-white brutal-border brutal-shadow p-6 space-y-5">
           <div className="flex items-center justify-between border-b-2 border-brutal-black pb-3">
-            <h2 className="font-display text-2xl uppercase">Pedido</h2>
+            <h2 className="font-display text-xl uppercase">Pedido</h2>
             <span className="font-mono text-[10px] uppercase text-gray-400">{cartItems.length === 1 ? '1 item' : `${cartItems.length} itens`}</span>
           </div>
 
@@ -317,7 +317,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                       </button>
                     </div>
                     <p className="font-mono text-[9px] uppercase text-gray-400 mt-1">{item.type} - {item.event}</p>
-                    <p className="font-display text-xl mt-1">R$ {Number(item.price).toFixed(2).replace('.', ',')}</p>
+                    <p className="font-display text-lg mt-1">R$ {Number(item.price).toFixed(2).replace('.', ',')}</p>
                   </div>
                 </div>
               ))}
@@ -352,7 +352,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 className="border border-brutal-accent bg-brutal-accent/10 p-3"
               >
                 <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
-                  Parabéns! Você ganhou 15% de desconto por comprar 5 ou mais fotos.
+                  Parabéns! Você ganhou 15% de desconto por comprar 4 ou mais fotos.
                 </p>
               </motion.div>
             )}
@@ -380,14 +380,14 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             </div>
             <div className="flex justify-between items-end pt-3">
               <span className="font-mono text-sm uppercase text-gray-500 font-bold tracking-widest">Total</span>
-              <span className="font-display text-4xl">R$ {displayedTotal.toFixed(2).replace('.', ',')}</span>
+              <span className="font-display text-3xl">R$ {displayedTotal.toFixed(2).replace('.', ',')}</span>
             </div>
           </div>
 
           <button
             onClick={() => handlePay('checkout')}
             disabled={!canPay}
-            className={`premium-button w-full h-16 flex items-center justify-center gap-2 font-display text-xl tracking-widest border-2 border-brutal-black transition-all ${
+            className={`premium-button w-full h-16 flex items-center justify-center gap-2 font-display text-lg tracking-widest border-2 border-brutal-black transition-all ${
               canPay
                 ? 'bg-brutal-black text-white hover:bg-brutal-accent cursor-pointer'
                 : 'bg-gray-200 text-gray-400 opacity-70 cursor-not-allowed'

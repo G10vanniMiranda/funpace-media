@@ -95,7 +95,7 @@ export function PhotographerPasswordSetup() {
             <Lock className="w-3.5 h-3.5" />
             Acesso do fotógrafo
           </div>
-          <h1 className="font-sans font-black text-3xl md:text-4xl uppercase tracking-normal mb-2">Criar Senha</h1>
+          <h1 className="font-sans font-bold text-2xl md:text-3xl uppercase tracking-normal mb-2">Criar Senha</h1>
           <p className="font-mono text-xs text-gray-500 uppercase tracking-widest">Defina sua senha para acessar o painel</p>
         </div>
 

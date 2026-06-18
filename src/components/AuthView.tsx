@@ -170,7 +170,7 @@ export function AuthView({ onClose, onSuccess }: AuthViewProps) {
         </button>
 
         <div className="text-center mb-8">
-          <h2 className="font-display text-4xl mb-2">
+          <h2 className="font-display text-3xl mb-2">
             {mode === 'login' ? 'ENTRAR' : 'CRIAR CONTA'}
           </h2>
           <p className="font-mono text-sm uppercase tracking-widest text-gray-500">

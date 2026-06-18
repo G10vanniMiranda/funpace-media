@@ -55,7 +55,7 @@ export function Privacidade() {
             <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
               Legal
             </p>
-            <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
+            <h1 className="font-display text-[clamp(2.5rem,8vw,5.25rem)] uppercase leading-[0.96] tracking-normal">
               Política de privacidade
             </h1>
             <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
@@ -71,7 +71,7 @@ export function Privacidade() {
                     <section.icon className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="font-display text-2xl uppercase tracking-normal">{section.title}</h2>
+                    <h2 className="font-display text-xl uppercase tracking-normal">{section.title}</h2>
                     <p className="mt-3 font-mono text-xs md:text-sm uppercase leading-relaxed text-gray-600">{section.text}</p>
                   </div>
                 </div>

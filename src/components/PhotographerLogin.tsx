@@ -291,7 +291,7 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
           <div className="inline-block bg-brutal-accent text-white p-4 brutal-border mb-6">
             <Camera className="w-8 h-8" />
           </div>
-          <h1 className="font-display text-4xl md:text-5xl tracking-tighter uppercase mb-2">STUDIO DASH</h1>
+          <h1 className="font-display text-3xl md:text-4xl uppercase mb-2">STUDIO DASH</h1>
           <p className="font-mono text-xs text-gray-500 uppercase tracking-[0.2em]">
             {isRegistering ? 'Cadastro de Fotógrafo' : 'Exclusivo para Fotógrafos'}
           </p>

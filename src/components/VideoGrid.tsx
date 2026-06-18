@@ -60,9 +60,9 @@ export function VideoGrid({
         <div className="space-y-2">
           <div className="flex items-center gap-3">
             <div className="w-12 h-0.5 bg-brutal-accent"></div>
-            <h2 className="font-mono text-sm uppercase tracking-[0.3em] text-brutal-accent font-bold">REPLAY DA EMOÇÃO</h2>
+            <h2 className="font-mono text-xs uppercase tracking-[0.22em] text-brutal-accent font-bold">REPLAY DA EMOÇÃO</h2>
           </div>
-          <h3 className="font-display text-5xl md:text-7xl tracking-tighter uppercase leading-none">VÍDEOS EM 4K</h3>
+          <h3 className="font-display text-4xl md:text-6xl uppercase leading-tight">VÍDEOS EM 4K</h3>
           <p className="font-mono text-xs text-gray-500 uppercase tracking-widest max-w-md">
             Sua jornada em movimento. Vídeos editados e prontos para suas redes sociais.
           </p>
@@ -72,7 +72,7 @@ export function VideoGrid({
           <div className="flex gap-2">
             <button
               onClick={() => onViewChange('photos')}
-              className={`px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'photos'
+              className={`px-5 py-3 font-mono text-xs uppercase brutal-border transition-colors cursor-pointer ${activeView === 'photos'
                   ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
                 }`}
@@ -81,7 +81,7 @@ export function VideoGrid({
             </button>
             <button
               onClick={() => onViewChange('videos')}
-              className={`px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'videos'
+              className={`px-5 py-3 font-mono text-xs uppercase brutal-border transition-colors cursor-pointer ${activeView === 'videos'
                   ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
                 }`}

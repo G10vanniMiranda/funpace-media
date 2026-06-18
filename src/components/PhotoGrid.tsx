@@ -87,15 +87,15 @@ export function PhotoGrid({
       )}
       <div className={`flex flex-col md:flex-row md:items-end justify-between gap-4 md:gap-6 ${compact ? 'mb-7' : 'mb-12'}`}>
         <div className="max-w-2xl">
-          <h2 className={`${compact ? 'text-3xl md:text-4xl' : 'text-4xl md:text-6xl'} mb-2`}>{title}</h2>
-          <p className="font-mono text-xs md:text-sm text-gray-600 uppercase tracking-widest">{subtitle}</p>
+          <h2 className={`${compact ? 'text-2xl md:text-3xl' : 'text-3xl md:text-5xl'} mb-2`}>{title}</h2>
+          <p className="font-mono text-xs text-gray-600 uppercase tracking-widest">{subtitle}</p>
         </div>
 
         {activeView && onViewChange && (
           <div className="flex gap-2">
             <button
               onClick={() => onViewChange('photos')}
-              className={`flex-1 md:flex-none px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'photos'
+              className={`flex-1 md:flex-none px-5 py-3 font-mono text-xs uppercase brutal-border transition-colors cursor-pointer ${activeView === 'photos'
                   ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
                 } premium-button`}
@@ -104,7 +104,7 @@ export function PhotoGrid({
             </button>
             <button
               onClick={() => onViewChange('videos')}
-              className={`flex-1 md:flex-none px-6 py-3 font-mono text-sm uppercase brutal-border transition-colors cursor-pointer ${activeView === 'videos'
+              className={`flex-1 md:flex-none px-5 py-3 font-mono text-xs uppercase brutal-border transition-colors cursor-pointer ${activeView === 'videos'
                   ? 'bg-brutal-black text-white'
                   : 'bg-brutal-white text-brutal-black hover:bg-gray-100'
                 } premium-button`}

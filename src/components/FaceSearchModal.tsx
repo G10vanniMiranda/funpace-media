@@ -381,7 +381,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
                 </div>
                 <div>
                   <p className="font-mono text-[10px] font-bold uppercase tracking-[0.28em]">Reconhecimento facial</p>
-                  <h2 className="mt-2 font-display text-3xl uppercase leading-none sm:text-5xl">Encontre suas fotos</h2>
+                  <h2 className="mt-2 font-display text-2xl uppercase leading-tight sm:text-4xl">Encontre suas fotos</h2>
                   <p className="mt-3 font-mono text-xs uppercase leading-relaxed text-brutal-black/70">{eventName}</p>
                 </div>
               </div>
@@ -390,7 +390,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
             {showConsent ? (
               <div className="p-5 sm:p-8">
                 <div className="mx-auto max-w-2xl text-center">
-                  <h3 className="font-display text-3xl uppercase text-brutal-accent sm:text-4xl">Permissão para Uso de Imagem</h3>
+                  <h3 className="font-display text-2xl uppercase text-brutal-accent sm:text-3xl">Permissão para Uso de Imagem</h3>
                   <p className="mt-5 text-base leading-relaxed text-gray-700">
                     Para encontrar suas fotos em nosso banco de dados, precisamos que você envie uma selfie. Sua privacidade é nossa prioridade, e seus dados serão tratados de acordo com a Lei Geral de Proteção de Dados (LGPD).
                   </p>

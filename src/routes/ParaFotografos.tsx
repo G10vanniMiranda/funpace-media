@@ -33,7 +33,7 @@ export function ParaFotografos() {
               <p className="font-mono text-[10px] md:text-xs uppercase tracking-[0.3em] text-brutal-accent font-bold mb-3">
                 Para fotógrafos
               </p>
-              <h1 className="font-display text-[clamp(2.8rem,9vw,6rem)] uppercase leading-[0.9] tracking-normal">
+              <h1 className="font-display text-[clamp(2.5rem,8vw,5.25rem)] uppercase leading-[0.96] tracking-normal">
                 Venda suas fotos de corrida
               </h1>
               <p className="mt-6 max-w-2xl font-mono text-sm md:text-base uppercase leading-relaxed text-gray-600">
@@ -41,7 +41,7 @@ export function ParaFotografos() {
               </p>
               <button
                 onClick={() => navigate('/fotografo')}
-                className="premium-button mt-8 min-h-14 px-6 bg-brutal-accent text-white brutal-border font-display text-sm md:text-base uppercase tracking-widest inline-flex items-center justify-center gap-2"
+                className="premium-button mt-8 min-h-14 px-6 bg-brutal-accent text-white brutal-border font-display text-xs md:text-sm uppercase tracking-widest inline-flex items-center justify-center gap-2"
               >
                 <Camera className="w-5 h-5" />
                 Acessar painel

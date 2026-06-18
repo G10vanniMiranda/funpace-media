@@ -1,6 +1,6 @@
 import type { Product, ProductType } from '../types';
 
-export const BULK_PHOTO_DISCOUNT_MIN_PHOTOS = 5;
+export const BULK_PHOTO_DISCOUNT_MIN_PHOTOS = 4;
 export const BULK_PHOTO_DISCOUNT_PERCENT = 15;
 
 export type CartPricingItem = Pick<Product, 'id' | 'price' | 'type'>;

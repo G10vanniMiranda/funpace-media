@@ -65,7 +65,7 @@ export function CartDrawer({
       >
         <div className="p-6 border-b-4 border-brutal-black flex items-center justify-between bg-brutal-white">
           <div>
-            <h2 className="font-display text-3xl">SEU CARRINHO</h2>
+            <h2 className="font-display text-2xl">SEU CARRINHO</h2>
             <p className="font-mono text-[10px] uppercase tracking-widest text-gray-500 mt-1">Mídias digitais</p>
           </div>
           <button
@@ -80,7 +80,7 @@ export function CartDrawer({
         <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
           {cartItems.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center opacity-50">
-              <span className="font-display text-6xl mb-4 opacity-20">0</span>
+              <span className="font-display text-5xl mb-4 opacity-20">0</span>
               <p className="font-mono uppercase tracking-widest text-lg">O carrinho está vazio</p>
               <p className="font-mono text-sm mt-2 max-w-50">Encontre fotos e vídeos para adicionar.</p>
             </div>
@@ -105,7 +105,7 @@ export function CartDrawer({
                       </div>
                       <p className="font-mono text-xs uppercase text-gray-800 font-bold mt-1 truncate">{item.name}</p>
                     </div>
-                    <p className="font-display text-lg">R$ {item.price.toFixed(2).replace('.', ',')}</p>
+                    <p className="font-display text-base">R$ {item.price.toFixed(2).replace('.', ',')}</p>
                   </div>
                 </div>
               ))}
@@ -117,7 +117,7 @@ export function CartDrawer({
           {pricing.automaticDiscountActive && (
             <div className="mb-4 border-2 border-brutal-accent bg-brutal-accent/10 p-3">
               <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
-                Parabéns! Você ganhou 15% de desconto por comprar 5 ou mais fotos.
+                Parabéns! Você ganhou 15% de desconto por comprar 4 ou mais fotos.
               </p>
             </div>
           )}
@@ -142,12 +142,12 @@ export function CartDrawer({
           </div>
           <div className="flex justify-between items-end mb-6 border-t-2 border-brutal-black pt-4">
             <span className="font-mono text-sm uppercase text-gray-500 font-bold tracking-widest">Total</span>
-            <span className="font-display text-4xl">R$ {pricing.total.toFixed(2).replace('.', ',')}</span>
+            <span className="font-display text-3xl">R$ {pricing.total.toFixed(2).replace('.', ',')}</span>
           </div>
           <button
             onClick={handleCheckoutClick}
             disabled={disableCheckout}
-            className={`premium-button w-full h-16 flex items-center justify-center gap-2 font-display text-2xl tracking-widest border-2 border-brutal-black transition-all ${disableCheckout
+            className={`premium-button w-full h-16 flex items-center justify-center gap-2 font-display text-xl tracking-widest border-2 border-brutal-black transition-all ${disableCheckout
                 ? 'opacity-50 cursor-not-allowed bg-gray-200 text-gray-400'
                 : 'bg-brutal-black text-brutal-white hover:bg-brutal-accent hover:text-white cursor-pointer'
               }`}

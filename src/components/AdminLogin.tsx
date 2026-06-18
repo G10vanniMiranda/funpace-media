@@ -71,7 +71,7 @@ export function AdminLogin({ onLoginSuccess, onBack }: AdminLoginProps) {
           <div className="inline-block bg-brutal-black text-white p-4 brutal-border mb-6">
             <ShieldCheck className="w-8 h-8 text-brutal-accent" />
           </div>
-          <h1 className="font-display text-4xl tracking-tighter uppercase mb-2">SYSTEM ADMIN</h1>
+          <h1 className="font-display text-3xl uppercase mb-2">SYSTEM ADMIN</h1>
           <div className="flex items-center justify-center gap-2">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
             <p className="font-mono text-[10px] text-gray-500 uppercase tracking-widest leading-none">Acesso restrito a administradores</p>

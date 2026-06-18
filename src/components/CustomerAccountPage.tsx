@@ -248,7 +248,7 @@ export function CustomerAccountPage({
           <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
             <div>
               <p className="font-mono text-[10px] uppercase tracking-[0.3em] text-brutal-accent">Área do cliente</p>
-              <h1 className="mt-2 font-display text-5xl uppercase leading-none md:text-7xl">Minha Conta</h1>
+              <h1 className="mt-2 font-display text-4xl uppercase leading-tight md:text-6xl">Minha Conta</h1>
               <p className="mt-3 max-w-2xl font-mono text-xs uppercase leading-relaxed text-slate-500">
                 Pedidos, downloads, favoritos e dados da conta em um único lugar.
               </p>
@@ -321,7 +321,7 @@ export function CustomerAccountPage({
                       <article key={order.id} className={`border bg-slate-50 p-4 ${highlightedOrderId === order.id ? 'border-brutal-accent ring-4 ring-brutal-accent/20' : 'border-slate-200'}`}>
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                           <div>
-                            <p className="font-display text-xl uppercase">Pedido #{order.id.slice(0, 8)}</p>
+                            <p className="font-display text-lg uppercase">Pedido #{order.id.slice(0, 8)}</p>
                             <p className="font-mono text-[10px] uppercase text-slate-400">
                               {formatDate(order.createdAt)} - {order.paymentMethod || 'checkout'} - {formatCurrency(Number(order.total))}
                             </p>
@@ -474,7 +474,7 @@ function Panel({ title, icon, children }: { title: string; icon: React.ReactNode
     <section className="bg-white border border-slate-200 shadow-sm p-4 md:p-5">
       <div className="mb-4 flex items-center gap-2">
         <span className="text-brutal-accent">{icon}</span>
-        <h2 className="font-display text-xl uppercase">{title}</h2>
+      <h2 className="font-display text-lg uppercase">{title}</h2>
       </div>
       {children}
     </section>
@@ -488,7 +488,7 @@ function Metric({ label, value, icon, dark = false }: { label: string; value: st
         <p className="font-mono text-[10px] uppercase text-current opacity-60">{label}</p>
         <span className={dark ? 'text-brutal-accent' : 'text-slate-400'}>{icon}</span>
       </div>
-      <p className="font-display text-2xl uppercase">{value}</p>
+      <p className="font-display text-xl uppercase">{value}</p>
     </div>
   );
 }

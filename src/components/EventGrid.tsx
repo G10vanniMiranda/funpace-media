@@ -167,11 +167,11 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
   }, [events, query]);
 
   return (
-    <section id="eventos" data-events-section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pt-10 pb-8 md:w-full md:max-w-[87.5rem] md:px-6 md:py-20">
-      <div className="mb-10 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
+    <section id="eventos" data-events-section className="mx-auto box-border w-[calc(100dvw-2rem)] max-w-[calc(100dvw-2rem)] px-0 pt-10 pb-8 md:w-full md:max-w-[87.5rem] md:px-6 md:py-18">
+      <div className="mb-9 flex flex-col lg:flex-row lg:items-end justify-between gap-6">
         <div className="max-w-3xl">
-          <h2 className="text-4xl md:text-6xl mb-2">EVENTOS</h2>
-          <p className="font-mono text-xs md:text-sm text-gray-600 uppercase tracking-widest">
+          <h2 className="text-3xl md:text-5xl mb-2">EVENTOS</h2>
+          <p className="font-mono text-xs text-gray-600 uppercase tracking-widest">
             Fotos e vídeos organizados por cobertura
           </p>
           {query.trim() && (
@@ -187,7 +187,7 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
           <p className="font-display text-2xl uppercase text-gray-400">Nenhum evento encontrado.</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 md:gap-7">
           {filteredEvents.map((event, eventIndex) => (
             <button
               key={event.name}
@@ -213,33 +213,33 @@ export function EventGrid({ products, registeredEvents = [], eventMediaCounts = 
                   </div>
                 )}
                 <div className="absolute inset-0 z-[2] bg-linear-to-t from-brutal-black/70 via-transparent to-transparent transition-opacity duration-200 group-hover:opacity-90" />
-                <div className="absolute bottom-4 left-4 right-4 z-[3] flex flex-wrap gap-2">
-                  <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[10px] uppercase font-bold">
+                <div className="absolute bottom-3 left-3 right-3 z-[3] flex flex-wrap gap-2">
+                  <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[9px] uppercase font-bold">
                     <Camera className="w-3 h-3" />
                     {event.photos}
                   </span>
-                  <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[10px] uppercase font-bold">
+                  <span className="inline-flex items-center gap-1 bg-white text-brutal-black px-2 py-1 brutal-border font-mono text-[9px] uppercase font-bold">
                     <Video className="w-3 h-3" />
                     {event.videos}
                   </span>
                 </div>
               </div>
 
-              <div className="flex min-w-0 flex-1 flex-col p-5">
+              <div className="flex min-w-0 flex-1 flex-col p-4">
                 <div className="flex items-center gap-2 text-gray-500 mb-3">
                   <MapPin className="w-4 h-4 text-brutal-accent shrink-0" />
-                  <p className="font-mono text-[10px] uppercase tracking-widest truncate">
+                  <p className="font-mono text-[9px] uppercase tracking-widest truncate">
                     {event.checkpoint}
                   </p>
                 </div>
-                <h3 className="min-h-[4.5rem] max-w-64 break-words font-display text-lg uppercase leading-tight sm:max-w-full sm:text-xl">
+                <h3 className="min-h-[3.8rem] max-w-64 break-words font-display text-base uppercase leading-snug sm:max-w-full sm:text-lg">
                   {event.name}
                 </h3>
                 <div className="mt-auto flex min-w-0 flex-col items-start justify-between gap-3 border-t border-gray-100 pt-4 sm:flex-row sm:items-center">
-                  <p className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
+                  <p className="font-mono text-[9px] uppercase tracking-widest text-gray-400">
                     {event.items === 1 ? '1 mídia' : `${event.items} mídias`}
                   </p>
-                  <span className="shrink-0 whitespace-nowrap font-display text-sm uppercase text-brutal-accent opacity-80 transition-opacity duration-200 group-hover:opacity-100">
+                  <span className="shrink-0 whitespace-nowrap font-display text-xs uppercase text-brutal-accent opacity-80 transition-opacity duration-200 group-hover:opacity-100">
                     Ver evento
                   </span>
                 </div>

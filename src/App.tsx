@@ -986,7 +986,7 @@ function Storefront() {
                   </button>
                   <div className="w-full max-w-full bg-brutal-black p-5 text-white brutal-border brutal-shadow sm:inline-block sm:w-auto sm:p-6">
                     <h2 className="font-mono text-sm uppercase tracking-widest text-gray-400 mb-1">Resultados</h2>
-                    <p className="max-w-full wrap-break-word font-display text-[clamp(1.8rem,8.5vw,2.45rem)] leading-[0.98] sm:text-5xl">
+                    <p className="max-w-full wrap-break-word font-display text-[clamp(1.6rem,7.6vw,2.15rem)] leading-[1.04] sm:text-5xl">
                       {searchType === 'selfie' ? `FOTOS ENCONTRADAS (${displayPhotos.length})` : `PEITO ${searchBib}`}
                     </p>
                     {searchType === 'selfie' && (
@@ -1049,7 +1049,7 @@ function Storefront() {
                             <p className="font-mono text-[9px] font-bold uppercase tracking-[0.26em] text-brutal-accent">
                               Evento selecionado
                             </p>
-                            <h1 className="mt-2 max-w-4xl font-sans text-[clamp(1.9rem,3.8vw,3.5rem)] font-black uppercase leading-[0.95] tracking-tight text-brutal-black wrap-break-word">
+                            <h1 className="mt-2 max-w-4xl font-sans text-[clamp(1.7rem,3.3vw,3.05rem)] font-bold uppercase leading-[1.02] tracking-tight text-brutal-black wrap-break-word">
                               {selectedEventName}
                             </h1>
                           </div>
@@ -1487,7 +1487,7 @@ function PublicPhotographerPage({
                   </a>
                 )}
               </div>
-              <h1 className="font-display text-[clamp(3.25rem,10vw,8rem)] uppercase leading-[0.86] tracking-normal wrap-break-word">{displayName}</h1>
+              <h1 className="font-display text-[clamp(2.8rem,8.8vw,6.8rem)] uppercase leading-[0.92] tracking-normal wrap-break-word">{displayName}</h1>
               {photographer.displayName && photographer.displayName !== photographer.name && <p className="mt-3 font-mono text-sm uppercase tracking-widest text-white/70">{photographer.name}</p>}
               {photographer.bio && <p className="mt-5 max-w-4xl font-sans text-base leading-relaxed text-white/90 md:text-xl">{photographer.bio}</p>}
             </div>
@@ -1667,7 +1667,7 @@ function PublicEventPage({
                 <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
                   <div className="min-w-0">
                     <p className="font-mono text-[9px] font-bold uppercase tracking-[0.25em] text-brutal-accent">Evento Funpace Media</p>
-                    <h1 className="mt-2 max-w-4xl font-display text-[clamp(2rem,4vw,4.25rem)] uppercase leading-[0.92] tracking-normal wrap-break-word">{event.name}</h1>
+                    <h1 className="mt-2 max-w-4xl font-display text-[clamp(1.8rem,3.5vw,3.65rem)] uppercase leading-[1] tracking-normal wrap-break-word">{event.name}</h1>
                     {event.description && <p className="mt-3 line-clamp-2 max-w-3xl text-sm leading-relaxed text-gray-600">{event.description}</p>}
                   </div>
                   {photographer && (
@@ -1905,7 +1905,7 @@ function PaymentNoticeModal({
                 <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 wrap-break-word">
                   Retorno da InfinitePay
                 </p>
-                <h2 className="max-w-full font-display text-[clamp(1.875rem,9vw,2.75rem)] uppercase tracking-normal leading-[0.95] wrap-break-word">
+                <h2 className="max-w-full font-display text-[clamp(1.65rem,8vw,2.4rem)] uppercase tracking-normal leading-[1.02] wrap-break-word">
                   {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmação pendente' : 'Pagamento cancelado'}
                 </h2>
                 <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">

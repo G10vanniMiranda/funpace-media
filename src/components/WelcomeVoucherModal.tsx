@@ -143,7 +143,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
 
               <div className="text-center">
                 <p className="font-mono text-[9px] uppercase tracking-[0.2em] text-gray-500 sm:text-[10px] sm:tracking-[0.28em]">Presente de primeira compra</p>
-                <h2 id="welcome-voucher-title" className="mt-2 font-display text-[2.35rem] uppercase leading-[0.92] sm:text-5xl">
+                <h2 id="welcome-voucher-title" className="mt-2 font-display text-[2.1rem] uppercase leading-none sm:text-4xl">
                   Bem-vindo a Funpace Media!
                 </h2>
                 <p className="mx-auto mt-3 max-w-sm font-mono text-[10px] uppercase leading-relaxed text-gray-600 sm:mt-4 sm:text-xs">
@@ -152,11 +152,11 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
               </div>
 
               <div className="mt-5 bg-gray-50 brutal-border p-3 text-center sm:mt-6 sm:p-5">
-                <p className="font-display text-[2rem] uppercase leading-none sm:text-3xl">Ganhe 10% OFF</p>
+                <p className="font-display text-[1.8rem] uppercase leading-none sm:text-2xl">Ganhe 10% OFF</p>
                 <p className="mt-2 font-mono text-[8px] uppercase leading-relaxed text-gray-500 sm:text-[10px]">
                   Na sua primeira compra utilizando o cupom
                 </p>
-                <div className="mt-3 w-full min-w-0 overflow-hidden brutal-border bg-white px-2 py-3 font-display text-[clamp(1.6rem,9.5vw,2.5rem)] uppercase leading-none tracking-[0.03em] text-brutal-accent sm:mt-4 sm:px-4 sm:py-4 sm:text-4xl sm:tracking-[0.08em]">
+                <div className="mt-3 w-full min-w-0 overflow-hidden brutal-border bg-white px-2 py-3 font-display text-[clamp(1.45rem,8.5vw,2.2rem)] uppercase leading-none tracking-[0.03em] text-brutal-accent sm:mt-4 sm:px-4 sm:py-4 sm:text-3xl sm:tracking-[0.08em]">
                   {WELCOME_VOUCHER_CODE}
                 </div>
                 <p className="mt-3 font-mono text-[8px] uppercase tracking-[0.16em] text-gray-500 sm:text-[9px] sm:tracking-widest">

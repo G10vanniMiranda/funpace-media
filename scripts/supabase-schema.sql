@@ -567,6 +567,29 @@ create table if not exists public.download_access (
   unique ("orderId", "photoId")
 );
 
+create table if not exists public.download_tokens (
+  id uuid primary key default gen_random_uuid(),
+  "tokenHash" text not null unique,
+  "orderId" uuid not null references public.orders(id) on delete cascade,
+  "orderItemId" uuid not null references public.order_items(id) on delete cascade,
+  "userId" text,
+  email text,
+  "expiresAt" timestamptz not null,
+  "consumedAt" timestamptz,
+  "createdAt" timestamptz not null default now()
+);
+
+create table if not exists public.email_logs (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid references public.orders(id) on delete set null,
+  customer_email text not null check (char_length(customer_email) <= 256),
+  template text not null check (char_length(template) <= 120),
+  status text not null check (status in ('sent', 'failed', 'skipped')),
+  provider_response jsonb,
+  error_message text,
+  created_at timestamptz not null default now()
+);
+
 do $$
 begin
   alter table public.payments drop constraint if exists payments_status_check;
@@ -794,9 +817,15 @@ create index if not exists payments_order_provider_updated_at_idx on public.paym
 create index if not exists download_access_order_id_idx on public.download_access ("orderId");
 create index if not exists download_access_photo_id_idx on public.download_access ("photoId");
 create index if not exists download_access_customer_email_idx on public.download_access ("customerEmail");
+create index if not exists download_tokens_order_item_idx on public.download_tokens ("orderId", "orderItemId");
+create index if not exists download_tokens_expires_at_idx on public.download_tokens ("expiresAt");
+create index if not exists download_tokens_consumed_at_idx on public.download_tokens ("consumedAt");
 create index if not exists download_events_vendedor_id_idx on public.download_events ("vendedorId");
 create index if not exists download_events_order_item_id_idx on public.download_events ("orderItemId");
 create index if not exists download_events_created_at_idx on public.download_events ("createdAt" desc);
+create index if not exists email_logs_order_id_idx on public.email_logs (order_id);
+create index if not exists email_logs_customer_email_idx on public.email_logs (customer_email);
+create index if not exists email_logs_created_at_idx on public.email_logs (created_at desc);
 create index if not exists product_likes_product_id_idx on public.product_likes ("productId");
 create index if not exists customer_favorites_user_id_idx on public.customer_favorites ("userId");
 create index if not exists customer_favorites_photo_id_idx on public.customer_favorites ("photoId");
@@ -908,7 +937,9 @@ alter table public.order_items enable row level security;
 alter table public.payment_events enable row level security;
 alter table public.payments enable row level security;
 alter table public.download_access enable row level security;
+alter table public.download_tokens enable row level security;
 alter table public.download_events enable row level security;
+alter table public.email_logs enable row level security;
 alter table public.product_likes enable row level security;
 alter table public.customer_favorites enable row level security;
 alter table public.user_sessions enable row level security;
@@ -1258,6 +1289,15 @@ using (
   or ("customerEmail" = (auth.jwt() ->> 'email'))
 );
 
+drop policy if exists "download_tokens_service_role_all" on public.download_tokens;
+create policy "download_tokens_service_role_all"
+on public.download_tokens
+for all
+using (auth.role() = 'service_role')
+with check (auth.role() = 'service_role');
+
+revoke all on table public.download_tokens from anon, authenticated;
+
 drop policy if exists "download_events_select_owner_or_admin" on public.download_events;
 create policy "download_events_select_owner_or_admin"
 on public.download_events
@@ -1266,6 +1306,18 @@ using (
   public.is_admin()
   or "vendedorId" = auth.uid()::text
 );
+
+drop policy if exists "email_logs_admin_select" on public.email_logs;
+create policy "email_logs_admin_select"
+on public.email_logs
+for select
+using (public.is_admin());
+
+drop policy if exists "email_logs_service_role_insert" on public.email_logs;
+create policy "email_logs_service_role_insert"
+on public.email_logs
+for insert
+with check (auth.role() = 'service_role');
 
 drop policy if exists "withdrawal_requests_select_owner_or_admin" on public.withdrawal_requests;
 create policy "withdrawal_requests_select_owner_or_admin"

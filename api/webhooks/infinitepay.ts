@@ -1,4 +1,5 @@
 import { assertRequestSize, handleOptions as handleSecurityOptions, rateLimit, setSecurityHeaders } from '../_security.js';
+import { fulfillPaidOrder } from '../../server/shared/checkoutFulfillment.js';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
@@ -338,7 +339,7 @@ export default async function handler(req: any, res: any) {
           updatedAt: new Date().toISOString(),
         }),
       });
-      await releaseDownloadAccess(orderId);
+      await fulfillPaidOrder(orderId);
     } else if (['failed', 'cancelled', 'canceled', 'refused', 'refunded'].includes(status)) {
       await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paymentProvider=eq.infinitepay&status=neq.paid`, {
         method: 'PATCH',

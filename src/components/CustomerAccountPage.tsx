@@ -129,6 +129,7 @@ export function CustomerAccountPage({
   const [password, setPassword] = React.useState('');
   const [isSavingProfile, setIsSavingProfile] = React.useState(false);
   const [downloadingItemId, setDownloadingItemId] = React.useState<string | null>(null);
+  const [resendingEmailOrderId, setResendingEmailOrderId] = React.useState<string | null>(null);
   const [downloadError, setDownloadError] = React.useState<{ orderId: string; itemId: string; message: string } | null>(null);
   const highlightedOrderId = React.useMemo(() => new URLSearchParams(location.search).get('order'), [location.search]);
 
@@ -238,6 +239,18 @@ export function CustomerAccountPage({
     for (const item of order.items ?? []) {
       await downloadItem(order, item);
       await new Promise((resolve) => window.setTimeout(resolve, 250));
+    }
+  };
+
+  const resendDownloadEmail = async (order: Order) => {
+    setResendingEmailOrderId(order.id);
+    try {
+      await orderService.resendDownloadEmail(order.id, 'customer');
+      showToast('Links reenviados para seu e-mail.', 'success');
+    } catch (error: any) {
+      showToast(error?.message || 'Nao foi possivel reenviar o e-mail.', 'error');
+    } finally {
+      setResendingEmailOrderId(null);
     }
   };
 
@@ -368,10 +381,16 @@ export function CustomerAccountPage({
                           </div>
                         )}
                         {order.status === 'paid' ? (
-                          <button type="button" onClick={() => downloadOrder(order)} className="mt-3 min-h-10 bg-brutal-black px-3 text-white border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent inline-flex items-center gap-2">
-                            <Download className="w-3 h-3" />
-                            Baixar fotos
-                          </button>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button type="button" onClick={() => downloadOrder(order)} className="min-h-10 bg-brutal-black px-3 text-white border border-brutal-black font-mono text-[10px] uppercase hover:bg-brutal-accent inline-flex items-center gap-2">
+                              <Download className="w-3 h-3" />
+                              Baixar fotos
+                            </button>
+                            <button type="button" disabled={resendingEmailOrderId === order.id} onClick={() => resendDownloadEmail(order)} className="min-h-10 bg-white px-3 text-brutal-black border border-slate-200 font-mono text-[10px] uppercase hover:border-brutal-accent inline-flex items-center gap-2 disabled:opacity-60">
+                              {resendingEmailOrderId === order.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                              Reenviar links
+                            </button>
+                          </div>
                         ) : (
                           <p className="mt-3 inline-flex items-center gap-2 font-mono text-[10px] uppercase text-slate-500">
                             <Clock3 className="w-3 h-3" />

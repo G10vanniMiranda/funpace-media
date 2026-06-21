@@ -27,7 +27,7 @@ export async function recordPayment(input: {
       updatedAt: new Date().toISOString(),
     }),
   }).catch((error) => {
-    console.error('Não foi possível registrar payment:', error);
+    console.error('Nao foi possivel registrar payment:', error);
   });
 }
 
@@ -99,7 +99,7 @@ export async function registerPhotographerTransactions(orderId: string) {
     body: JSON.stringify(transactions),
   }).catch((error) => {
     if (!/duplicate|unique/i.test(String(error?.message || error))) {
-      console.error('Não foi possível registrar transações do fotógrafo:', error);
+      console.error('Nao foi possivel registrar transacoes do fotografo:', error);
     }
   });
 
@@ -127,7 +127,9 @@ export async function registerPhotographerTransactions(orderId: string) {
 }
 
 function getFrontendUrl() {
-  return String(process.env.FRONTEND_URL || 'https://funpace.media').replace(/\/+$/, '');
+  const value = String(process.env.FRONTEND_URL || '').trim();
+  if (!value) throw new Error('FRONTEND_URL ausente.');
+  return value.replace(/\/+$/, '');
 }
 
 function getNotificationEmail() {
@@ -136,9 +138,10 @@ function getNotificationEmail() {
 
 async function sendResendEmail(input: { to: string; subject: string; html: string; bcc?: string }) {
   const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return { skipped: true, reason: 'RESEND_API_KEY ausente' };
+  if (!apiKey) throw new Error('RESEND_API_KEY ausente.');
+  const from = process.env.EMAIL_FROM;
+  if (!from) throw new Error('EMAIL_FROM ausente.');
 
-  const from = process.env.EMAIL_FROM || 'Funpace Media <no-reply@funpace.media>';
   const response = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
@@ -162,31 +165,112 @@ async function sendResendEmail(input: { to: string; subject: string; html: strin
   return response.json().catch(() => ({}));
 }
 
-function buildPaidOrderEmail(order: any) {
-  const ordersUrl = `${getFrontendUrl()}/minha-conta?order=${encodeURIComponent(order.id)}&status=paid`;
-  const buyerName = String(order.buyerName || 'cliente').trim();
-  const orderShort = String(order.id).slice(0, 8);
-  return paidOrderEmailTemplate({ buyerName, orderShort, ordersUrl });
+async function recordEmailLog(input: {
+  orderId: string;
+  customerEmail: string;
+  template: string;
+  status: 'sent' | 'failed' | 'skipped';
+  providerResponse?: any;
+  errorMessage?: string | null;
+}) {
+  await supabaseRequest('/rest/v1/email_logs', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      order_id: input.orderId,
+      customer_email: input.customerEmail,
+      template: input.template,
+      status: input.status,
+      provider_response: input.providerResponse ?? null,
+      error_message: input.errorMessage ?? null,
+    }),
+  }).catch((error) => {
+    console.error('Nao foi possivel registrar email_logs:', error);
+  });
 }
 
-export async function sendPaidOrderEmailOnce(orderId: string) {
+function formatCurrency(value: number) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+}
+
+function resolveOrderEventName(items: any[]) {
+  const events = Array.from(new Set(items.map((item) => String(item.event || '').trim()).filter(Boolean)));
+  if (events.length === 0) return 'Evento Funpace';
+  if (events.length === 1) return events[0];
+  return `${events[0]} + ${events.length - 1} evento(s)`;
+}
+
+function buildPaidOrderEmail(order: any, items: any[]) {
+  const base = getFrontendUrl();
+  const ordersUrl = `${base}/minha-conta?order=${encodeURIComponent(order.id)}&status=paid`;
+  const downloadsUrl = `${base}/minha-conta?order=${encodeURIComponent(order.id)}&status=paid&download=1`;
+  const buyerName = String(order.buyerName || 'cliente').trim();
+  const orderShort = String(order.id).slice(0, 8);
+  return paidOrderEmailTemplate({
+    buyerName,
+    orderId: order.id,
+    orderShort,
+    eventName: resolveOrderEventName(items),
+    itemCount: items.length,
+    total: formatCurrency(Number(order.total || 0)),
+    ordersUrl,
+    downloadsUrl,
+  });
+}
+
+export async function sendPaidOrderEmail(orderId: string, options: { force?: boolean; actor?: 'system' | 'admin' | 'customer' } = {}) {
   const orders = await supabaseRequest<any[]>(
-    `/rest/v1/orders?select=id,buyerName,buyerEmail,paidEmailSentAt,status&id=eq.${encodeURIComponent(orderId)}&limit=1`,
+    `/rest/v1/orders?select=id,buyerName,buyerEmail,total,paidEmailSentAt,status&id=eq.${encodeURIComponent(orderId)}&limit=1`,
   );
   const order = orders[0];
-  if (!order || order.status !== 'paid' || order.paidEmailSentAt) return;
+  if (!order || order.status !== 'paid') return { skipped: true, reason: 'order_not_paid' };
 
-  const email = buildPaidOrderEmail(order);
+  if (order.paidEmailSentAt && !options.force) {
+    await recordEmailLog({
+      orderId,
+      customerEmail: order.buyerEmail,
+      template: 'paid_order_download',
+      status: 'skipped',
+      errorMessage: 'paidEmailSentAt ja preenchido',
+    });
+    return { skipped: true, reason: 'already_sent' };
+  }
+
+  const items = await supabaseRequest<any[]>(
+    `/rest/v1/order_items?select=id,orderId,productId,name,type,price,event&orderId=eq.${encodeURIComponent(orderId)}&order=createdAt.asc`,
+  ).catch(() => []);
+
   try {
-    await sendResendEmail({ to: order.buyerEmail, bcc: getNotificationEmail(), ...email });
-    await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}&paidEmailSentAt=is.null`, {
+    const email = buildPaidOrderEmail(order, items);
+    const providerResponse = await sendResendEmail({ to: order.buyerEmail, bcc: getNotificationEmail(), ...email });
+    await recordEmailLog({
+      orderId,
+      customerEmail: order.buyerEmail,
+      template: 'paid_order_download',
+      status: 'sent',
+      providerResponse: { provider: 'resend', response: providerResponse, actor: options.actor || 'system' },
+    });
+    await supabaseRequest(`/rest/v1/orders?id=eq.${encodeURIComponent(orderId)}`, {
       method: 'PATCH',
       headers: { Prefer: 'return=minimal' },
       body: JSON.stringify({ paidEmailSentAt: new Date().toISOString() }),
     });
+    return { sent: true, providerResponse };
   } catch (error) {
-    console.error('Não foi possível enviar e-mail de pedido pago:', error);
+    await recordEmailLog({
+      orderId,
+      customerEmail: order.buyerEmail,
+      template: 'paid_order_download',
+      status: 'failed',
+      errorMessage: error instanceof Error ? error.message : String(error || 'email_failed'),
+    });
+    console.error('Nao foi possivel enviar e-mail de pedido pago:', error);
+    return { sent: false, error: error instanceof Error ? error.message : String(error || 'email_failed') };
   }
+}
+
+export async function sendPaidOrderEmailOnce(orderId: string) {
+  return sendPaidOrderEmail(orderId, { force: false, actor: 'system' });
 }
 
 export async function fulfillPaidOrder(orderId: string) {

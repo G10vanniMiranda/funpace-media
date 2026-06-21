@@ -14,6 +14,7 @@ import { getActivePaymentProvider } from "./server/payments/paymentProvider";
 import { fulfillPaidOrder, recordPayment } from "./server/shared/checkoutFulfillment";
 import { ensurePhotographerReferralCode, markReferralApproved, registerPendingReferral } from "./server/shared/referrals";
 import adminApiHandler from "./api/admin";
+import downloadEmailHandler from "./api/orders/download-email";
 import eventMediaCountsHandler from "./server/api/events/media-counts";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
@@ -1433,6 +1434,10 @@ app.all([
   "/api/admin/payments/recovery",
 ], async (req, res) => {
   return adminApiHandler(req, res);
+});
+
+app.all("/api/orders/download-email", async (req, res) => {
+  return downloadEmailHandler(req, res);
 });
 
 app.get("/api/auth/google/status", async (req, res) => {

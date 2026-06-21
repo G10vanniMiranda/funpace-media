@@ -1260,6 +1260,25 @@ export const orderService = {
     if (!updated) throw new Error('Pedido não encontrado.');
     return updated;
   },
+
+  async resendDownloadEmail(orderId: string, requestedBy: 'admin' | 'customer' = 'customer'): Promise<void> {
+    if (isMockMode) return;
+
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessao expirada.');
+
+    const response = await fetch('/api/orders/download-email', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ orderId, requestedBy }),
+    });
+    const payload = await response.json().catch(() => ({}));
+
+    if (!response.ok) throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
+  },
 };
 
 export const eventService = {

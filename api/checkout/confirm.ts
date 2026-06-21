@@ -1,4 +1,5 @@
 import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
+import { fulfillPaidOrder } from '../../server/shared/checkoutFulfillment.js';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
 
@@ -248,7 +249,7 @@ export default async function handler(req: any, res: any) {
     }
 
     if (order.status === 'paid') {
-      await releaseDownloadAccess(orderId);
+      await fulfillPaidOrder(orderId);
       return res.status(200).json({ paid: true, confirmedBy: 'order_status' });
     }
 
@@ -296,7 +297,7 @@ export default async function handler(req: any, res: any) {
       }),
     });
 
-    await releaseDownloadAccess(orderId);
+    await fulfillPaidOrder(orderId);
     return res.status(200).json({ paid: true, confirmedBy: 'payment_check' });
   } catch (error: any) {
     console.error('confirm:infinitepay_failed', error);

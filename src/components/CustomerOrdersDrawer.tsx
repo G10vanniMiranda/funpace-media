@@ -206,6 +206,7 @@ export function CustomerOrdersDrawer({
   const [error, setError] = React.useState<string | null>(null);
   const [hiddenItemIds, setHiddenItemIds] = React.useState<Set<string>>(() => loadHiddenPurchaseIds());
   const [copiedMessage, setCopiedMessage] = React.useState<string | null>(null);
+  const [resendingEmailOrderId, setResendingEmailOrderId] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     if (!isOpen) return;
@@ -281,6 +282,19 @@ export function CustomerOrdersDrawer({
   const copyReceipt = async (order: Order) => {
     await copyText(buildReceiptText(order));
     showCopied('Recibo copiado');
+  };
+
+  const resendDownloadEmail = async (order: Order) => {
+    setResendingEmailOrderId(order.id);
+    try {
+      await orderService.resendDownloadEmail(order.id, 'customer');
+      showCopied('Links enviados por e-mail');
+    } catch (error) {
+      console.error('Erro ao reenviar e-mail de download:', error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel reenviar o e-mail.');
+    } finally {
+      setResendingEmailOrderId(null);
+    }
   };
 
   const shareItem = async (item: NonNullable<Order['items']>[number]) => {
@@ -466,6 +480,15 @@ export function CustomerOrdersDrawer({
                               >
                                 Baixar tudo
                                 <Download className="w-3 h-3" />
+                              </button>
+                              <button
+                                type="button"
+                                disabled={resendingEmailOrderId === order.id}
+                                onClick={() => resendDownloadEmail(order)}
+                                className="inline-flex items-center gap-2 bg-white text-brutal-black px-3 py-2 brutal-border-thin font-mono text-[10px] uppercase hover:bg-gray-50 transition-colors cursor-pointer disabled:opacity-60"
+                              >
+                                {resendingEmailOrderId === order.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                                Reenviar links
                               </button>
                             </>
                           )}

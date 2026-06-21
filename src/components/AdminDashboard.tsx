@@ -39,6 +39,7 @@ import {
   FolderOpen,
   Trash2,
   Link as LinkIcon,
+  Loader2,
 } from 'lucide-react';
 import { AdminActivityLog, AdminMetrics, Coupon, Customer, Event, Order, PaymentEventLog, PaymentRecord, PaymentRecoveryIssue, Photographer, PhotographerReferral, PlatformSettings, Product, ReferralSettings, WithdrawalRequest } from '../types';
 import { adminService, eventService, photographerService, platformSettingsService, productService, referralService, withdrawalService, orderService } from '../lib/services';
@@ -490,6 +491,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [logSearch, setLogSearch] = useState('');
   const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+  const [resendingEmailOrderId, setResendingEmailOrderId] = useState<string | null>(null);
   const [updatingCouponId, setUpdatingCouponId] = useState<string | null>(null);
   const [couponForm, setCouponForm] = useState({
     code: '',
@@ -1705,6 +1707,32 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
     }
   };
 
+  const handleResendDownloadEmail = async (order: Order) => {
+    if (order.status !== 'paid') {
+      alert('O e-mail de download so pode ser reenviado para pedidos pagos.');
+      return;
+    }
+    const confirmed = window.confirm(`Reenviar e-mail de download para ${order.buyerEmail}?`);
+    if (!confirmed) return;
+
+    setResendingEmailOrderId(order.id);
+    try {
+      await orderService.resendDownloadEmail(order.id, 'admin');
+      await adminService.logAction({
+        action: 'download_email_resent',
+        targetType: 'order',
+        targetId: order.id,
+        metadata: { buyerEmail: order.buyerEmail, source: 'admin_dashboard' },
+      });
+      alert('E-mail de download reenviado.');
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : 'Nao foi possivel reenviar o e-mail.');
+    } finally {
+      setResendingEmailOrderId(null);
+    }
+  };
+
   const handleAuditPayments = async () => {
     setIsAuditingPayments(true);
     try {
@@ -2856,7 +2884,22 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             <td className="px-5 py-4 font-sans font-black text-green-400">{formatCurrency(Number(order.total || 0))}</td>
                             <td className="px-5 py-4 font-mono text-xs uppercase">{order.paymentMethod || 'checkout'}</td>
                             <td className="px-5 py-4 font-mono text-[10px] text-gray-400">{firstItem?.event || 'N/I'}<br />{firstItem ? photographerById.get(firstItem.vendedorId)?.name ?? firstItem.vendedorId : 'N/I'}</td>
-                            <td className="px-5 py-4"><select disabled={updatingOrderId === order.id} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pendente</option><option value="paid">Pago</option><option value="refused">Recusado</option><option value="canceled">Cancelado</option><option value="refunded">Reembolsado</option></select></td>
+                            <td className="px-5 py-4">
+                              <div className="flex flex-col gap-2">
+                                <select disabled={updatingOrderId === order.id} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pendente</option><option value="paid">Pago</option><option value="refused">Recusado</option><option value="canceled">Cancelado</option><option value="refunded">Reembolsado</option></select>
+                                {order.status === 'paid' && (
+                                  <button
+                                    type="button"
+                                    disabled={resendingEmailOrderId === order.id}
+                                    onClick={() => handleResendDownloadEmail(order)}
+                                    className="h-9 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase inline-flex items-center justify-center gap-2 hover:border-brutal-accent disabled:text-gray-500 disabled:cursor-not-allowed"
+                                  >
+                                    {resendingEmailOrderId === order.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                                    Reenviar e-mail
+                                  </button>
+                                )}
+                              </div>
+                            </td>
                           </tr>
                         );
                       })}

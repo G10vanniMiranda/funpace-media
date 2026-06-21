@@ -21,8 +21,9 @@ test('duplicate upload copy uses unique filenames and replacement keeps product 
 
   assert.match(dashboard, /createCopyFileName/);
   assert.match(dashboard, /\$\{base\} \(\$\{counter\}\)\$\{extension\}/);
-  assert.match(dashboard, /replaceProductMedia\(existingNameProduct\.id, productPayload\)/);
+  assert.match(dashboard, /replaceProductMediaResilient\(existingNameProduct\.id, productPayload\)/);
   assert.match(services, /async replaceProductMedia/);
+  assert.match(services, /replaceProductMediaResilient/);
   assert.match(services, /updatedAt: new Date\(\)\.toISOString\(\)/);
 });
 

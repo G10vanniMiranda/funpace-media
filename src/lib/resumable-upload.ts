@@ -1,4 +1,14 @@
-export type ResumableUploadItemStatus = 'queued' | 'uploading' | 'done' | 'failed' | 'paused' | 'skipped';
+export type ResumableUploadItemStatus =
+  | 'pending'
+  | 'queued'
+  | 'uploading'
+  | 'uploaded'
+  | 'db_saved'
+  | 'published'
+  | 'done'
+  | 'failed'
+  | 'paused'
+  | 'skipped';
 
 export type ResumableUploadFileHandle = {
   getFile: () => Promise<File>;
@@ -17,6 +27,13 @@ export type ResumableUploadManifestItem = {
   error: string;
   uploadedAt: string | null;
   handle?: ResumableUploadFileHandle | null;
+  uploadBatchId?: string | null;
+  fileHash?: string | null;
+  thumbnailHash?: string | null;
+  uploadedFilePath?: string | null;
+  uploadedThumbnailPath?: string | null;
+  preparedFileSize?: number | null;
+  productId?: string | null;
 };
 
 export type ResumableUploadManifest = {

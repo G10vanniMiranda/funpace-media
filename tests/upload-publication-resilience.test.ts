@@ -7,7 +7,7 @@ test('photographer upload reports missing local files without aborting the whole
 
   assert.match(dashboard, /isMissingLocalUploadFileError/);
   assert.match(dashboard, /requested file or directory could not be found/);
-  assert.match(dashboard, /Nao foi possivel localizar o arquivo local/);
+  assert.match(dashboard, /arquivo local.*durante a publica/i);
   assert.match(dashboard, /Verifique se as fotos ainda existem no armazenamento/);
   assert.doesNotMatch(dashboard, /Nenhum arquivo foi publicado\. Primeiro erro/);
 });
@@ -16,11 +16,32 @@ test('photographer upload keeps partial publication counts and failed files sele
   const dashboard = readFileSync('src/components/PhotographerDashboard.tsx', 'utf8');
 
   assert.match(dashboard, /Upload parcial concluido/);
-  assert.match(dashboard, /Publicadas: \$\{publishedCount\} fotos/);
-  assert.match(dashboard, /Falharam: \$\{failedUploads\.length\} fotos/);
+  assert.match(dashboard, /Publicadas: \$\{publishedCount\} foto\(s\)/);
+  assert.match(dashboard, /Falharam: \$\{failedUploads\.length\}/);
   assert.match(dashboard, /setSelectedFiles\(\(current\) => current\.filter/);
   assert.match(dashboard, /stage: UploadPublishStage/);
   assert.match(dashboard, /getUploadStageLabel/);
+  assert.match(dashboard, /uploadCompletionNotice/);
+});
+
+test('database publication failures can resume after storage upload without reuploading media', () => {
+  const dashboard = readFileSync('src/components/PhotographerDashboard.tsx', 'utf8');
+  const services = readFileSync('src/lib/services.ts', 'utf8');
+  const resumableUpload = readFileSync('src/lib/resumable-upload.ts', 'utf8');
+
+  assert.match(resumableUpload, /'uploaded'/);
+  assert.match(resumableUpload, /'db_saved'/);
+  assert.match(resumableUpload, /'published'/);
+  assert.match(resumableUpload, /uploadedFilePath/);
+  assert.match(resumableUpload, /uploadedThumbnailPath/);
+  assert.match(dashboard, /item\.uploadedFilePath/);
+  assert.match(dashboard, /status: 'uploaded'/);
+  assert.match(dashboard, /status: 'db_saved'/);
+  assert.match(dashboard, /status: 'published'/);
+  assert.match(dashboard, /addProductResilient\(productPayload\)/);
+  assert.match(services, /addProductResilient/);
+  assert.match(services, /db:create-recovered/);
+  assert.match(services, /products\.find-created-after-failure/);
 });
 
 test('publication flow logs client and backend storage diagnostics without secrets', () => {

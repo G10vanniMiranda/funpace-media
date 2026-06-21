@@ -74,6 +74,13 @@ type UploadItem = {
   stage: UploadPublishStage | null;
   error: string;
   uploadedAt: string | null;
+  uploadBatchId?: string | null;
+  fileHash?: string | null;
+  thumbnailHash?: string | null;
+  uploadedFilePath?: string | null;
+  uploadedThumbnailPath?: string | null;
+  preparedFileSize?: number | null;
+  productId?: string | null;
 };
 
 type UploadItemStatus = ResumableUploadItemStatus;
@@ -316,8 +323,12 @@ function wait(ms: number) {
 
 function getUploadStatusLabel(status: UploadItemStatus) {
   const labels: Record<UploadItemStatus, string> = {
+    pending: 'Pendente',
     queued: 'Na fila',
     uploading: 'Enviando',
+    uploaded: 'Upload ok',
+    db_saved: 'Banco ok',
+    published: 'Publicada',
     done: 'Enviada',
     failed: 'Falhou',
     paused: 'Pausada',
@@ -327,7 +338,8 @@ function getUploadStatusLabel(status: UploadItemStatus) {
 }
 
 function getUploadStatusClass(status: UploadItemStatus) {
-  if (status === 'done') return 'border-green-500/30 bg-green-500/10 text-green-300';
+  if (status === 'done' || status === 'published' || status === 'db_saved') return 'border-green-500/30 bg-green-500/10 text-green-300';
+  if (status === 'uploaded') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200';
   if (status === 'failed') return 'border-red-500/30 bg-red-500/10 text-red-300';
   if (status === 'uploading') return 'border-brutal-accent/40 bg-brutal-accent/10 text-brutal-accent';
   if (status === 'paused') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
@@ -1104,6 +1116,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
   const [resumeNotice, setResumeNotice] = useState('');
+  const [uploadCompletionNotice, setUploadCompletionNotice] = useState('');
   const [duplicateConflict, setDuplicateConflict] = useState<DuplicateUploadConflict | null>(null);
   const [applyDuplicateChoiceToAll, setApplyDuplicateChoiceToAll] = useState(false);
   const [availableEvents, setAvailableEvents] = useState<Event[]>([]);
@@ -1202,7 +1215,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
         bib: '',
         previewUrl: URL.createObjectURL(file),
-        status: resumeItem?.status === 'done'
+        status: resumeItem?.status === 'done' || resumeItem?.status === 'published'
           ? 'skipped'
           : resumeItem?.status === 'failed' || resumeItem?.status === 'paused'
             ? resumeItem.status
@@ -1211,6 +1224,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         stage: (resumeItem?.stage || null) as UploadPublishStage | null,
         error: resumeItem?.error || '',
         uploadedAt: resumeItem?.uploadedAt || null,
+        uploadBatchId: resumeItem?.uploadBatchId || null,
+        fileHash: resumeItem?.fileHash || null,
+        thumbnailHash: resumeItem?.thumbnailHash || null,
+        uploadedFilePath: resumeItem?.uploadedFilePath || null,
+        uploadedThumbnailPath: resumeItem?.uploadedThumbnailPath || null,
+        preparedFileSize: resumeItem?.preparedFileSize || null,
+        productId: resumeItem?.productId || null,
       };
     });
   }, []);
@@ -1255,7 +1275,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const manifest = await readUploadResumeManifest(photographer.id);
       if (cancelled || !manifest) return;
 
-      const pendingItems = manifest.items.filter((item) => item.status !== 'done' && item.status !== 'skipped');
+      const pendingItems = manifest.items.filter((item) => item.status !== 'done' && item.status !== 'published' && item.status !== 'skipped');
       if (pendingItems.length === 0) return;
 
       setEventInput(manifest.eventInput || '');
@@ -1303,6 +1323,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         error: item.error,
         uploadedAt: item.uploadedAt,
         handle: item.fileHandle || null,
+        uploadBatchId: item.uploadBatchId || null,
+        fileHash: item.fileHash || null,
+        thumbnailHash: item.thumbnailHash || null,
+        uploadedFilePath: item.uploadedFilePath || null,
+        uploadedThumbnailPath: item.uploadedThumbnailPath || null,
+        preparedFileSize: item.preparedFileSize || null,
+        productId: item.productId || null,
       })),
     });
   }, [selectedFiles, photographer.id, eventInput, checkpointInput, selectedEventId]);
@@ -1746,9 +1773,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     acc[item.status] = (acc[item.status] || 0) + 1;
     return acc;
   }, {} as Record<UploadItemStatus, number>), [selectedFiles]);
-  const pendingUploadCount = selectedFiles.filter((item) => item.status !== 'done' && item.status !== 'skipped').length;
-  const completedUploadCount = (uploadStatusCounts.done || 0) + (uploadStatusCounts.skipped || 0);
+  const pendingUploadCount = selectedFiles.filter((item) => item.status !== 'done' && item.status !== 'published' && item.status !== 'skipped').length;
+  const completedUploadCount = (uploadStatusCounts.done || 0) + (uploadStatusCounts.published || 0) + (uploadStatusCounts.skipped || 0);
   const failedUploadCount = uploadStatusCounts.failed || 0;
+  const uploadedOnlyCount = uploadStatusCounts.uploaded || 0;
+  const dbSavedUploadCount = uploadStatusCounts.db_saved || 0;
+  const inProgressUploadCount = uploadStatusCounts.uploading || 0;
+  const skippedUploadCount = uploadStatusCounts.skipped || 0;
   const visibleSelectedFiles = selectedFiles.slice(0, uploadVisibleListLimit);
   const hiddenSelectedFileCount = Math.max(0, selectedFiles.length - visibleSelectedFiles.length);
   const canPublishSelectedFiles = pendingUploadCount > 0 && !isLoading && !isPreparingFiles && !isPublishing && isBrowserOnline;
@@ -1766,6 +1797,31 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setReferralCopyMessage('Link copiado com sucesso!');
     window.setTimeout(() => setReferralCopyMessage(''), 2500);
   };
+
+  const exportUploadErrorReport = React.useCallback(() => {
+    const failedItems = selectedFiles.filter((item) => item.status === 'failed' || item.error);
+    if (failedItems.length === 0) return;
+
+    const lines = [
+      'Arquivo,Status,Etapa,Erro,Storage original,Storage preview,Produto',
+      ...failedItems.map((item) => [
+        item.name,
+        item.status,
+        item.stage ? getUploadStageLabel(item.stage) : '',
+        item.error,
+        item.uploadedFilePath || '',
+        item.uploadedThumbnailPath || '',
+        item.productId || '',
+      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(',')),
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `funpace-upload-erros-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  }, [selectedFiles]);
 
   const loadPhotographerContent = React.useCallback(async (showLoader = false) => {
     if (showLoader) setIsLoading(true);
@@ -2102,6 +2158,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     if (acceptedFiles.length === 0) return;
 
+    setUploadCompletionNotice('');
     const defaultBatchPrice = Number(batchPriceInput);
     const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
     const resumeManifest = await readUploadResumeManifest(photographer.id);
@@ -2153,6 +2210,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       if (acceptedPicked.length === 0) return;
 
+      setUploadCompletionNotice('');
       const defaultBatchPrice = Number(batchPriceInput);
       const resolvedPrice = Number.isFinite(defaultBatchPrice) && defaultBatchPrice > 0 ? defaultBatchPrice : 19.90;
       const resumeManifest = await readUploadResumeManifest(photographer.id);
@@ -2189,6 +2247,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setSelectedFiles([]);
     void clearUploadResumeManifest(photographer.id);
     setResumeNotice('');
+    setUploadCompletionNotice('');
     setBatchPriceInput('19.90');
     setPreviewIndex(0);
     setIsPreparingFiles(false);
@@ -2427,7 +2486,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     const uploadQueue = selectedFiles
       .map((item, index) => ({ item, index }))
-      .filter(({ item }) => item.status !== 'done' && item.status !== 'skipped');
+      .filter(({ item }) => item.status !== 'done' && item.status !== 'published' && item.status !== 'skipped');
 
     if (uploadQueue.length === 0) {
       alert('Nenhum arquivo pendente para publicar.');
@@ -2450,6 +2509,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setIsLoading(true);
     setIsPublishing(true);
     setIsUploadPaused(false);
+    setUploadCompletionNotice('');
     uploadPausedRef.current = false;
     try {
       const currentUser = getCurrentUser();
@@ -2544,9 +2604,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             uploadSize: uploadFile.size,
             uploadType: uploadFile.type,
           });
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, preparedFileSize: uploadFile.size, uploadBatchId } : uploadItem));
 
           uploadStage = 'hash-original';
-          const fileHash = await calculateUploadFileSha256(uploadFile);
+          const fileHash = item.fileHash || await calculateUploadFileSha256(uploadFile);
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, fileHash, uploadBatchId } : uploadItem));
 
           uploadStage = 'duplicidade-conteudo';
           if (duplicateAction !== 'replace' && currentBatchHashes.has(fileHash)) {
@@ -2579,22 +2641,27 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           }
 
           uploadStage = 'upload-original';
-          console.info('[photographer-upload] storage:upload:start', {
-            uploadBatchId,
-            fileName: uploadFile.name,
-            originalFileName: item.file.name,
-            eventId: selectedEvent?.id || null,
-            photographerId: photographer.id,
-            size: uploadFile.size,
-            contentType: uploadFile.type,
-          });
-          const uploadedFile = await productService.uploadProductFile(photographer.id, uploadFile, { fileHash, uploadBatchId });
+          const uploadedFile = item.uploadedFilePath
+            ? { path: item.uploadedFilePath, publicUrl: item.uploadedFilePath, reused: true }
+            : await (async () => {
+                console.info('[photographer-upload] storage:upload:start', {
+                  uploadBatchId,
+                  fileName: uploadFile.name,
+                  originalFileName: item.file.name,
+                  eventId: selectedEvent?.id || null,
+                  photographerId: photographer.id,
+                  size: uploadFile.size,
+                  contentType: uploadFile.type,
+                });
+                return productService.uploadProductFile(photographer.id, uploadFile, { fileHash, uploadBatchId });
+              })();
           console.info('[photographer-upload] storage:upload:done', {
             uploadBatchId,
             fileName: uploadFile.name,
             storagePath: uploadedFile.path,
             reused: 'reused' in uploadedFile ? uploadedFile.reused : false,
           });
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'uploaded', uploadedFilePath: uploadedFile.path, fileHash, uploadBatchId, stage: uploadStage } : uploadItem));
           let thumbnailFile: File | null = null;
           try {
             uploadStage = 'preview';
@@ -2611,10 +2678,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             });
           }
           uploadStage = 'hash-preview';
-          const thumbnailHash = thumbnailFile ? await calculateUploadFileSha256(thumbnailFile) : null;
+          const thumbnailHash = item.thumbnailHash || (thumbnailFile ? await calculateUploadFileSha256(thumbnailFile) : null);
           uploadStage = 'upload-preview';
           const uploadedThumbnail = thumbnailFile
-            ? await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
+            ? item.uploadedThumbnailPath
+              ? { path: item.uploadedThumbnailPath, publicUrl: item.uploadedThumbnailPath, reused: true }
+              : await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash ?? undefined, uploadBatchId })
             : null;
           if (uploadedThumbnail) {
             console.info('[photographer-upload] thumbnail:upload:done', {
@@ -2624,6 +2693,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               reused: 'reused' in uploadedThumbnail ? uploadedThumbnail.reused : false,
             });
           }
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'uploaded', uploadedFilePath: uploadedFile.path, uploadedThumbnailPath: uploadedThumbnail?.path || null, thumbnailHash, fileHash, uploadBatchId, stage: uploadStage } : uploadItem));
 
           const productPayload = {
             name: resolvedDescription,
@@ -2649,7 +2719,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           let indexedPhotoId: string | null = null;
           uploadStage = 'banco';
           if (duplicateAction === 'replace' && existingNameProduct) {
-            await productService.replaceProductMedia(existingNameProduct.id, productPayload);
+            await productService.replaceProductMediaResilient(existingNameProduct.id, productPayload);
             indexedPhotoId = existingNameProduct.id;
             await productService.logUploadConflictAction({
               action: 'upload_replace',
@@ -2664,7 +2734,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             });
             replacedCount += 1;
           } else {
-            const productId = await productService.addProduct(productPayload);
+            const productId = await productService.addProductResilient(productPayload);
             indexedPhotoId = productId;
             if (duplicateAction === 'copy') {
               await productService.logUploadConflictAction({
@@ -2682,6 +2752,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             }
             publishedCount += 1;
           }
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'db_saved', productId: indexedPhotoId, error: '', stage: uploadStage } : uploadItem));
           console.info('[photographer-upload] db:published', {
             uploadBatchId,
             photoId: indexedPhotoId,
@@ -2700,7 +2771,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               });
             });
           }
-          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'done', uploadedAt: new Date().toISOString(), error: '', stage: uploadStage } : uploadItem));
+          setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'published', uploadedAt: new Date().toISOString(), error: '', productId: indexedPhotoId, stage: uploadStage } : uploadItem));
           setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
@@ -2756,7 +2827,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) dos arquivos publicados ficaram com fallback visual.`
           : '';
-        alert(`Upload parcial concluido.\n\nPublicadas: ${publishedCount} fotos\nFalharam: ${failedUploads.length} fotos\nDuplicadas ignoradas: ${skippedDuplicateCount}\n${previewWarningText ? `${previewWarningText}\n` : ''}\nOs arquivos com falha ficaram selecionados para tentar novamente.\nPrimeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
+        setUploadCompletionNotice(`Upload parcial concluido. Publicadas: ${publishedCount} foto(s). Falharam: ${failedUploads.length}. Duplicadas ignoradas: ${skippedDuplicateCount}.${previewWarningText} Primeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);
@@ -2764,7 +2835,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) não foram gerados e ficaram com fallback visual.`
           : '';
-        alert(skippedDuplicateCount > 0
+        setUploadCompletionNotice(skippedDuplicateCount > 0
           ? `Upload concluído: ${publishedCount} publicado(s), ${replacedCount} substituído(s), ${copiedCount} cópia(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
           : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s).${previewWarningText}`);
       }
@@ -5010,6 +5081,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         <p className="font-mono text-[10px] uppercase tracking-widest">{resumeNotice}</p>
                       </div>
                     )}
+                    {uploadCompletionNotice && (
+                      <div className="bg-[#0d131c] border border-brutal-accent/40 p-3 text-gray-200">
+                        <p className="font-mono text-[10px] uppercase tracking-widest">{uploadCompletionNotice}</p>
+                      </div>
+                    )}
                     <div className="bg-[#080d14] border border-white/10 p-3 space-y-3">
                       <div className="flex flex-col sm:flex-row sm:items-end gap-3">
                         <div className="flex-1">
@@ -5043,7 +5119,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <div className="bg-[#080d14] border border-white/10 p-3">
                       <div className="mb-3 grid grid-cols-2 gap-2 md:grid-cols-4">
                         <div className="border border-white/10 bg-[#05080d] p-2">
-                          <p className="font-mono text-[9px] uppercase text-gray-500">Concluidas</p>
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Publicadas</p>
                           <p className="font-sans text-xl font-black text-green-300">{completedUploadCount}</p>
                         </div>
                         <div className="border border-white/10 bg-[#05080d] p-2">
@@ -5053,6 +5129,22 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         <div className="border border-white/10 bg-[#05080d] p-2">
                           <p className="font-mono text-[9px] uppercase text-gray-500">Falhas</p>
                           <p className="font-sans text-xl font-black text-red-300">{failedUploadCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Em andamento</p>
+                          <p className="font-sans text-xl font-black text-cyan-200">{inProgressUploadCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Storage ok</p>
+                          <p className="font-sans text-xl font-black text-cyan-200">{uploadedOnlyCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Banco ok</p>
+                          <p className="font-sans text-xl font-black text-green-200">{dbSavedUploadCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Duplicadas</p>
+                          <p className="font-sans text-xl font-black text-blue-300">{skippedUploadCount}</p>
                         </div>
                         <div className="border border-white/10 bg-[#05080d] p-2">
                           <p className="font-mono text-[9px] uppercase text-gray-500">Conexao</p>
@@ -5264,7 +5356,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
                         {publishProgress.done} de {publishProgress.total} arquivo(s) processados.
                       </p>
-                      <div className="mt-3 grid grid-cols-2 gap-2">
+                      <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                         <button
                           type="button"
                           disabled={!isPublishing || !isBrowserOnline}
@@ -5276,12 +5368,21 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         </button>
                         <button
                           type="button"
-                          disabled={isPublishing || failedUploadCount === 0}
+                          disabled={isPublishing || pendingUploadCount === 0 || !isBrowserOnline}
                           onClick={handleUpload}
                           className="inline-flex h-10 items-center justify-center gap-2 border border-white/15 bg-white/5 px-3 font-mono text-[10px] uppercase font-bold text-gray-200 transition-colors hover:border-brutal-accent disabled:opacity-50"
                         >
                           <RotateCcw className="h-4 w-4" />
-                          Reenviar erros
+                          {failedUploadCount > 0 ? 'Tentar falhas' : 'Continuar upload'}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={failedUploadCount === 0}
+                          onClick={exportUploadErrorReport}
+                          className="inline-flex h-10 items-center justify-center gap-2 border border-white/15 bg-white/5 px-3 font-mono text-[10px] uppercase font-bold text-gray-200 transition-colors hover:border-brutal-accent disabled:opacity-50"
+                        >
+                          <Copy className="h-4 w-4" />
+                          Exportar erros
                         </button>
                       </div>
                     </div>

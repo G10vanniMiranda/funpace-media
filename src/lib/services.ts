@@ -219,6 +219,39 @@ function wait(ms: number) {
   return new Promise<void>((resolve) => setTimeout(resolve, ms));
 }
 
+function isTransientNetworkError(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '');
+  return /failed to fetch|networkerror|load failed|aborterror|timeout|temporar|econnreset|socket|fetch failed/i.test(message);
+}
+
+async function retryTransient<T>(
+  action: () => Promise<T>,
+  input: { label: string; attempts?: number; delayMs?: number; metadata?: Record<string, unknown> },
+): Promise<T> {
+  const attempts = input.attempts ?? 4;
+  const delayMs = input.delayMs ?? 900;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await action();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientNetworkError(error) || attempt >= attempts) break;
+      console.warn('[supabase-rest] transient retry', {
+        label: input.label,
+        attempt,
+        nextAttempt: attempt + 1,
+        message: error instanceof Error ? error.message : String(error || ''),
+        ...(input.metadata || {}),
+      });
+      await wait(delayMs * attempt);
+    }
+  }
+
+  throw lastError;
+}
+
 function quotePostgrestString(value: string) {
   return `"${String(value).replace(/"/g, '\\"')}"`;
 }
@@ -815,6 +848,76 @@ export const productService = {
     return created.id;
   },
 
+  async addProductResilient(product: Omit<Product, 'id'>): Promise<string> {
+    const findExistingCreatedProduct = async () => {
+      if (isMockMode || !product.vendedorId || !product.event) return null;
+
+      const params = new URLSearchParams({
+        select: 'id,name,event,vendedorId,fileHash,originalFileName,storagePath,status,createdAt',
+        vendedorId: `eq.${product.vendedorId}`,
+        event: `eq.${product.event}`,
+        status: 'neq.removed',
+        order: 'createdAt.desc',
+        limit: '20',
+      });
+      if (product.fileHash) params.set('fileHash', `eq.${product.fileHash}`);
+
+      const rows = await retryTransient(
+        () => supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true),
+        { label: 'products.find-created-after-failure', metadata: { uploadBatchId: product.uploadBatchId || null } },
+      );
+
+      return rows.find((row) => (
+        (!product.fileHash || row.fileHash === product.fileHash) &&
+        (!product.originalFileName || row.originalFileName === product.originalFileName) &&
+        (!product.storagePath || row.storagePath === product.storagePath)
+      )) || rows[0] || null;
+    };
+
+    try {
+      return await this.addProduct(product);
+    } catch (error) {
+      if (!isTransientNetworkError(error)) throw error;
+
+      const existing = await findExistingCreatedProduct().catch(() => null);
+      if (existing?.id) {
+        console.warn('[photographer-upload] db:create-recovered', {
+          productId: existing.id,
+          uploadBatchId: product.uploadBatchId || null,
+          originalFileName: product.originalFileName || null,
+          storagePath: product.storagePath || null,
+        });
+        return existing.id;
+      }
+
+      let lastError: unknown = error;
+      for (let attempt = 1; attempt <= 3; attempt += 1) {
+        console.warn('[supabase-rest] transient retry', {
+          label: 'products.create',
+          attempt,
+          nextAttempt: attempt + 1,
+          message: lastError instanceof Error ? lastError.message : String(lastError || ''),
+          uploadBatchId: product.uploadBatchId || null,
+          originalFileName: product.originalFileName || null,
+          storagePath: product.storagePath || null,
+        });
+        await wait(900 * attempt);
+
+        const recovered = await findExistingCreatedProduct().catch(() => null);
+        if (recovered?.id) return recovered.id;
+
+        try {
+          return await this.addProduct(product);
+        } catch (retryError) {
+          if (!isTransientNetworkError(retryError)) throw retryError;
+          lastError = retryError;
+        }
+      }
+
+      throw lastError;
+    }
+  },
+
   async findExistingProductByFileHash(vendedorId: string, fileHash: string, eventName?: string): Promise<Product | null> {
     if (!fileHash || isMockMode) return null;
 
@@ -828,7 +931,10 @@ export const productService = {
     });
 
     try {
-      const rows = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+      const rows = await retryTransient(
+        () => supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true),
+        { label: 'products.find-by-hash', metadata: { vendedorId, eventName: eventName || null } },
+      );
       const normalizedEvent = eventName?.trim().toLowerCase();
       const match = normalizedEvent
         ? rows.find((product) => (product.event || '').trim().toLowerCase() === normalizedEvent) || rows[0]
@@ -859,7 +965,10 @@ export const productService = {
     });
 
     try {
-      const rows = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true);
+      const rows = await retryTransient(
+        () => supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`, true),
+        { label: 'products.find-by-original-name', metadata: { vendedorId, eventName, originalFileName } },
+      );
       const match = rows.find((product) => (
         normalizeFileName(product.originalFileName) === normalizedTarget ||
         normalizeFileName(product.name) === normalizeFileName(baseName)
@@ -923,6 +1032,13 @@ export const productService = {
 
     if (!updated) throw new Error('Produto não encontrado.');
     return updated;
+  },
+
+  async replaceProductMediaResilient(id: string, changes: Partial<Pick<Product, 'name' | 'price' | 'url' | 'type' | 'event' | 'eventId' | 'checkpoint' | 'bib' | 'thumbnailUrl' | 'watermarkUrl' | 'storagePath' | 'fileHash' | 'fileSize' | 'originalFileName' | 'thumbnailHash' | 'uploadBatchId' | 'status'>>): Promise<Product> {
+    return retryTransient(
+      () => this.replaceProductMedia(id, changes),
+      { label: 'products.replace-media', metadata: { productId: id, uploadBatchId: changes.uploadBatchId || null } },
+    );
   },
 
   async logUploadConflictAction(input: { action: 'upload_replace' | 'upload_copy'; productId?: string | null; metadata: Record<string, unknown> }) {

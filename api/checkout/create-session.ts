@@ -1,4 +1,4 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 import { BULK_PHOTO_DISCOUNT_PERCENT, calculateCartPricing, isPhotoType } from '../../src/lib/cart-pricing.js';
 
 const WELCOME_VOUCHER_CODE = 'FUNPACE10';
@@ -476,7 +476,7 @@ function getAllowedRedirectOrigins(req: any) {
 function buildSafeSuccessUrl(req: any, inputUrl: string | undefined, orderId: string) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
   const host = req.headers.host;
-  const fallback = `${proto}://${host}/pagamento/sucesso`;
+  const fallback = `${proto}://${host}/checkout/sucesso`;
   const candidate = new URL(inputUrl || fallback, fallback);
   const origin = candidate.origin.replace(/\/+$/, '');
 

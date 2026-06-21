@@ -1,4 +1,4 @@
-import { getClientIp, handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.js';
+import { getClientIp, handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../server/shared/security.js';
 
 function isIpAllowed(req: any) {
   const allowlist = String(process.env.ADMIN_IP_ALLOWLIST || '')

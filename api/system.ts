@@ -2,7 +2,7 @@ import healthHandler from '../server/api/health.js';
 import checkoutDebugHandler from '../server/api/checkout/debug.js';
 import eventMediaCountsHandler from '../server/api/events/media-counts.js';
 import paymentsReconcileHandler from '../server/api/payments/reconcile.js';
-import { handleOptions, rateLimit, setSecurityHeaders } from './_security.js';
+import { handleOptions, rateLimit, setSecurityHeaders } from '../server/shared/security.js';
 
 function routeName(req: any) {
   const queryRoute = String(req.query?.route || '').trim();
@@ -12,15 +12,21 @@ function routeName(req: any) {
   if (url.includes('/checkout/debug')) return 'checkout-debug';
   if (url.includes('/events/media-counts')) return 'events-media-counts';
   if (url.includes('/payments/reconcile')) return 'payments-reconcile';
+  if (url.includes('/downloads/authorize')) return 'downloads-authorize';
   return 'health';
 }
 
-export default function handler(req: any, res: any) {
+export default async function handler(req: any, res: any) {
+  const route = routeName(req);
+
+  if (route === 'downloads-authorize') {
+    const { default: downloadAuthorizeHandler } = await import('../server/api/downloads/authorize.js');
+    return downloadAuthorizeHandler(req, res);
+  }
+
   if (handleOptions(req, res, 'GET,POST,OPTIONS')) return;
   if (rateLimit(req, res, { keyPrefix: 'system', windowMs: 60 * 1000, max: 120 })) return;
   setSecurityHeaders(res);
-
-  const route = routeName(req);
 
   if (route === 'health') {
     if (process.env.ENABLE_PUBLIC_DIAGNOSTICS !== 'true') {

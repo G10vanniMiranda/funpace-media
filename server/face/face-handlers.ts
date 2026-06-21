@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { getClientIp } from '../../api/_security.js';
+import { getClientIp } from '../shared/security.js';
 import { deletePrivateObject, getAwsS3Config, testS3Connection, uploadPrivateImage } from '../../src/services/aws/s3.service.js';
 import { getRekognitionConfig, indexFaces, removeFaces, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
 import { faceError, isUuid, parseSelfieMultipart, readJsonBody, readRequestBuffer, validateImage } from './face-utils.js';

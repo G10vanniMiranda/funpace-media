@@ -5,6 +5,7 @@ import { Order, Product } from '../types';
 import { orderService } from '../lib/services';
 import { getCurrentAccessToken, getCurrentUser } from '../lib/supabase';
 import { copyText, createProductShareUrl } from '../lib/customer-engagement';
+import { buildSafeDownloadPath, shouldUseSafeDownloadPage } from '../lib/download-flow';
 import { ProtectedMedia } from './ProtectedMedia';
 
 interface CustomerOrdersDrawerProps {
@@ -243,6 +244,10 @@ export function CustomerOrdersDrawer({
   const downloadPaidOrder = async (order: Order) => {
     try {
       const items = (order.items ?? []).filter((item) => !hiddenItemIds.has(item.id));
+      if (shouldUseSafeDownloadPage() && items[0]) {
+        window.location.assign(buildSafeDownloadPath(order.id, items[0].id));
+        return;
+      }
       for (const item of items) {
         const authorized = await authorizeDownload(order.id, item.id);
         triggerBrowserDownload(authorized.downloadUrl);
@@ -256,6 +261,10 @@ export function CustomerOrdersDrawer({
 
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     try {
+      if (shouldUseSafeDownloadPage()) {
+        window.location.assign(buildSafeDownloadPath(order.id, item.id));
+        return;
+      }
       const authorized = await authorizeDownload(order.id, item.id);
       triggerBrowserDownload(authorized.downloadUrl);
     } catch (error) {
@@ -265,13 +274,7 @@ export function CustomerOrdersDrawer({
   };
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    try {
-      const authorized = await authorizeDownload(order.id, item.id);
-      window.location.assign(authorized.saveUrl);
-    } catch (error) {
-      console.error('Erro ao abrir arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Não foi possível abrir o arquivo.');
-    }
+    window.location.assign(buildSafeDownloadPath(order.id, item.id));
   };
 
   const showCopied = (message: string) => {
@@ -743,6 +746,10 @@ export function CustomerOrdersPage({
 
   const downloadPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
     try {
+      if (shouldUseSafeDownloadPage()) {
+        window.location.assign(buildSafeDownloadPath(order.id, item.id));
+        return;
+      }
       const authorized = await authorizeDownload(order.id, item.id);
       triggerBrowserDownload(authorized.downloadUrl);
     } catch (error) {
@@ -752,17 +759,15 @@ export function CustomerOrdersPage({
   };
 
   const openPaidItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    try {
-      const authorized = await authorizeDownload(order.id, item.id);
-      window.location.assign(authorized.saveUrl);
-    } catch (error) {
-      console.error('Erro ao abrir arquivo:', error);
-      alert(error instanceof Error ? error.message : 'Não foi possível abrir o arquivo.');
-    }
+    window.location.assign(buildSafeDownloadPath(order.id, item.id));
   };
 
   const downloadPaidOrder = async (order: Order) => {
     try {
+      if (shouldUseSafeDownloadPage() && order.items?.[0]) {
+        window.location.assign(buildSafeDownloadPath(order.id, order.items[0].id));
+        return;
+      }
       for (const item of order.items ?? []) {
         const authorized = await authorizeDownload(order.id, item.id);
         triggerBrowserDownload(authorized.downloadUrl);

@@ -17,6 +17,7 @@ import { AdminLogin } from './components/AdminLogin';
 import { FaceSearchModal } from './components/FaceSearchModal';
 import { WelcomeVoucherModal } from './components/WelcomeVoucherModal';
 import { PagamentoSucesso } from './routes/pagamento/sucesso';
+import { DownloadSeguro } from './routes/DownloadSeguro';
 import { ParaFotografos } from './routes/ParaFotografos';
 import { Precos } from './routes/Precos';
 import { Faq } from './routes/Faq';
@@ -748,7 +749,7 @@ function Storefront() {
         userId: user.uid,
         buyer,
         items: checkoutItems,
-        successUrl: `${window.location.origin}/pagamento/sucesso`,
+        successUrl: `${window.location.origin}/checkout/sucesso`,
         cancelUrl: `${window.location.origin}?payment=cancel`,
         paymentMethod,
         couponCode,
@@ -2495,6 +2496,8 @@ export default function App() {
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/pagar" element={<PagamentoSucesso />} />
           <Route path="/pagamento/sucesso" element={<PagamentoSucesso />} />
+          <Route path="/checkout/sucesso" element={<PagamentoSucesso />} />
+          <Route path="/download" element={<DownloadSeguro />} />
           <Route path="/" element={<Storefront />} />
           <Route path="/@:slug" element={<Storefront />} />
           <Route path="/:slug" element={<Storefront />} />

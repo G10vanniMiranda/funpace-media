@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from './_security.js';
+import { handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../server/shared/security.js';
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from '../server/face/face-handlers.js';
 import { shouldBypassFaceBackfillRateLimit } from '../server/face/face-rate-limit.js';
 

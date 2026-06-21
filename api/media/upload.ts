@@ -1,4 +1,4 @@
-import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
+import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 
 export const config = {
   api: {

@@ -46,7 +46,7 @@ test('manual resend endpoint validates owner or admin before forcing resend', ()
 
 test('schema includes email audit logs and token-backed downloads', () => {
   const sql = readFileSync('scripts/supabase-schema.sql', 'utf8');
-  const downloads = readFileSync('api/downloads/authorize.ts', 'utf8');
+  const downloads = readFileSync('server/api/downloads/authorize.ts', 'utf8');
 
   assert.match(sql, /create table if not exists public\.email_logs/);
   assert.match(sql, /order_id uuid references public\.orders/);

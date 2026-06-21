@@ -1,4 +1,4 @@
-import { assertRequestSize, handleOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../_security.js';
+import { assertRequestSize, handleOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 import { sendPaidOrderEmail } from '../../server/shared/checkoutFulfillment.js';
 import { getSupabaseApiConfig, supabaseRequest } from '../../server/shared/utils.js';
 

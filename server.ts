@@ -1127,7 +1127,7 @@ function getAllowedRedirectOrigins(req: express.Request) {
 }
 
 function buildSafeCheckoutSuccessUrl(req: express.Request, inputUrl: string | undefined, orderId: string) {
-  const fallback = `${getRequestOrigin(req)}/pagamento/sucesso`;
+  const fallback = `${getRequestOrigin(req)}/checkout/sucesso`;
   const candidate = new URL(inputUrl || fallback, fallback);
   const origin = candidate.origin.replace(/\/+$/, "");
 
@@ -1275,7 +1275,7 @@ app.post("/payments/infinitepay/create", async (req, res) => {
       });
     }
 
-    const redirectUrl = `${getFrontendUrl()}/pagamento/sucesso?order_id=${encodeURIComponent(orderId)}`;
+    const redirectUrl = `${getFrontendUrl()}/checkout/sucesso?order_id=${encodeURIComponent(orderId)}`;
     const webhookUrl = `${getApiUrl()}/payments/infinitepay/webhook`;
     const checkoutPayload = {
       handle,

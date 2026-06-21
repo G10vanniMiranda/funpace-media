@@ -1,3 +1,4 @@
+// Shared security primitives for Vercel functions and the Express-compatible backend.
 type RateLimitBucket = {
   count: number;
   resetAt: number;
@@ -7,6 +8,7 @@ type RateLimitOptions = {
   keyPrefix: string;
   windowMs: number;
   max: number;
+  onLimit?: (retryAfterSeconds: number) => void;
 };
 
 declare global {
@@ -112,7 +114,12 @@ export function rateLimit(req: any, res: any, options: RateLimitOptions) {
   bucket.count += 1;
   if (bucket.count <= options.max) return false;
 
-  res.setHeader('Retry-After', String(Math.ceil((bucket.resetAt - now) / 1000)));
+  const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
+  res.setHeader('Retry-After', String(retryAfterSeconds));
+  if (options.onLimit) {
+    options.onLimit(retryAfterSeconds);
+    return true;
+  }
   res.status(429).json({ error: 'Muitas tentativas. Aguarde e tente novamente.' });
   return true;
 }

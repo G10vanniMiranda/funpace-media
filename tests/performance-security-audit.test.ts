@@ -19,7 +19,7 @@ test('public event page queries only products from the selected event', () => {
 });
 
 test('download proxy blocks private destinations and streams files', () => {
-  const source = readFileSync('api/downloads/authorize.ts', 'utf8');
+  const source = readFileSync('server/api/downloads/authorize.ts', 'utf8');
 
   assert.match(source, /isPrivateDownloadHostname/);
   assert.match(source, /value === 'localhost'/);
@@ -31,7 +31,7 @@ test('download proxy blocks private destinations and streams files', () => {
 });
 
 test('serverless rate limiter periodically removes expired buckets', () => {
-  const source = readFileSync('api/_security.ts', 'utf8');
+  const source = readFileSync('server/shared/security.ts', 'utf8');
 
   assert.match(source, /cleanupRateLimitBuckets/);
   assert.match(source, /bucket\.resetAt <= now/);

@@ -22,6 +22,7 @@ import { customerAccountService, orderService } from '../lib/services';
 import { getCurrentAccessToken, getCurrentUser, updateCurrentUserPassword, updateCurrentUserProfile } from '../lib/supabase';
 import { useToast } from '../contexts/ToastContext';
 import { ProtectedMedia } from './ProtectedMedia';
+import { buildSafeDownloadPath, shouldUseSafeDownloadPage } from '../lib/download-flow';
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
@@ -205,6 +206,10 @@ export function CustomerAccountPage({
   };
 
   const downloadItem = async (order: Order, item: NonNullable<Order['items']>[number]) => {
+    if (shouldUseSafeDownloadPage()) {
+      navigate(buildSafeDownloadPath(order.id, item.id));
+      return;
+    }
     setDownloadingItemId(item.id);
     setDownloadError(null);
     try {
@@ -221,18 +226,7 @@ export function CustomerAccountPage({
   };
 
   const openItemForSaving = async (order: Order, item: NonNullable<Order['items']>[number]) => {
-    setDownloadingItemId(item.id);
-    setDownloadError(null);
-    try {
-      const authorized = await authorizeDownload(order.id, item.id);
-      window.location.assign(authorized.saveUrl);
-    } catch (error: any) {
-      const message = error?.message || 'Não foi possível abrir a imagem.';
-      setDownloadError({ orderId: order.id, itemId: item.id, message });
-      showToast(message, 'error');
-    } finally {
-      setDownloadingItemId(null);
-    }
+    navigate(buildSafeDownloadPath(order.id, item.id));
   };
 
   const downloadOrder = async (order: Order) => {

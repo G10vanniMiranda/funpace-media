@@ -69,6 +69,10 @@
       "destination": "/api/system?route=payments-reconcile"
     },
     {
+      "source": "/api/downloads/authorize",
+      "destination": "/api/system?route=downloads-authorize"
+    },
+    {
       "source": "/api/admin/snapshot",
       "destination": "/api/admin?route=snapshot"
     },

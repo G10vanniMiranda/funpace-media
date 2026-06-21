@@ -88,6 +88,11 @@ function getRouteInput(req: any) {
   };
 }
 
+function devLog(message: string, metadata?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'production') return;
+  console.info(`[photographer-signup] ${message}`, metadata || {});
+}
+
 export default async function handler(req: any, res: any) {
   setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -124,8 +129,8 @@ export default async function handler(req: any, res: any) {
     }
 
     const patch = action === 'disable'
-      ? { verified: false, blockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-      : { verified: true, blockedAt: null, updatedAt: new Date().toISOString() };
+      ? { verified: false, approved: false, status: 'pending', blockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      : { verified: true, approved: true, status: 'active', isPublic: true, blockedAt: null, updatedAt: new Date().toISOString() };
 
     const [photographer] = await supabaseRequest<any[]>(
       `/rest/v1/photographers?id=eq.${encodeURIComponent(id)}&select=*`,
@@ -136,6 +141,18 @@ export default async function handler(req: any, res: any) {
       },
     );
     if (!photographer) return res.status(404).json({ error: 'Fotógrafo não encontrado.' });
+
+    if (action === 'reactivate') {
+      await supabaseRequest(`/rest/v1/photographer_referrals?referredPhotographerId=eq.${encodeURIComponent(id)}&status=eq.pending`, {
+        method: 'PATCH',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({
+          status: 'approved',
+          approvedAt: new Date().toISOString(),
+        }),
+      }).catch((error) => devLog('Nao foi possivel aprovar indicacao do fotografo', { photographerId: id, error: String(error?.message || error) }));
+      devLog('Aprovado; login liberado', { photographerId: id });
+    }
 
     return res.json({
       ok: true,

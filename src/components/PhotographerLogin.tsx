@@ -5,7 +5,7 @@ import { Camera, Lock, Mail, ArrowRight, Loader2, AlertCircle, Check } from 'luc
 import { Photographer } from '../types';
 import { photographerService, referralService } from '../lib/services';
 import { isMockMode } from '../lib/config';
-import { loginWithEmail, registerWithEmail } from '../lib/supabase';
+import { getCurrentAccessToken, loginWithEmail, registerWithEmail } from '../lib/supabase';
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { formatWhatsapp, onlyWhatsappDigits } from '../lib/phone';
 
@@ -43,6 +43,13 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
     avatar: string;
   }) {
     const referralCode = referralService.getStoredReferralCode();
+    if (import.meta.env.DEV) {
+      console.info('[photographer-signup] Cadastro iniciado', {
+        email: input.email,
+        hasUserId: Boolean(input.userId),
+        hasReferralCode: Boolean(referralCode),
+      });
+    }
     const pendingResponse = await fetch('/api/photographers/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -214,13 +221,21 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
         if (authUser?.id && loginEmail) {
           let claimDetail = '';
           try {
+            const token = await getCurrentAccessToken();
             const claimResponse = await fetch('/api/photographers/claim', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
               body: JSON.stringify({ userId: authUser.id, email: loginEmail }),
             });
 
             if (claimResponse.ok) {
+              if (import.meta.env.DEV) {
+                const claimPayload = await claimResponse.clone().json().catch(() => null);
+                console.info('[photographer-signup] Claim executado no login', claimPayload);
+              }
               photographer = await photographerService.getPhotographerById(authUser.id);
             } else {
               const claimPayload = await claimResponse.json().catch(() => null);
@@ -244,12 +259,12 @@ export function PhotographerLogin({ onLoginSuccess, onBack }: PhotographerLoginP
 
         if (photographer) {
           if (!photographer.verified) {
-            setError('PENDENTE: seu cadastro ainda não foi aprovado pelo administrador.');
+            setError('Sua conta foi criada com sucesso e está aguardando aprovação do administrador.');
             return;
           }
           onLoginSuccess(photographer);
         } else {
-          setError('ACESSO NEGADO: esta conta ainda não possui cadastro de fotógrafo.');
+          setError('Não encontramos o cadastro de fotógrafo vinculado a esta conta. Tente entrar novamente; se persistir, o cadastro pendente falhou e precisa ser reparado pelo administrador.');
         }
       }
     } catch (err: any) {

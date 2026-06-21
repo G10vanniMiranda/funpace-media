@@ -88,18 +88,9 @@ export async function registerPendingReferral(input: {
   if (referrer.id === input.referredPhotographerId || sameEmail || sameCpf || samePhone) return;
 
   const now = new Date().toISOString();
-  await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(input.referredPhotographerId)}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({
-      referredByPhotographerId: referrer.id,
-      updatedAt: now,
-    }),
-  }).catch(() => undefined);
-
-  await supabaseRequest('/rest/v1/photographer_referrals?on_conflict=referredPhotographerId', {
+  const created = await supabaseRequest<any[]>('/rest/v1/photographer_referrals?on_conflict=referredPhotographerId&select=id', {
     method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify({
       referrerPhotographerId: referrer.id,
       referredPhotographerId: input.referredPhotographerId,
@@ -119,7 +110,19 @@ export async function registerPendingReferral(input: {
     }),
   }).catch((error) => {
     console.error('Nao foi possivel registrar indicacao:', error);
+    return [] as any[];
   });
+
+  await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(input.referredPhotographerId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      referredByPhotographerId: referrer.id,
+      referral_id: created?.[0]?.id || null,
+      invited_by: referrer.id,
+      updatedAt: now,
+    }),
+  }).catch(() => undefined);
 }
 
 export async function markReferralApproved(referredPhotographerId: string) {

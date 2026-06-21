@@ -1,7 +1,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertCircle, ArrowRight, Camera, Check, Loader2, Lock, Mail } from 'lucide-react';
-import { completePasswordSetupFromUrl, updateCurrentUserPassword, type AppUser } from '../lib/supabase';
+import { completePasswordSetupFromUrl, getCurrentAccessToken, updateCurrentUserPassword, type AppUser } from '../lib/supabase';
 
 export function PhotographerPasswordSetup() {
   const [user, setUser] = useState<AppUser | null>(null);
@@ -33,9 +33,13 @@ export function PhotographerPasswordSetup() {
   async function claimPhotographerProfile(nextUser: AppUser) {
     if (!nextUser.id || !nextUser.email) return;
 
+    const token = await getCurrentAccessToken();
     await fetch('/api/photographers/claim', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify({ userId: nextUser.id, email: nextUser.email }),
     }).catch(() => null);
   }

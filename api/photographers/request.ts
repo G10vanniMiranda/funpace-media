@@ -96,6 +96,15 @@ function normalizeReferralCode(value: string | null | undefined) {
     .slice(0, 80);
 }
 
+function createSlug(value: string) {
+  return normalizeReferralCode(value).slice(0, 72) || `fotografo-${Date.now().toString(36)}`;
+}
+
+function devLog(message: string, metadata?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'production') return;
+  console.info(`[photographer-signup] ${message}`, metadata || {});
+}
+
 function getSupabaseConfig() {
   const supabaseUrl = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL || '';
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SERVICE_ROLE_KEY || '';
@@ -133,15 +142,9 @@ async function registerPendingReferral(input: {
   const samePhone = referrer.phone && String(referrer.phone).replace(/\D/g, '') === input.referredPhone;
   if (sameEmail || sameCpf || samePhone) return;
 
-  await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(input.referredPhotographerId)}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ referredByPhotographerId: referrer.id }),
-  }).catch(() => undefined);
-
-  await supabaseRequest('/rest/v1/photographer_referrals?on_conflict=referredPhotographerId', {
+  const created = await supabaseRequest<any[]>('/rest/v1/photographer_referrals?on_conflict=referredPhotographerId&select=id', {
     method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+    headers: { Prefer: 'resolution=merge-duplicates,return=representation' },
     body: JSON.stringify({
       referrerPhotographerId: referrer.id,
       referredPhotographerId: input.referredPhotographerId,
@@ -156,6 +159,16 @@ async function registerPendingReferral(input: {
         ipHash: input.ipHash,
         userAgent: input.userAgent,
       },
+    }),
+  }).catch(() => [] as any[]);
+
+  await supabaseRequest(`/rest/v1/photographers?id=eq.${encodeURIComponent(input.referredPhotographerId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      referredByPhotographerId: referrer.id,
+      referral_id: created?.[0]?.id || null,
+      invited_by: referrer.id,
     }),
   }).catch(() => undefined);
 }
@@ -198,9 +211,17 @@ function photographerPayload(input: {
   avatar: string;
   cpf: string;
 }) {
+  const baseSlug = createSlug(input.instagram || input.name || input.email);
+  const slug = `${baseSlug}-${crypto.createHash('sha1').update(input.email).digest('hex').slice(0, 6)}`.slice(0, 80);
+  const isAuthUserId = Boolean(input.id && !input.id.startsWith('pending:'));
   return {
     ...(input.id ? { id: input.id } : {}),
+    auth_user_id: isAuthUserId ? input.id : null,
     name: input.name,
+    displayName: input.name,
+    username: slug,
+    slug,
+    isPublic: false,
     instagram: input.instagram,
     email: input.email,
     bio: input.bio,
@@ -208,6 +229,8 @@ function photographerPayload(input: {
     avatar: input.avatar,
     cpf: input.cpf,
     verified: false,
+    approved: false,
+    status: 'pending',
     stats: {
       photos: 0,
       events: 0,
@@ -228,14 +251,22 @@ function photographerUpdatePayload(input: {
   avatar: string;
   cpf: string;
 }) {
+  const baseSlug = createSlug(input.instagram || input.name || input.email);
+  const slug = `${baseSlug}-${crypto.createHash('sha1').update(input.email).digest('hex').slice(0, 6)}`.slice(0, 80);
   return {
     name: input.name,
+    displayName: input.name,
+    username: slug,
+    slug,
+    isPublic: false,
     instagram: input.instagram,
     email: input.email,
     bio: input.bio,
     phone: input.phone,
     avatar: input.avatar,
     cpf: input.cpf,
+    approved: false,
+    status: 'pending',
   };
 }
 
@@ -269,6 +300,7 @@ export default async function handler(req: any, res: any) {
     step = 'parse_body';
     assertRequestSize(req, Number(process.env.API_JSON_BODY_LIMIT_BYTES || 200 * 1024));
     const { userId, email, name, instagram, bio, cpf, phone, avatar, referralCode } = getJsonBody(req);
+    devLog('Cadastro iniciado', { email, hasUserId: Boolean(userId), hasReferralCode: Boolean(referralCode) });
 
     step = 'validacao';
     if (typeof email !== 'string' || !email.includes('@') || email.length > 256) {
@@ -326,6 +358,7 @@ export default async function handler(req: any, res: any) {
           cpf: cpfDigits,
         })),
       });
+      devLog('Photographer pendente atualizado', { id: existingByEmail[0]?.id, email: normalizedEmail });
     } else {
       try {
         await supabaseRequest('/rest/v1/photographers', {
@@ -342,6 +375,7 @@ export default async function handler(req: any, res: any) {
             cpf: cpfDigits,
           })),
         });
+        devLog('Photographer criado como pending', { id: resolvedId, email: normalizedEmail });
       } catch (insertError: any) {
         if (!String(insertError?.message || '').includes('photographers_email_key')) {
           throw insertError;
@@ -360,6 +394,7 @@ export default async function handler(req: any, res: any) {
             cpf: cpfDigits,
           })),
         });
+        devLog('Photographer pendente atualizado apos conflito de email', { id: resolvedId, email: normalizedEmail });
       }
     }
 
@@ -372,6 +407,7 @@ export default async function handler(req: any, res: any) {
       ipHash: crypto.createHash('sha256').update(getClientIp(req)).digest('hex'),
       userAgent: String(req.headers['user-agent'] || '').slice(0, 500),
     });
+    devLog('Referral registrada e status pending confirmado', { id: resolvedId, referralCode: normalizeReferralCode(referralCode) || null });
 
     return res.status(200).json({ ok: true, id: resolvedId });
   } catch (error: any) {

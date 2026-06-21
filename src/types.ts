@@ -1,5 +1,6 @@
 export interface Photographer {
   id: string;
+  auth_user_id?: string | null;
   slug?: string | null;
   username?: string | null;
   isPublic?: boolean | null;
@@ -15,10 +16,14 @@ export interface Photographer {
   city?: string | null;
   cpf?: string;
   verified: boolean;
+  approved?: boolean;
+  status?: 'pending' | 'active' | 'disabled';
   role?: 'photographer';
   commissionPercent?: number | null;
   referralCode?: string | null;
   referredByPhotographerId?: string | null;
+  referral_id?: string | null;
+  invited_by?: string | null;
   blockedAt?: string | null;
   lastLoginAt?: string | null;
   createdAt?: string;

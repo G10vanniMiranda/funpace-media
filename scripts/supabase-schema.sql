@@ -83,6 +83,7 @@ grant execute on function public.order_has_vendor(uuid, text) to service_role;
 
 create table if not exists public.photographers (
   id text primary key,
+  auth_user_id uuid unique references auth.users(id) on delete set null,
   slug text unique,
   username text unique check (username is null or username ~ '^[a-z0-9-]{2,80}$'),
   "isPublic" boolean not null default true,
@@ -98,10 +99,14 @@ create table if not exists public.photographers (
   city text check (city is null or char_length(city) <= 120),
   cpf text,
   verified boolean not null default false,
+  approved boolean not null default false,
+  status text not null default 'pending' check (status in ('pending', 'active', 'disabled')),
   role text not null default 'photographer' check (role in ('photographer')),
   "commissionPercent" numeric(5, 2) check ("commissionPercent" is null or ("commissionPercent" >= 0 and "commissionPercent" <= 100)),
   "blockedAt" timestamptz,
   "lastLoginAt" timestamptz,
+  referral_id uuid,
+  invited_by text,
   stats jsonb not null default jsonb_build_object(
     'photos', 0,
     'events', 0,
@@ -114,7 +119,10 @@ create table if not exists public.photographers (
   "updatedAt" timestamptz not null default now()
 );
 
+alter table public.photographers add column if not exists auth_user_id uuid unique references auth.users(id) on delete set null;
 alter table public.photographers add column if not exists role text not null default 'photographer';
+alter table public.photographers add column if not exists approved boolean not null default false;
+alter table public.photographers add column if not exists status text not null default 'pending';
 alter table public.photographers add column if not exists "commissionPercent" numeric(5, 2);
 alter table public.photographers add column if not exists "blockedAt" timestamptz;
 alter table public.photographers add column if not exists "lastLoginAt" timestamptz;
@@ -128,6 +136,35 @@ alter table public.photographers add column if not exists "coverPhoto" text;
 alter table public.photographers add column if not exists city text;
 alter table public.photographers add column if not exists "referralCode" text;
 alter table public.photographers add column if not exists "referredByPhotographerId" text references public.photographers(id) on delete set null;
+alter table public.photographers add column if not exists referral_id uuid;
+alter table public.photographers add column if not exists invited_by text;
+
+do $$
+begin
+  alter table public.photographers drop constraint if exists photographers_status_check;
+  alter table public.photographers add constraint photographers_status_check
+    check (status in ('pending', 'active', 'disabled'));
+exception
+  when undefined_table then
+    null;
+end $$;
+
+update public.photographers
+set
+  auth_user_id = case
+    when id ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      then id::uuid
+    else auth_user_id
+  end,
+  approved = verified,
+  status = case
+    when "blockedAt" is not null then 'disabled'
+    when verified = true then 'active'
+    else 'pending'
+  end
+where auth_user_id is null
+   or approved is distinct from verified
+   or status is null;
 
 create unique index if not exists photographers_referral_code_key
 on public.photographers ("referralCode")
@@ -135,6 +172,13 @@ where "referralCode" is not null;
 
 create index if not exists photographers_referred_by_idx
 on public.photographers ("referredByPhotographerId");
+
+create index if not exists photographers_auth_user_id_idx
+on public.photographers (auth_user_id);
+
+create unique index if not exists photographers_auth_user_id_key
+on public.photographers (auth_user_id)
+where auth_user_id is not null;
 
 do $$
 begin
@@ -882,7 +926,12 @@ drop policy if exists "photographers_select_public_verified_or_owner_or_admin" o
 create policy "photographers_select_public_verified_or_owner_or_admin"
 on public.photographers
 for select
-using ((verified = true and "isPublic" = true) or id = auth.uid()::text or public.is_admin());
+using (
+  (verified = true and "isPublic" = true)
+  or id = auth.uid()::text
+  or auth_user_id = auth.uid()
+  or public.is_admin()
+);
 
 drop policy if exists "photographers_insert_own_profile" on public.photographers;
 create policy "photographers_insert_own_profile"

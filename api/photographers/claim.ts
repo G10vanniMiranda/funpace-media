@@ -24,6 +24,11 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
   return user?.id ? { id: String(user.id), email: user.email ? String(user.email).toLowerCase() : null } : null;
 }
 
+function devLog(message: string, metadata?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === 'production') return;
+  console.info(`[photographer-signup] ${message}`, metadata || {});
+}
+
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res)) return;
   setCors(req, res);
@@ -49,6 +54,7 @@ export default async function handler(req: any, res: any) {
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    devLog('Email confirmado/login autenticado; claim iniciado', { userId: userId.trim(), email: normalizedEmail });
     if (!authUser?.id || authUser.id !== userId.trim() || (authUser.email && authUser.email !== normalizedEmail)) {
       return res.status(403).json({ error: 'Usuário autenticado não corresponde ao cadastro reivindicado.' });
     }
@@ -59,6 +65,21 @@ export default async function handler(req: any, res: any) {
     );
 
     if (authRows.length > 0) {
+      await supabaseRequest(
+        `/rest/v1/photographers?id=eq.${encodeURIComponent(userId.trim())}`,
+        {
+          method: 'PATCH',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({
+            auth_user_id: userId.trim(),
+            email: normalizedEmail,
+            status: authRows[0]?.verified ? 'active' : 'pending',
+            approved: Boolean(authRows[0]?.verified),
+            isPublic: Boolean(authRows[0]?.verified),
+          }),
+        },
+      ).catch((error) => devLog('Nao foi possivel atualizar metadados do claim ja vinculado', { error: String(error?.message || error) }));
+      devLog('Cadastro ja vinculado ao auth.users', { userId: userId.trim(), verified: Boolean(authRows[0]?.verified) });
       return res.status(200).json({ ok: true, moved: 0, alreadyLinked: true });
     }
 
@@ -68,6 +89,7 @@ export default async function handler(req: any, res: any) {
     );
 
     if (photographerRows.length === 0) {
+      devLog('Cadastro pendente nao encontrado por email', { userId: userId.trim(), email: normalizedEmail });
       return res.status(200).json({ ok: true, moved: 0 });
     }
 
@@ -84,7 +106,11 @@ export default async function handler(req: any, res: any) {
         headers: { Prefer: 'return=representation' },
         body: JSON.stringify({
           id: userId.trim(),
+          auth_user_id: userId.trim(),
           email: normalizedEmail,
+          status: photographer.verified ? 'active' : 'pending',
+          approved: Boolean(photographer.verified),
+          isPublic: Boolean(photographer.verified),
         }),
       },
     );
@@ -110,6 +136,8 @@ export default async function handler(req: any, res: any) {
         step,
       });
     }
+
+    devLog('Photographer sincronizado com auth.users', { previousId: photographer.id, userId: userId.trim(), verified: Boolean(confirmed.verified) });
 
     return res.status(200).json({
       ok: true,

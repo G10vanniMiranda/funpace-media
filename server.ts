@@ -369,6 +369,11 @@ function normalizeCouponCode(value: unknown) {
   return String(value || "").trim().toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 40);
 }
 
+function devSignupLog(message: string, metadata?: Record<string, unknown>) {
+  if (process.env.NODE_ENV === "production") return;
+  console.info(`[photographer-signup] ${message}`, metadata || {});
+}
+
 const WELCOME_VOUCHER_CODE = "FUNPACE10";
 const WELCOME_VOUCHER_PERCENT = 10;
 
@@ -1656,8 +1661,8 @@ async function handleAdminPhotographerStatus(req: express.Request, res: express.
     if (!existing.data?.id) return res.status(404).json({ error: "Fotografo nao encontrado." });
 
     const patch = action === "disable"
-      ? { verified: false, blockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-      : { verified: true, blockedAt: null, updatedAt: new Date().toISOString() };
+      ? { verified: false, approved: false, status: "pending", blockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
+      : { verified: true, approved: true, status: "active", isPublic: true, blockedAt: null, updatedAt: new Date().toISOString() };
 
     const { data, error } = await supabase
       .from("photographers")
@@ -1670,6 +1675,7 @@ async function handleAdminPhotographerStatus(req: express.Request, res: express.
     if (action === "reactivate") {
       await ensurePhotographerReferralCode(data);
       await markReferralApproved(id);
+      devSignupLog("Aprovado; login liberado", { photographerId: id });
     }
 
     return res.json({
@@ -2731,6 +2737,7 @@ app.post("/api/photographers/request", async (req, res) => {
 
   try {
     const { userId, email, name, instagram, bio, cpf, phone, avatar, referralCode } = req.body ?? {};
+    devSignupLog("Cadastro iniciado", { email, hasUserId: Boolean(userId), hasReferralCode: Boolean(referralCode) });
 
     if (typeof email !== "string" || !email.includes("@") || email.length > 256) {
       return res.status(400).json({ error: "Email invalido." });
@@ -2769,7 +2776,12 @@ app.post("/api/photographers/request", async (req, res) => {
       `
         insert into public.photographers (
           id,
+          auth_user_id,
           name,
+          "displayName",
+          username,
+          slug,
+          "isPublic",
           instagram,
           email,
           bio,
@@ -2784,7 +2796,12 @@ app.post("/api/photographers/request", async (req, res) => {
         )
         values (
           $1,
+          case when $1 like 'pending:%' then null else $1 end,
           $2,
+          $2,
+          left(regexp_replace(lower($3), '[^a-z0-9]+', '-', 'g') || '-' || substr(md5($4), 1, 6), 80),
+          left(regexp_replace(lower($3), '[^a-z0-9]+', '-', 'g') || '-' || substr(md5($4), 1, 6), 80),
+          false,
           $3,
           $4,
           $5,
@@ -2804,8 +2821,14 @@ app.post("/api/photographers/request", async (req, res) => {
           now(),
           now()
         )
-        on conflict (id) do update set
+        on conflict (email) do update set
+          id = excluded.id,
           name = excluded.name,
+          auth_user_id = coalesce(excluded.auth_user_id, public.photographers.auth_user_id),
+          "displayName" = excluded."displayName",
+          username = excluded.username,
+          slug = excluded.slug,
+          "isPublic" = false,
           instagram = excluded.instagram,
           email = excluded.email,
           bio = excluded.bio,
@@ -2813,12 +2836,15 @@ app.post("/api/photographers/request", async (req, res) => {
           cpf = excluded.cpf,
           phone = excluded.phone,
           verified = false,
+          approved = false,
+          status = 'pending',
           "updatedAt" = now()
       `,
       [resolvedId, name.trim(), safeInstagram, normalizedEmail, safeBio, safeAvatar, phoneDigits, cpfDigits],
     );
 
     await pool.query("commit");
+    devSignupLog("Photographer criado/atualizado como pending", { id: resolvedId, email: normalizedEmail });
     await registerPendingReferral({
       referralCode,
       referredPhotographerId: resolvedId,
@@ -2828,6 +2854,7 @@ app.post("/api/photographers/request", async (req, res) => {
       ipHash: crypto.createHash("sha256").update(getClientIp(req)).digest("hex"),
       userAgent: String(req.header("user-agent") || "").slice(0, 500),
     });
+    devSignupLog("Referral registrada e aguardando aprovacao", { id: resolvedId, referralCode });
     res.json({ ok: true });
   } catch (error: any) {
     if (pool) {
@@ -2886,6 +2913,7 @@ app.post("/api/photographers/claim", async (req, res) => {
 
   try {
     const { userId, email } = req.body ?? {};
+    const authUser = await getAuthenticatedRequestUser(req);
 
     if (typeof userId !== "string" || userId.trim().length < 8) {
       return res.status(400).json({ error: "userId invalido." });
@@ -2897,6 +2925,10 @@ app.post("/api/photographers/claim", async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
     const pendingId = `pending:${normalizedEmail}`;
+    if (!authUser?.id || authUser.id !== userId.trim() || (authUser.email && authUser.email !== normalizedEmail)) {
+      return res.status(403).json({ error: "Usuario autenticado nao corresponde ao cadastro reivindicado." });
+    }
+    devSignupLog("Email confirmado/login autenticado; claim iniciado", { userId: userId.trim(), email: normalizedEmail });
 
     pool = new Pool(getDbConfig());
     await pool.query("begin");
@@ -2906,7 +2938,13 @@ app.post("/api/photographers/claim", async (req, res) => {
       `
         with moved as (
           update public.photographers
-          set id = $1, "updatedAt" = now()
+          set
+            id = $1,
+            auth_user_id = $1,
+            status = case when verified then 'active' else 'pending' end,
+            approved = verified,
+            "isPublic" = verified,
+            "updatedAt" = now()
           where id = $2
           returning *
         )
@@ -2916,6 +2954,7 @@ app.post("/api/photographers/claim", async (req, res) => {
     );
 
     await pool.query("commit");
+    devSignupLog("Claim executado", { userId: userId.trim(), moved: result.rows?.[0]?.moved_count ?? 0 });
     res.json({ ok: true, moved: result.rows?.[0]?.moved_count ?? 0 });
   } catch (error: any) {
     if (pool) {

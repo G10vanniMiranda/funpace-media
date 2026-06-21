@@ -48,6 +48,8 @@ export type AppUser = {
 function getSessionStorageKey() {
   // Keep admin, photographer and customer auth isolated from each other.
   try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('scope') === 'photographer') return 'funpace:supabase-session:photographer';
     if (window.location.pathname.startsWith('/admin')) return 'funpace:supabase-session:admin';
     if (window.location.pathname.startsWith('/fotografo')) return 'funpace:supabase-session:photographer';
     return 'funpace:supabase-session:customer';
@@ -383,7 +385,9 @@ export const getCurrentAccessToken = async (forceRefresh = false) => {
 function clearOAuthParamsFromUrl() {
   const storedReturnPath = sessionStorage.getItem('funpace:oauth-return-path');
   sessionStorage.removeItem('funpace:oauth-return-path');
-  const nextPath = storedReturnPath || (window.location.pathname === '/auth/callback' ? '/' : window.location.pathname);
+  const params = new URLSearchParams(window.location.search);
+  const scopedReturnPath = params.get('scope') === 'photographer' ? '/fotografo' : '/';
+  const nextPath = storedReturnPath || (window.location.pathname === '/auth/callback' ? scopedReturnPath : window.location.pathname);
   window.history.replaceState({}, '', nextPath);
 }
 
@@ -482,6 +486,34 @@ async function fetchUserWithToken(accessToken: string) {
   return response.json() as Promise<SupabaseUserResponse>;
 }
 
+async function claimPhotographerAfterAuth(user: SupabaseAuthUser | undefined | null, accessToken: string) {
+  if (!user?.id || !user.email || !accessToken) return;
+
+  try {
+    const response = await fetch('/api/photographers/claim', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ userId: user.id, email: user.email }),
+    });
+
+    if (import.meta.env.DEV) {
+      const payload = await response.clone().json().catch(() => null);
+      console.info('[photographer-signup] Email confirmado; claim executado', {
+        ok: response.ok,
+        status: response.status,
+        userId: user.id,
+        moved: payload?.moved ?? null,
+        alreadyLinked: payload?.alreadyLinked ?? null,
+      });
+    }
+  } catch (error) {
+    console.warn('[photographer-signup] Nao foi possivel sincronizar fotografo apos confirmacao.', error);
+  }
+}
+
 export const validateGoogleAuth = async () => {
   let response: Response;
   let payload: any = {};
@@ -558,6 +590,9 @@ export const handleOAuthCallbackFromUrl = async () => {
     }
 
     setStoredSession(session);
+    if (new URLSearchParams(window.location.search).get('scope') === 'photographer') {
+      await claimPhotographerAfterAuth(session.user, session.access_token);
+    }
     clearOAuthParamsFromUrl();
     window.dispatchEvent(new Event('supabase-auth-changed'));
     return true;
@@ -590,6 +625,10 @@ export const handleOAuthCallbackFromUrl = async () => {
     expires_at: expiresAt,
     user,
   });
+
+  if (new URLSearchParams(window.location.search).get('scope') === 'photographer') {
+    await claimPhotographerAfterAuth(user, parsed.access_token);
+  }
 
   clearOAuthParamsFromUrl();
   window.dispatchEvent(new Event('supabase-auth-changed'));
@@ -750,7 +789,7 @@ export const registerWithEmail = async (email: string, password: string, name: s
     throw new Error('Senha muito curta. Use pelo menos 6 caracteres.');
   }
 
-  const emailRedirectTo = `${window.location.origin}/auth/callback`;
+  const emailRedirectTo = `${window.location.origin}/auth/callback?scope=photographer`;
   const response = await supabaseFetch<SupabaseSignupResponse>('/auth/v1/signup', {
     method: 'POST',
     body: JSON.stringify({
@@ -764,10 +803,16 @@ export const registerWithEmail = async (email: string, password: string, name: s
   if (response.access_token && response.user) {
     setStoredSession(response as SupabaseSession);
     recordAuthDiagnostic({ action: 'register', email: normalizedEmail, status: 'success' });
+    if (import.meta.env.DEV) {
+      console.info('[photographer-signup] Usuario criado no Supabase Auth com sessao', { userId: response.user.id, email: normalizedEmail });
+    }
     window.dispatchEvent(new Event('supabase-auth-changed'));
     return toAppUser(response.user);
   } else {
     recordAuthDiagnostic({ action: 'register', email: normalizedEmail, status: 'pending_confirmation', detail: 'signup_without_session' });
+    if (import.meta.env.DEV) {
+      console.info('[photographer-signup] Usuario criado no Supabase Auth; aguardando confirmacao de email', { email: normalizedEmail });
+    }
   }
 
   window.dispatchEvent(new Event('supabase-auth-changed'));

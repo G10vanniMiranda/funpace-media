@@ -2277,7 +2277,10 @@ export const photographerService = {
       id: `eq.${id}`,
       limit: '1',
     });
-    const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
+    let rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
+    if (!rows[0] && await getCurrentAccessToken().catch(() => null)) {
+      rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`, true);
+    }
     if (rows[0]) return rows[0];
 
     const normalizedId = normalizePhotographerUsername(id);
@@ -2302,7 +2305,10 @@ export const photographerService = {
       email: `eq.${email}`,
       limit: '1',
     });
-    const rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
+    let rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`);
+    if (!rows[0] && await getCurrentAccessToken().catch(() => null)) {
+      rows = await supabaseRest.get<SupabaseRow<Photographer>[]>(`/rest/v1/photographers?${params.toString()}`, true);
+    }
     return rows[0] ?? null;
   },
 

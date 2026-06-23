@@ -278,6 +278,71 @@ function getTimestamp(value?: string | null) {
   return Number.isFinite(timestamp) ? timestamp : 0;
 }
 
+function isInferredEvent(eventItem: Event) {
+  return eventItem.id.startsWith('inferred-event:');
+}
+
+function sortDashboardEventsNewestFirst(events: Event[]) {
+  return [...events].sort((left, right) => {
+    const leftDate = getTimestamp(left.date);
+    const rightDate = getTimestamp(right.date);
+    if (leftDate !== rightDate) return rightDate - leftDate;
+
+    const leftCreated = getTimestamp(left.createdAt);
+    const rightCreated = getTimestamp(right.createdAt);
+    if (leftCreated !== rightCreated) return rightCreated - leftCreated;
+
+    return left.name.localeCompare(right.name, 'pt-BR', { sensitivity: 'base' });
+  });
+}
+
+function mergeDashboardEvents(events: Event[], products: Product[], photographerId: string) {
+  const registeredEventNames = new Set(events.map((eventItem) => normalizeCatalogText(eventItem.name)));
+  const inferredEvents: Event[] = [];
+
+  const productsByEventName = new Map<string, Product[]>();
+
+  for (const product of products) {
+    if ((product.status ?? 'published') === 'removed') continue;
+    if (product.vendedorId !== photographerId) continue;
+
+    const eventName = product.event?.trim();
+    if (!eventName) continue;
+
+    const normalizedName = normalizeCatalogText(eventName);
+    if (!normalizedName || registeredEventNames.has(normalizedName)) continue;
+
+    const group = productsByEventName.get(normalizedName) ?? [];
+    group.push(product);
+    productsByEventName.set(normalizedName, group);
+  }
+
+  for (const [normalizedName, groupProducts] of productsByEventName.entries()) {
+    const latestProduct = groupProducts.reduce((latest, product) => (
+      getTimestamp(product.createdAt) > getTimestamp(latest.createdAt) ? product : latest
+    ), groupProducts[0]);
+    const coverProduct = groupProducts.find((product) => product.thumbnailUrl || product.url);
+    const createdAt = latestProduct.createdAt || new Date().toISOString();
+
+    inferredEvents.push({
+      id: `inferred-event:${encodeURIComponent(normalizedName)}`,
+      photographerId,
+      name: latestProduct.event.trim(),
+      date: createdAt.slice(0, 10),
+      location: latestProduct.checkpoint || null,
+      checkpoint: latestProduct.checkpoint || 'Ponto Principal',
+      coverImage: coverProduct?.thumbnailUrl || (coverProduct?.type === 'IMG' ? coverProduct.url : null) || null,
+      cover_position: 'center center',
+      isPublished: groupProducts.some((product) => (product.status ?? 'published') === 'published'),
+      status: 'active',
+      createdAt,
+      updatedAt: createdAt,
+    });
+  }
+
+  return sortDashboardEventsNewestFirst([...events, ...inferredEvents]);
+}
+
 function formatCreatedOrderLabel(value?: string | null) {
   const timestamp = getTimestamp(value);
   if (!timestamp) return 'Criação não registrada';
@@ -1833,10 +1898,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const pWithdrawals = await withdrawalService.getPhotographerWithdrawals(photographer.id);
       const pReferrals = await referralService.getPhotographerReferrals(photographer.id).catch(() => []);
       const events = await eventService.getPhotographerEvents(photographer.id);
+      const mergedEvents = mergeDashboardEvents(events, visibleProducts, photographer.id);
       console.info('[event-cover] dashboard:events-loaded', {
         photographerId: photographer.id,
-        count: events.length,
-        covers: events.map((eventItem) => ({
+        count: mergedEvents.length,
+        registeredCount: events.length,
+        inferredCount: mergedEvents.length - events.length,
+        covers: mergedEvents.map((eventItem) => ({
           eventId: eventItem.id,
           name: eventItem.name,
           coverImage: eventItem.coverImage || null,
@@ -1848,7 +1916,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       setProductPerformance(dashboard.productPerformance);
       setWithdrawals(pWithdrawals);
       setReferrals(pReferrals);
-      setAvailableEvents(events);
+      setAvailableEvents(mergedEvents);
     } catch (error) {
       console.error("Error loading photographer content:", error);
     } finally {
@@ -1975,12 +2043,13 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const handleEditEvent = (eventItem: Event, options: { keepActiveTab?: boolean } = {}) => {
+    const inferred = isInferredEvent(eventItem);
     setPendingEventCover((current) => {
       if (current?.previewUrl) URL.revokeObjectURL(current.previewUrl);
       return null;
     });
     setEventForm({
-      id: eventItem.id,
+      id: inferred ? null : eventItem.id,
       name: eventItem.name,
       date: eventItem.date,
       location: eventItem.location || '',
@@ -2063,11 +2132,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       }
 
       setAvailableEvents((current) => {
-        const exists = current.some((eventItem) => eventItem.id === saved.id);
-        return (exists
-          ? current.map((eventItem) => (eventItem.id === saved.id ? saved : eventItem))
-          : [saved, ...current])
-          .sort((left, right) => String(left.date || '').localeCompare(String(right.date || '')));
+        const savedName = normalizeCatalogText(saved.name);
+        const withoutDuplicateInferred = current.filter((eventItem) => (
+          eventItem.id === saved.id ||
+          !isInferredEvent(eventItem) ||
+          normalizeCatalogText(eventItem.name) !== savedName
+        ));
+        const exists = withoutDuplicateInferred.some((eventItem) => eventItem.id === saved.id);
+        return sortDashboardEventsNewestFirst(exists
+          ? withoutDuplicateInferred.map((eventItem) => (eventItem.id === saved.id ? saved : eventItem))
+          : [saved, ...withoutDuplicateInferred]);
       });
       resetEventForm();
     } catch (error: any) {
@@ -2116,6 +2190,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const handleToggleEventPublication = async (eventItem: Event) => {
+    if (isInferredEvent(eventItem)) {
+      handleEditEvent(eventItem);
+      return;
+    }
+
     try {
       const updated = await eventService.updateEvent(eventItem.id, { isPublished: eventItem.isPublished === false });
       setAvailableEvents((current) => current.map((item) => (item.id === updated.id ? updated : item)));
@@ -2126,6 +2205,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   };
 
   const handleRemoveEvent = async (eventItem: Event) => {
+    if (isInferredEvent(eventItem)) {
+      alert('Este evento foi detectado pelas mídias, mas ainda não está cadastrado. Abra em Editar/Cadastrar e salve para gerenciar publicação ou exclusão.');
+      return;
+    }
+
     const hasProducts = products.some((product) => product.event === eventItem.name);
     const shouldRemove = window.confirm(hasProducts
       ? 'Este evento possui produtos vinculados. Remover o evento não remove as fotos, mas elas ficam com o nome atual no catálogo. Continuar?'
@@ -3319,6 +3403,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                   ) : (
                     <div className="divide-y divide-white/10">
                       {availableEvents.map((eventItem) => {
+                        const inferredEvent = isInferredEvent(eventItem);
                         const eventProducts = products.filter((product) => product.event === eventItem.name);
                         const eventRevenue = periodSales
                           .filter((sale) => sale.event === eventItem.name)
@@ -3345,6 +3430,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   <span className={`px-2 py-1 font-mono text-[8px] uppercase border ${eventItem.isPublished === false ? 'border-yellow-400/30 bg-yellow-400/10 text-yellow-200' : 'border-green-400/30 bg-green-400/10 text-green-200'}`}>
                                     {eventItem.isPublished === false ? 'Oculto' : 'Publicado'}
                                   </span>
+                                  {inferredEvent && (
+                                    <span className="px-2 py-1 font-mono text-[8px] uppercase border border-orange-400/30 bg-orange-400/10 text-orange-200">
+                                      Detectado nas mídias
+                                    </span>
+                                  )}
                                   <span className="px-2 py-1 font-mono text-[8px] uppercase border border-white/10 text-gray-300">
                                     {eventItem.status}
                                   </span>
@@ -3363,19 +3453,21 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   onClick={() => handleEditEvent(eventItem)}
                                   className="h-10 px-3 border border-white/15 text-white font-mono text-[10px] uppercase hover:border-brutal-accent"
                                 >
-                                  Editar
+                                  {inferredEvent ? 'Cadastrar' : 'Editar'}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleToggleEventPublication(eventItem)}
-                                  className="h-10 px-3 border border-white/15 text-gray-300 font-mono text-[10px] uppercase hover:text-white"
+                                  disabled={inferredEvent}
+                                  className={`h-10 px-3 border border-white/15 font-mono text-[10px] uppercase ${inferredEvent ? 'cursor-not-allowed text-gray-600 opacity-60' : 'text-gray-300 hover:text-white'}`}
                                 >
                                   {eventItem.isPublished === false ? 'Publicar' : 'Ocultar'}
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => handleRemoveEvent(eventItem)}
-                                  className="h-10 px-3 border border-red-500/40 text-red-200 font-mono text-[10px] uppercase hover:bg-red-500/10"
+                                  disabled={inferredEvent}
+                                  className={`h-10 px-3 border border-red-500/40 font-mono text-[10px] uppercase ${inferredEvent ? 'cursor-not-allowed text-red-900 opacity-60' : 'text-red-200 hover:bg-red-500/10'}`}
                                 >
                                   Excluir
                                 </button>

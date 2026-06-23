@@ -1388,24 +1388,26 @@ export const eventService = {
 
   async getPhotographerEvents(photographerId: string, count = 200): Promise<Event[]> {
     if (isMockMode) {
-      return loadLocalEvents()
+      return sortEventsNewestFirst(loadLocalEvents()
         .filter((event) => !event.photographerId || event.photographerId === photographerId)
+      )
         .slice(0, count);
     }
 
     const params = new URLSearchParams({
       select: '*',
       photographerId: `eq.${photographerId}`,
-      order: 'date.asc,createdAt.desc',
+      order: 'date.desc,createdAt.desc',
       limit: String(count),
     });
     try {
       const events = await supabaseRest.get<SupabaseRow<Event>[]>(`/rest/v1/events?${params.toString()}`, true);
-      return sortEvents(events).slice(0, count);
+      return sortEventsNewestFirst(events).slice(0, count);
     } catch (error) {
       if (isMissingEventsTableError(error)) {
-        return loadLocalEvents()
+        return sortEventsNewestFirst(loadLocalEvents()
           .filter((event) => !event.photographerId || event.photographerId === photographerId)
+        )
           .slice(0, count);
       }
       throw error;

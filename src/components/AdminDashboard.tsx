@@ -2907,6 +2907,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <tbody className="divide-y divide-white/10">
                       {filteredOrders.slice(0, 160).map((order) => {
                         const firstItem = order.items?.[0];
+                        const isRecoveringOrderPayment = recoveringPaymentOrderId === order.id;
                         return (
                           <tr key={order.id} className="hover:bg-white/3">
                             <td className="px-5 py-4 font-mono text-xs">#{order.id.slice(0, 8)}<p className="text-[10px] text-gray-600">{new Date(order.createdAt).toLocaleString('pt-BR')}</p></td>
@@ -2917,7 +2918,18 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                             <td className="px-5 py-4 font-mono text-[10px] text-gray-400">{firstItem?.event || 'N/I'}<br />{firstItem ? photographerById.get(firstItem.vendedorId)?.name ?? firstItem.vendedorId : 'N/I'}</td>
                             <td className="px-5 py-4">
                               <div className="flex flex-col gap-2">
-                                <select disabled={updatingOrderId === order.id} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pendente</option><option value="paid">Pago</option><option value="refused">Recusado</option><option value="canceled">Cancelado</option><option value="refunded">Reembolsado</option></select>
+                                <select disabled={updatingOrderId === order.id || isRecoveringOrderPayment} value={order.status} onChange={(event) => handleAdminOrderStatus(order, event.target.value as Order['status'])} className="h-9 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="pending">Pendente</option><option value="paid">Pago via recuperação</option><option value="refused">Recusado</option><option value="canceled">Cancelado</option><option value="refunded">Reembolsado</option></select>
+                                {order.status !== 'paid' && (
+                                  <button
+                                    type="button"
+                                    disabled={isRecoveringOrderPayment}
+                                    onClick={() => handleManualReleaseOrder(order)}
+                                    className="h-9 px-3 bg-[#080d14] border border-brutal-accent/60 text-brutal-accent font-mono text-[10px] uppercase inline-flex items-center justify-center gap-2 hover:bg-brutal-accent/10 disabled:text-gray-500 disabled:border-white/10 disabled:cursor-not-allowed"
+                                  >
+                                    {isRecoveringOrderPayment ? <Loader2 className="w-3 h-3 animate-spin" /> : <AlertTriangle className="w-3 h-3" />}
+                                    Liberar pagamento
+                                  </button>
+                                )}
                                 {order.status === 'paid' && (
                                   <button
                                     type="button"

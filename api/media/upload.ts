@@ -338,13 +338,17 @@ export default async function handler(req: any, res: any) {
   const requestStartedAt = Date.now();
 
   try {
+    const authStartedAt = Date.now();
     const authUser = await getAuthenticatedRequestUser(req);
+    const authDurationMs = Date.now() - authStartedAt;
     storagePath = decodeHeaderValue(req.headers['x-storage-path']);
     fileName = decodeHeaderValue(req.headers['x-file-name']) || storagePath.split('/').pop() || 'arquivo';
     const fileHash = String(req.headers['x-file-hash'] || '').trim().toLowerCase();
     const uploadBatchId = String(req.headers['x-upload-batch-id'] || '').trim();
     contentType = String(req.headers['content-type'] || 'application/octet-stream');
+    const readStartedAt = Date.now();
     const fileBuffer = await readRequestBuffer(req);
+    const readDurationMs = Date.now() - readStartedAt;
     fileSize = fileBuffer.length;
 
     if (!authUser?.id) {
@@ -376,14 +380,22 @@ export default async function handler(req: any, res: any) {
       photographerId: authUser.id,
       uploadBatchId: uploadBatchId || null,
       fileHash: fileHash || null,
+      authDurationMs,
+      readDurationMs,
+      heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     });
 
+    const providerStartedAt = Date.now();
     const uploaded = usesExternalBucket()
       ? await uploadToExternalBucket(storagePath, fileName, contentType, fileBuffer)
       : (() => {
           throw new Error('MEDIA_STORAGE_PROVIDER deve ser external_bucket para upload de mídias.');
         })();
+    const providerDurationMs = Date.now() - providerStartedAt;
+    const verifyStartedAt = Date.now();
     const verification = await verifyUploadedMedia(uploaded);
+    const verifyDurationMs = Date.now() - verifyStartedAt;
 
     console.info('[media-upload] done', {
       bucket: mediaBucket,
@@ -392,7 +404,13 @@ export default async function handler(req: any, res: any) {
       photographerId: authUser.id,
       uploadBatchId: uploadBatchId || null,
       verified: verification.verified,
+      authDurationMs,
+      readDurationMs,
+      providerDurationMs,
+      verifyDurationMs,
       durationMs: Date.now() - requestStartedAt,
+      heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
     });
 
     return res.status(200).json({
@@ -412,6 +430,8 @@ export default async function handler(req: any, res: any) {
       size: fileSize,
       provider: usesExternalBucket() ? 'external_bucket' : mediaStorageProvider,
       durationMs: Date.now() - requestStartedAt,
+      heapUsedMb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
+      rssMb: Math.round(process.memoryUsage().rss / 1024 / 1024),
       message,
     });
     const status = /excede o limite|too large|payload/i.test(message) ? 413 : 500;

@@ -189,6 +189,33 @@ const eventCoverOptimizeThresholdBytes = 5 * 1024 * 1024;
 const profileImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const uploadVisibleListLimit = 160;
 const uploadOfflineRetryDelayMs = 1500;
+const uploadConcurrencyLimit = Number(import.meta.env.VITE_PHOTOGRAPHER_UPLOAD_CONCURRENCY || 1);
+
+type UploadRuntimeMetrics = {
+  batchId: string | null;
+  startedAt: number;
+  completedAt: number | null;
+  totalFiles: number;
+  totalBytes: number;
+  uploadedBytes: number;
+  failedFiles: number;
+  retries: number;
+  activeUploads: number;
+  concurrencyLimit: number;
+};
+
+const emptyUploadRuntimeMetrics: UploadRuntimeMetrics = {
+  batchId: null,
+  startedAt: 0,
+  completedAt: null,
+  totalFiles: 0,
+  totalBytes: 0,
+  uploadedBytes: 0,
+  failedFiles: 0,
+  retries: 0,
+  activeUploads: 0,
+  concurrencyLimit: Math.max(1, uploadConcurrencyLimit),
+};
 
 const withdrawalStatusLabels: Record<WithdrawalRequest['status'], string> = {
   pending: 'Pendente',
@@ -380,6 +407,23 @@ function formatFileSize(bytes: number) {
   const mb = bytes / (1024 * 1024);
   if (mb >= 1) return `${mb.toFixed(mb >= 10 ? 0 : 1).replace('.', ',')} MB`;
   return `${Math.ceil(bytes / 1024)} KB`;
+}
+
+function formatDurationMs(ms: number) {
+  if (!Number.isFinite(ms) || ms <= 0) return '0s';
+  const totalSeconds = Math.max(1, Math.round(ms / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes <= 0) return `${seconds}s`;
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  if (hours <= 0) return `${minutes}min ${seconds}s`;
+  return `${hours}h ${remainingMinutes}min`;
+}
+
+function formatUploadSpeed(bytesPerSecond: number) {
+  if (!Number.isFinite(bytesPerSecond) || bytesPerSecond <= 0) return '0 MB/s';
+  return `${(bytesPerSecond / 1024 / 1024).toFixed(2).replace('.', ',')} MB/s`;
 }
 
 function wait(ms: number) {
@@ -1104,53 +1148,6 @@ async function prepareEventCoverForUpload(file: File): Promise<File> {
   });
 }
 
-function waitForPreviewReady(file: File, previewUrl: string): Promise<void> {
-  if (file.type.startsWith('video')) {
-    return new Promise((resolve) => {
-      const video = document.createElement('video');
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        cleanup();
-        resolve();
-      };
-      const cleanup = () => {
-        video.removeAttribute('src');
-        video.load();
-      };
-      const timeout = window.setTimeout(finish, 12000);
-
-      video.preload = 'metadata';
-      video.muted = true;
-      video.playsInline = true;
-      video.onloadedmetadata = finish;
-      video.onerror = finish;
-      video.src = previewUrl;
-    });
-  }
-
-  if (file.type.startsWith('image')) {
-    return new Promise((resolve) => {
-      const image = new Image();
-      let settled = false;
-      const finish = () => {
-        if (settled) return;
-        settled = true;
-        window.clearTimeout(timeout);
-        resolve();
-      };
-      const timeout = window.setTimeout(finish, 12000);
-      image.onload = finish;
-      image.onerror = finish;
-      image.src = previewUrl;
-    });
-  }
-
-  return Promise.resolve();
-}
-
 async function generateMediaThumbnail(file: File): Promise<File | null> {
   return file.type.startsWith('image')
     ? generateImageThumbnail(file)
@@ -1173,6 +1170,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [isUploadPaused, setIsUploadPaused] = useState(false);
   const [isBrowserOnline, setIsBrowserOnline] = useState(() => typeof navigator === 'undefined' ? true : navigator.onLine);
   const [publishProgress, setPublishProgress] = useState({ done: 0, total: 0 });
+  const [uploadRuntimeMetrics, setUploadRuntimeMetrics] = useState<UploadRuntimeMetrics>(emptyUploadRuntimeMetrics);
   const [isPreparingFiles, setIsPreparingFiles] = useState(false);
   const [filePrepareProgress, setFilePrepareProgress] = useState({ done: 0, total: 0 });
   const [showWithdrawalModal, setShowWithdrawalModal] = useState(false);
@@ -1279,7 +1277,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         name: file.name,
         description: file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim(),
         bib: '',
-        previewUrl: URL.createObjectURL(file),
+        previewUrl: '',
         status: resumeItem?.status === 'done' || resumeItem?.status === 'published'
           ? 'skipped'
           : resumeItem?.status === 'failed' || resumeItem?.status === 'paused'
@@ -1398,6 +1396,32 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       })),
     });
   }, [selectedFiles, photographer.id, eventInput, checkpointInput, selectedEventId]);
+
+  React.useEffect(() => {
+    if (selectedFiles.length === 0) return;
+    const keepIndexes = new Set<number>();
+    for (let index = 0; index < Math.min(uploadVisibleListLimit, selectedFiles.length); index += 1) {
+      keepIndexes.add(index);
+    }
+    if (previewIndex >= 0 && previewIndex < selectedFiles.length) keepIndexes.add(previewIndex);
+
+    let changed = false;
+    const nextFiles = selectedFiles.map((item, index) => {
+      const shouldKeepPreview = keepIndexes.has(index);
+      if (shouldKeepPreview && !item.previewUrl) {
+        changed = true;
+        return { ...item, previewUrl: URL.createObjectURL(item.file) };
+      }
+      if (!shouldKeepPreview && item.previewUrl) {
+        URL.revokeObjectURL(item.previewUrl);
+        changed = true;
+        return { ...item, previewUrl: '' };
+      }
+      return item;
+    });
+
+    if (changed) setSelectedFiles(nextFiles);
+  }, [selectedFiles, previewIndex]);
 
   React.useEffect(() => {
     pendingProfileImagesRef.current = pendingProfileImages;
@@ -1845,6 +1869,16 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const dbSavedUploadCount = uploadStatusCounts.db_saved || 0;
   const inProgressUploadCount = uploadStatusCounts.uploading || 0;
   const skippedUploadCount = uploadStatusCounts.skipped || 0;
+  const uploadElapsedMs = uploadRuntimeMetrics.startedAt
+    ? (uploadRuntimeMetrics.completedAt || Date.now()) - uploadRuntimeMetrics.startedAt
+    : 0;
+  const uploadAverageSpeed = uploadElapsedMs > 0
+    ? uploadRuntimeMetrics.uploadedBytes / (uploadElapsedMs / 1000)
+    : 0;
+  const uploadRemainingBytes = Math.max(0, uploadRuntimeMetrics.totalBytes - uploadRuntimeMetrics.uploadedBytes);
+  const uploadEtaMs = uploadAverageSpeed > 0 && uploadRemainingBytes > 0
+    ? (uploadRemainingBytes / uploadAverageSpeed) * 1000
+    : 0;
   const visibleSelectedFiles = selectedFiles.slice(0, uploadVisibleListLimit);
   const hiddenSelectedFileCount = Math.max(0, selectedFiles.length - visibleSelectedFiles.length);
   const canPublishSelectedFiles = pendingUploadCount > 0 && !isLoading && !isPreparingFiles && !isPublishing && isBrowserOnline;
@@ -2265,7 +2299,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
     try {
       for (const [index, item] of newFiles.entries()) {
-        await waitForPreviewReady(item.file, item.previewUrl);
+        if (index % 100 === 0) await wait(0);
         setFilePrepareProgress({ done: index + 1, total: newFiles.length });
       }
     } finally {
@@ -2313,7 +2347,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       try {
         for (const [index, item] of newFiles.entries()) {
-          await waitForPreviewReady(item.file, item.previewUrl);
+          if (index % 100 === 0) await wait(0);
           setFilePrepareProgress({ done: index + 1, total: newFiles.length });
         }
       } finally {
@@ -2337,6 +2371,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
     setIsPreparingFiles(false);
     setFilePrepareProgress({ done: 0, total: 0 });
     setPublishProgress({ done: 0, total: 0 });
+    setUploadRuntimeMetrics(emptyUploadRuntimeMetrics);
     setDuplicateConflict(null);
     setApplyDuplicateChoiceToAll(false);
     duplicateBatchActionRef.current = null;
@@ -2607,6 +2642,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       let copiedCount = 0;
       let skippedDuplicateCount = 0;
       const uploadBatchId = crypto.randomUUID();
+      const batchStartedAt = performance.now();
+      const batchTotalBytes = uploadQueue.reduce((sum, { item }) => sum + item.file.size, 0);
+      setUploadRuntimeMetrics({
+        batchId: uploadBatchId,
+        startedAt: Date.now(),
+        completedAt: null,
+        totalFiles: uploadQueue.length,
+        totalBytes: batchTotalBytes,
+        uploadedBytes: 0,
+        failedFiles: 0,
+        retries: uploadQueue.reduce((sum, { item }) => sum + Math.max(0, item.attempts), 0),
+        activeUploads: 0,
+        concurrencyLimit: Math.max(1, uploadConcurrencyLimit),
+      });
       const currentBatchHashes = new Set<string>();
       const failedUploads: Array<{ index: number; name: string; message: string; stage: UploadPublishStage }> = [];
       const previewWarnings: Array<{ name: string; message: string }> = [];
@@ -2625,8 +2674,22 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
 
       for (const [queueIndex, { item, index }] of uploadQueue.entries()) {
         let uploadStage: UploadPublishStage = 'validacao';
+        const fileStartedAt = performance.now();
+        let lastStageStartedAt = fileStartedAt;
+        const stageDurations: Partial<Record<UploadPublishStage, number>> = {};
+        const markStage = (nextStage: UploadPublishStage) => {
+          const now = performance.now();
+          stageDurations[uploadStage] = Math.round((stageDurations[uploadStage] || 0) + now - lastStageStartedAt);
+          uploadStage = nextStage;
+          lastStageStartedAt = now;
+        };
         try {
           await waitUntilUploadCanContinue();
+          setUploadRuntimeMetrics((current) => ({
+            ...current,
+            activeUploads: 1,
+            retries: current.retries + Math.max(0, item.attempts > 0 ? 1 : 0),
+          }));
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => (
             itemIndex === index
               ? { ...uploadItem, status: 'uploading', attempts: uploadItem.attempts + 1, error: '', stage: uploadStage }
@@ -2646,7 +2709,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           });
           await assertUploadFileReadable(item.file);
 
-          uploadStage = 'duplicidade-nome';
+          markStage('duplicidade-nome');
           let duplicateAction: DuplicateUploadAction | null = null;
           let existingNameProduct = await productService.findExistingProductByOriginalFileName(photographer.id, item.file.name, normalizedEvent);
           let resolvedOriginalFileName = item.file.name;
@@ -2677,7 +2740,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             usedFileNames.add(normalizeUploadName(item.file.name));
           }
 
-          uploadStage = 'preparo-arquivo';
+          markStage('preparo-arquivo');
           const uploadFile = await prepareImageForUpload(item.file);
           assertFileFitsUploadLimit(uploadFile);
           console.info('[photographer-upload] file:prepared', {
@@ -2690,11 +2753,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           });
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, preparedFileSize: uploadFile.size, uploadBatchId } : uploadItem));
 
-          uploadStage = 'hash-original';
+          markStage('hash-original');
           const fileHash = item.fileHash || await calculateUploadFileSha256(uploadFile);
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, fileHash, uploadBatchId } : uploadItem));
 
-          uploadStage = 'duplicidade-conteudo';
+          markStage('duplicidade-conteudo');
           if (duplicateAction !== 'replace' && currentBatchHashes.has(fileHash)) {
             skippedDuplicateCount += 1;
             console.info('[photographer-upload] file:skipped-duplicate-batch', {
@@ -2724,7 +2787,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             continue;
           }
 
-          uploadStage = 'upload-original';
+          markStage('upload-original');
           const uploadedFile = item.uploadedFilePath
             ? { path: item.uploadedFilePath, publicUrl: item.uploadedFilePath, reused: true }
             : await (async () => {
@@ -2745,10 +2808,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             storagePath: uploadedFile.path,
             reused: 'reused' in uploadedFile ? uploadedFile.reused : false,
           });
+          setUploadRuntimeMetrics((current) => ({
+            ...current,
+            uploadedBytes: current.uploadedBytes + uploadFile.size,
+          }));
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'uploaded', uploadedFilePath: uploadedFile.path, fileHash, uploadBatchId, stage: uploadStage } : uploadItem));
           let thumbnailFile: File | null = null;
           try {
-            uploadStage = 'preview';
+            markStage('preview');
             thumbnailFile = await generateMediaThumbnail(uploadFile);
           } catch (thumbnailError) {
             console.warn(`Preview não gerado para ${item.name}:`, thumbnailError);
@@ -2761,9 +2828,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                 : 'Preview da foto não foi gerado; o card usará a mídia original protegida como fallback.',
             });
           }
-          uploadStage = 'hash-preview';
+          markStage('hash-preview');
           const thumbnailHash = item.thumbnailHash || (thumbnailFile ? await calculateUploadFileSha256(thumbnailFile) : null);
-          uploadStage = 'upload-preview';
+          markStage('upload-preview');
           const uploadedThumbnail = thumbnailFile
             ? item.uploadedThumbnailPath
               ? { path: item.uploadedThumbnailPath, publicUrl: item.uploadedThumbnailPath, reused: true }
@@ -2776,6 +2843,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               storagePath: uploadedThumbnail.path,
               reused: 'reused' in uploadedThumbnail ? uploadedThumbnail.reused : false,
             });
+            if (thumbnailFile) {
+              setUploadRuntimeMetrics((current) => ({
+                ...current,
+                uploadedBytes: current.uploadedBytes + thumbnailFile.size,
+              }));
+            }
           }
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'uploaded', uploadedFilePath: uploadedFile.path, uploadedThumbnailPath: uploadedThumbnail?.path || null, thumbnailHash, fileHash, uploadBatchId, stage: uploadStage } : uploadItem));
 
@@ -2801,7 +2874,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           } satisfies Omit<Product, 'id'>;
 
           let indexedPhotoId: string | null = null;
-          uploadStage = 'banco';
+          markStage('banco');
           if (duplicateAction === 'replace' && existingNameProduct) {
             await productService.replaceProductMediaResilient(existingNameProduct.id, productPayload);
             indexedPhotoId = existingNameProduct.id;
@@ -2846,17 +2919,25 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             action: duplicateAction === 'replace' ? 'replace' : duplicateAction === 'copy' ? 'copy' : 'create',
           });
           if (indexedPhotoId && selectedEvent?.id && uploadFile.type.startsWith('image/')) {
-            uploadStage = 'indexacao-facial';
-            await productService.indexProductFace(indexedPhotoId, selectedEvent.id, uploadFile).catch((faceError) => {
-              console.error('[face-index] automatic:index-error', {
-                photoId: indexedPhotoId,
-                eventId: selectedEvent.id,
-                message: faceError instanceof Error ? faceError.message : String(faceError),
-              });
+            console.info('[face-index] automatic:queued-background', {
+              photoId: indexedPhotoId,
+              eventId: selectedEvent.id,
+              uploadBatchId,
             });
           }
+          markStage('indexacao-facial');
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'published', uploadedAt: new Date().toISOString(), error: '', productId: indexedPhotoId, stage: uploadStage } : uploadItem));
           setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
+          console.info('[photographer-upload] file:done', {
+            uploadBatchId,
+            index: queueIndex + 1,
+            total: uploadQueue.length,
+            fileName: item.file.name,
+            originalSize: item.file.size,
+            uploadSize: uploadFile.size,
+            durationMs: Math.round(performance.now() - fileStartedAt),
+            stageDurationsMs: stageDurations,
+          });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
           if (/Upload cancelado pelo fotografo/i.test(message)) {
@@ -2887,10 +2968,31 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             message: formattedMessage,
             stage: uploadStage,
           });
+          setUploadRuntimeMetrics((current) => ({
+            ...current,
+            failedFiles: current.failedFiles + 1,
+            activeUploads: 0,
+          }));
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: browserOnlineRef.current ? 'failed' : 'paused', error: formattedMessage, stage: uploadStage } : uploadItem));
           setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
+        } finally {
+          setUploadRuntimeMetrics((current) => ({
+            ...current,
+            activeUploads: 0,
+          }));
         }
       }
+      console.info('[photographer-upload] batch:done', {
+        uploadBatchId,
+        total: uploadQueue.length,
+        publishedCount,
+        replacedCount,
+        copiedCount,
+        skippedDuplicateCount,
+        failedCount: failedUploads.length,
+        durationMs: Math.round(performance.now() - batchStartedAt),
+        concurrencyLimit: Math.max(1, uploadConcurrencyLimit),
+      });
 
       if (publishedCount === 0 && failedUploads.length > 0) {
         const firstFailure = failedUploads[0];
@@ -2927,6 +3029,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       console.error("Erro no upload:", error);
       alert(error instanceof Error ? error.message : "Erro ao realizar upload.");
     } finally {
+      setUploadRuntimeMetrics((current) => ({
+        ...current,
+        completedAt: Date.now(),
+        activeUploads: 0,
+      }));
       setIsLoading(false);
       setIsPublishing(false);
     }
@@ -5275,11 +5382,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                         >
                           <div className="grid grid-cols-[64px_1fr] gap-3">
                             <div className="w-16 h-16 bg-white/5 border border-white/10 overflow-hidden shrink-0 flex items-center justify-center">
-                              {item.file.type.startsWith('image') ? (
+                              {item.file.type.startsWith('image') && item.previewUrl ? (
                                 <img src={item.previewUrl} alt={item.name} className="w-full h-full object-cover" />
                               ) : (
                                 <div className="w-full h-full flex items-center justify-center bg-black text-white">
-                                  <VideoIcon className="w-4 h-4" />
+                                  {item.file.type.startsWith('video') ? <VideoIcon className="w-4 h-4" /> : <ImageIcon className="w-4 h-4" />}
                                 </div>
                               )}
                             </div>
@@ -5338,19 +5445,24 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                     <label className="block font-mono text-[10px] uppercase font-bold text-gray-500 mb-2">Preview antes de publicar</label>
                     <div className="aspect-video bg-black border border-white/10 overflow-hidden flex items-center justify-center">
                       {currentPreview ? (
-                        currentPreview.file.type.startsWith('image') ? (
+                        currentPreview.file.type.startsWith('image') && currentPreview.previewUrl ? (
                           <img
                             src={currentPreview.previewUrl}
                             alt={currentPreview.name}
                             className="w-full h-full object-contain bg-brutal-black"
                           />
-                        ) : (
+                        ) : currentPreview.file.type.startsWith('video') && currentPreview.previewUrl ? (
                           <video
                             src={currentPreview.previewUrl}
                             className="w-full h-full bg-brutal-black"
                             controls
                             preload="metadata"
                           />
+                        ) : (
+                          <div className="text-center px-8">
+                            {currentPreview.file.type.startsWith('video') ? <VideoIcon className="w-10 h-10 text-white/30 mx-auto mb-4" /> : <ImageIcon className="w-10 h-10 text-white/30 mx-auto mb-4" />}
+                            <p className="font-mono text-[10px] uppercase tracking-widest text-white/50">Preparando preview</p>
+                          </div>
                         )
                       ) : (
                         <div className="text-center px-8">
@@ -5448,6 +5560,40 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                       <p className="mt-2 font-mono text-[10px] uppercase text-gray-600">
                         {publishProgress.done} de {publishProgress.total} arquivo(s) processados.
                       </p>
+                      <div className="mt-3 grid grid-cols-2 gap-2 md:grid-cols-4">
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Enviado</p>
+                          <p className="font-sans text-sm font-black text-white">{formatFileSize(uploadRuntimeMetrics.uploadedBytes)}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Velocidade</p>
+                          <p className="font-sans text-sm font-black text-cyan-200">{formatUploadSpeed(uploadAverageSpeed)}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Estimativa</p>
+                          <p className="font-sans text-sm font-black text-green-200">{uploadEtaMs > 0 ? formatDurationMs(uploadEtaMs) : '-'}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Concorrencia</p>
+                          <p className="font-sans text-sm font-black text-white">{uploadRuntimeMetrics.activeUploads}/{uploadRuntimeMetrics.concurrencyLimit}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Tempo</p>
+                          <p className="font-sans text-sm font-black text-white">{formatDurationMs(uploadElapsedMs)}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Retries</p>
+                          <p className="font-sans text-sm font-black text-yellow-200">{uploadRuntimeMetrics.retries}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Falhas lote</p>
+                          <p className="font-sans text-sm font-black text-red-300">{uploadRuntimeMetrics.failedFiles}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Total bruto</p>
+                          <p className="font-sans text-sm font-black text-gray-200">{formatFileSize(uploadRuntimeMetrics.totalBytes)}</p>
+                        </div>
+                      </div>
                       <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
                         <button
                           type="button"

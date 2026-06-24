@@ -1685,6 +1685,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
   const handleAdminOrderStatus = async (order: Order, status: Order['status']) => {
     if (order.status === status) return;
+
+    if (status === 'paid') {
+      await handleManualReleaseOrder(order);
+      return;
+    }
+
     const confirmed = window.confirm(`Atualizar pedido #${order.id.slice(0, 8)} para ${orderStatusLabels[status]}?`);
     if (!confirmed) return;
 
@@ -1704,6 +1710,31 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       alert(message || 'Não foi possível atualizar o pedido.');
     } finally {
       setUpdatingOrderId(null);
+    }
+  };
+
+  const handleManualReleaseOrder = async (order: Order) => {
+    if (order.status === 'paid') return;
+
+    const reason = window.prompt(`Informe o comprovante/motivo detalhado para liberar #${order.id.slice(0, 8)}:`)?.trim() || '';
+    if (reason.length < 20) {
+      if (reason) alert('Informe pelo menos 20 caracteres com comprovante/motivo da liberação.');
+      return;
+    }
+
+    const confirmed = window.confirm(`Liberar manualmente o pedido #${order.id.slice(0, 8)} como pago?`);
+    if (!confirmed) return;
+
+    setRecoveringPaymentOrderId(order.id);
+    try {
+      await adminService.recoverPayment({ orderId: order.id, action: 'manual_release', reason });
+      await handleAuditPayments();
+      await onRefresh();
+    } catch (error) {
+      console.error(error);
+      alert(error instanceof Error ? error.message : 'Não foi possível liberar o pedido.');
+    } finally {
+      setRecoveringPaymentOrderId(null);
     }
   };
 

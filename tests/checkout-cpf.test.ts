@@ -8,8 +8,8 @@ test('checkout page requires and sends buyer CPF before payment', () => {
   assert.match(source, /label="CPF"/);
   assert.match(source, /isValidCpf\(cpfDigits\)/);
   assert.match(source, /cpf:\s*cpfDigits/);
-  assert.match(source, /console\.log\('CPF digitado:'/);
-  assert.match(source, /console\.log\('Payload checkout:'/);
+  assert.doesNotMatch(source, /console\.log\('CPF digitado:'/);
+  assert.doesNotMatch(source, /console\.log\('Payload checkout:'/);
 });
 
 test('checkout backend rejects invalid CPF before creating gateway checkout', () => {

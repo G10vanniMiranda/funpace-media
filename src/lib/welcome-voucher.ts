@@ -23,8 +23,6 @@ export function recordWelcomeVoucherEvent(name: WelcomeVoucherEventName, metadat
   } catch {
     // Analytics local is best-effort and must not block checkout.
   }
-
-  console.info('[welcome-voucher]', event);
 }
 
 export function hasActiveWelcomeVoucherDismissal(now = Date.now()) {
@@ -57,4 +55,3 @@ export function saveWelcomeVoucherForCheckout() {
     // Ignore storage failures.
   }
 }
-

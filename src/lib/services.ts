@@ -36,6 +36,17 @@ const localEventsStorageKey = 'funpace:local-events:v1';
 const defaultUploadLimitBytes = 300 * 1024 * 1024;
 const clientUploadLimitBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadLimitBytes);
 const clientUploadTimeoutMs = Number(import.meta.env.VITE_MEDIA_UPLOAD_TIMEOUT_MS || 600_000);
+const adminSnapshotLimits = {
+  photographers: 1000,
+  products: 2000,
+  orders: 500,
+  withdrawals: 1000,
+  customers: 1000,
+  payments: 1000,
+  paymentEvents: 1000,
+  coupons: 500,
+  adminLogs: 1000,
+};
 
 function apiUrl(path: string) {
   const baseUrl = String(import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
@@ -655,19 +666,21 @@ export const productService = {
     return counts;
   },
 
-  async getLatestProducts(count = 20): Promise<Product[]> {
+  async getLatestProducts(count = 20, offset = 0): Promise<Product[]> {
     if (isMockMode) {
       return mockProducts
         .filter((product) => isPubliclyListableProduct(product) && (product.status ?? 'published') === 'published')
-        .slice(0, count);
+        .slice(offset, offset + count);
     }
 
     const params = new URLSearchParams({
       select: '*',
       status: 'eq.published',
       order: 'createdAt.desc',
+      limit: String(count),
+      offset: String(Math.max(0, offset)),
     });
-    const products = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${params.toString()}`, count);
+    const products = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${params.toString()}`);
     return signMediaUrls(products.filter(isPubliclyListableProduct), { protectOriginals: true });
   },
 
@@ -732,8 +745,8 @@ export const productService = {
       if (response.status === 413) throw new Error('Imagem muito grande. Envie uma selfie de ate 8 MB.');
       if (response.status === 415) throw new Error('Formato invalido. Envie uma selfie JPG ou PNG.');
       if (response.status === 422) throw new Error('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.');
-      if (response.status === 403) throw new Error('Permissão para uso de imagem necessária para realizar a busca facial.');
-      throw new Error('Não foi possível realizar a busca facial. Tente novamente em alguns instantes.');
+      if (response.status === 403) throw new Error('Permissao para uso de imagem necessaria para realizar a busca facial.');
+      throw new Error('Nao foi possivel realizar a busca facial. Tente novamente em alguns instantes.');
     }
     const matches = Array.isArray(payload.matches) ? payload.matches : [];
     const signed = await signMediaUrls(matches.map((match) => match.product), { protectOriginals: true });
@@ -2679,7 +2692,10 @@ export const adminService = {
     const accessToken = await getCurrentAccessToken();
     if (!accessToken) throw new Error('Sessão admin ausente.');
 
-    const response = await fetch('/api/admin/snapshot', {
+    const snapshotParams = new URLSearchParams(
+      Object.fromEntries(Object.entries(adminSnapshotLimits).map(([key, value]) => [key, String(value)])),
+    );
+    const response = await fetch(`/api/admin/snapshot?${snapshotParams.toString()}`, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },

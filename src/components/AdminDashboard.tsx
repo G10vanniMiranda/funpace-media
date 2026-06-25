@@ -143,6 +143,49 @@ const orderStatusClasses: Record<Order['status'], string> = {
   refunded: 'border-blue-500/30 bg-blue-500/10 text-blue-300',
 };
 
+const adminListPageSizes = {
+  users: 120,
+  photographers: 120,
+  media: 80,
+  orders: 160,
+  paymentIssues: 80,
+  payments: 120,
+  paymentEvents: 120,
+  logs: 250,
+} as const;
+
+type AdminListKey = keyof typeof adminListPageSizes;
+
+const initialVisibleAdminRows: Record<AdminListKey, number> = {
+  users: adminListPageSizes.users,
+  photographers: adminListPageSizes.photographers,
+  media: adminListPageSizes.media,
+  orders: adminListPageSizes.orders,
+  paymentIssues: adminListPageSizes.paymentIssues,
+  payments: adminListPageSizes.payments,
+  paymentEvents: adminListPageSizes.paymentEvents,
+  logs: adminListPageSizes.logs,
+};
+
+function AdminLoadMoreButton({ visible, total, onClick }: { visible: number; total: number; onClick: () => void }) {
+  if (visible >= total) return null;
+
+  return (
+    <div className="border-t border-white/10 p-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+      <p className="font-mono text-[10px] uppercase text-gray-500">
+        Exibindo {Math.min(visible, total)} de {total}
+      </p>
+      <button
+        type="button"
+        onClick={onClick}
+        className="h-10 px-4 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase hover:border-brutal-accent hover:text-brutal-accent transition-colors"
+      >
+        Carregar mais
+      </button>
+    </div>
+  );
+}
+
 function startOfDay(date: Date) {
   const result = new Date(date);
   result.setHours(0, 0, 0, 0);
@@ -489,6 +532,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
   const [isAuditingPayments, setIsAuditingPayments] = useState(false);
   const [recoveringPaymentOrderId, setRecoveringPaymentOrderId] = useState<string | null>(null);
   const [logSearch, setLogSearch] = useState('');
+  const [visibleAdminRows, setVisibleAdminRows] = useState<Record<AdminListKey, number>>(initialVisibleAdminRows);
   const [updatingProductId, setUpdatingProductId] = useState<string | null>(null);
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [resendingEmailOrderId, setResendingEmailOrderId] = useState<string | null>(null);
@@ -753,6 +797,41 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
       JSON.stringify(log.metadata || {}),
     ].some((value) => String(value || '').toLowerCase().includes(normalized)));
   }, [logSearch, operationalLogs]);
+  const showMoreAdminRows = React.useCallback((key: AdminListKey) => {
+    setVisibleAdminRows((current) => ({
+      ...current,
+      [key]: current[key] + adminListPageSizes[key],
+    }));
+  }, []);
+
+  React.useEffect(() => {
+    setVisibleAdminRows((current) => ({ ...current, users: adminListPageSizes.users }));
+  }, [userSearch, customerRows.length]);
+
+  React.useEffect(() => {
+    setVisibleAdminRows((current) => ({ ...current, photographers: adminListPageSizes.photographers }));
+  }, [photographerSearch, photographerStatusFilter, photographers.length]);
+
+  React.useEffect(() => {
+    setVisibleAdminRows((current) => ({ ...current, media: adminListPageSizes.media }));
+  }, [mediaSearch, mediaStatusFilter, allMedia.length]);
+
+  React.useEffect(() => {
+    setVisibleAdminRows((current) => ({ ...current, orders: adminListPageSizes.orders }));
+  }, [orderSearch, orderStatusFilter, selectedPeriod, customPeriodStart, customPeriodEnd, periodOrders.length]);
+
+  React.useEffect(() => {
+    setVisibleAdminRows((current) => ({
+      ...current,
+      paymentIssues: adminListPageSizes.paymentIssues,
+      payments: adminListPageSizes.payments,
+      paymentEvents: adminListPageSizes.paymentEvents,
+    }));
+  }, [paymentStatusFilter, payments.length, paymentEvents.length, visiblePaymentIssues.length]);
+
+  React.useEffect(() => {
+    setVisibleAdminRows((current) => ({ ...current, logs: adminListPageSizes.logs }));
+  }, [logSearch, operationalLogs.length]);
   const referralRanking = React.useMemo(() => {
     const rows = new Map<string, { photographer: Photographer | undefined; total: number; rewarded: number }>();
     for (const referral of referrals) {
@@ -2465,7 +2544,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       <tr><th className="px-5 py-3">Nome</th><th className="px-5 py-3">E-mail</th><th className="px-5 py-3">Role</th><th className="px-5 py-3">Compras</th><th className="px-5 py-3">Total gasto</th><th className="px-5 py-3">Cadastro</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {filteredUsers.slice(0, 120).map((row) => (
+                      {filteredUsers.slice(0, visibleAdminRows.users).map((row) => (
                         <tr key={row.id} className="hover:bg-white/3">
                           <td className="px-5 py-4 font-sans font-bold text-white">{row.name}</td>
                           <td className="px-5 py-4 font-mono text-xs text-gray-400">{row.email}</td>
@@ -2478,6 +2557,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </tbody>
                   </table>
                 </div>
+                <AdminLoadMoreButton
+                  visible={visibleAdminRows.users}
+                  total={filteredUsers.length}
+                  onClick={() => showMoreAdminRows('users')}
+                />
               </div>
             </motion.div>
           )}
@@ -2601,7 +2685,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
-                      {filteredPhotographers.map((p) => {
+                      {filteredPhotographers.slice(0, visibleAdminRows.photographers).map((p) => {
                         const photographerStatus = getPhotographerStatus(p);
                         const statusBadge = photographerStatus === 'disabled'
                           ? {
@@ -2765,6 +2849,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </tbody>
                   </table>
                 </div>
+                <AdminLoadMoreButton
+                  visible={visibleAdminRows.photographers}
+                  total={filteredPhotographers.length}
+                  onClick={() => showMoreAdminRows('photographers')}
+                />
               </div>
             </motion.div>
           )}
@@ -2868,7 +2957,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 p-5">
-                  {filteredMedia.slice(0, 80).map((product) => (
+                  {filteredMedia.slice(0, visibleAdminRows.media).map((product) => (
                     <div key={product.id} className="bg-[#080d14] border border-white/10 overflow-hidden">
                       <div className="aspect-4/3 bg-black relative">
                         {product.thumbnailUrl || product.type === 'IMG' ? <img src={product.thumbnailUrl || product.url} alt={product.name} className="w-full h-full object-cover" /> : <video src={product.url} className="w-full h-full object-cover" muted preload="metadata" />}
@@ -2885,6 +2974,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </div>
                   ))}
                 </div>
+                <AdminLoadMoreButton
+                  visible={visibleAdminRows.media}
+                  total={filteredMedia.length}
+                  onClick={() => showMoreAdminRows('media')}
+                />
               </div>
             </motion.div>
           )}
@@ -2905,7 +2999,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <table className="w-full text-left">
                     <thead className="bg-[#05080d] text-gray-500 font-mono text-[10px] uppercase"><tr><th className="px-5 py-3">Pedido</th><th className="px-5 py-3">Cliente</th><th className="px-5 py-3">Status</th><th className="px-5 py-3">Valor</th><th className="px-5 py-3">Método</th><th className="px-5 py-3">Evento/Fotógrafo</th><th className="px-5 py-3">Ação</th></tr></thead>
                     <tbody className="divide-y divide-white/10">
-                      {filteredOrders.slice(0, 160).map((order) => {
+                      {filteredOrders.slice(0, visibleAdminRows.orders).map((order) => {
                         const firstItem = order.items?.[0];
                         const isRecoveringOrderPayment = recoveringPaymentOrderId === order.id;
                         return (
@@ -2949,6 +3043,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </tbody>
                   </table>
                 </div>
+                <AdminLoadMoreButton
+                  visible={visibleAdminRows.orders}
+                  total={filteredOrders.length}
+                  onClick={() => showMoreAdminRows('orders')}
+                />
               </div>
             </motion.div>
           )}
@@ -2978,7 +3077,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <div className="bg-[#080d14] border border-white/10 p-4"><p className="font-mono text-[9px] uppercase text-gray-500">Total em risco</p><p className="font-sans font-black text-2xl text-white">{visiblePaymentIssues.length}</p></div>
                 </div>
                 <div className="divide-y divide-white/10 max-h-96 overflow-y-auto">
-                  {visiblePaymentIssues.slice(0, 80).map((issue) => {
+                  {visiblePaymentIssues.slice(0, visibleAdminRows.paymentIssues).map((issue) => {
                     const canReprocess = issue.hasTransactionNsu && issue.hasSlug;
                     const isBusy = recoveringPaymentOrderId === issue.orderId;
                     return (
@@ -3021,6 +3120,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     <div className="p-6 text-center font-mono text-[10px] uppercase text-gray-500">Nenhuma inconsistencia encontrada.</div>
                   )}
                 </div>
+                <AdminLoadMoreButton
+                  visible={visibleAdminRows.paymentIssues}
+                  total={visiblePaymentIssues.length}
+                  onClick={() => showMoreAdminRows('paymentIssues')}
+                />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
                 <div className="bg-[#0d131c] border border-white/10 p-5"><p className="font-mono text-[10px] uppercase text-gray-500 mb-2">Pagamentos</p><p className="font-sans font-black text-3xl">{payments.length}</p></div>
@@ -3031,11 +3135,21 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                 <div className="bg-[#0d131c] border border-white/10">
                   <div className="p-5 border-b border-white/10 flex items-center justify-between"><h3 className="font-sans font-black text-base uppercase">Histórico de pagamentos</h3><select value={paymentStatusFilter} onChange={(event) => setPaymentStatusFilter(event.target.value as typeof paymentStatusFilter)} className="h-10 bg-[#080d14] border border-white/15 text-white font-mono text-[10px] uppercase"><option value="all">Todos</option><option value="paid">Pago</option><option value="pending">Pendente</option><option value="refused">Recusado</option><option value="failed">Falhou</option></select></div>
-                  <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{filteredPayments.slice(0, 120).map((payment) => <div key={payment.id} className="p-4 flex justify-between gap-4"><div><p className="font-sans font-black text-sm uppercase">{payment.provider} - {payment.method}</p><p className="font-mono text-[10px] text-gray-500">Pedido #{payment.orderId.slice(0, 8)} - {payment.providerPaymentId}</p></div><span className={`h-fit px-2 py-1 border font-mono text-[10px] uppercase ${orderStatusClasses[payment.status]}`}>{payment.status}</span></div>)}</div>
+                  <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{filteredPayments.slice(0, visibleAdminRows.payments).map((payment) => <div key={payment.id} className="p-4 flex justify-between gap-4"><div><p className="font-sans font-black text-sm uppercase">{payment.provider} - {payment.method}</p><p className="font-mono text-[10px] text-gray-500">Pedido #{payment.orderId.slice(0, 8)} - {payment.providerPaymentId}</p></div><span className={`h-fit px-2 py-1 border font-mono text-[10px] uppercase ${orderStatusClasses[payment.status]}`}>{payment.status}</span></div>)}</div>
+                  <AdminLoadMoreButton
+                    visible={visibleAdminRows.payments}
+                    total={filteredPayments.length}
+                    onClick={() => showMoreAdminRows('payments')}
+                  />
                 </div>
                 <div className="bg-[#0d131c] border border-white/10">
                   <div className="p-5 border-b border-white/10"><h3 className="font-sans font-black text-base uppercase">Logs de webhook</h3><p className="font-mono text-[10px] uppercase text-gray-500">Auditoria do gateway</p></div>
-                  <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{paymentEvents.slice(0, 120).map((eventItem) => <div key={eventItem.id} className="p-4"><p className="font-sans font-black text-sm uppercase">{eventItem.provider} - {eventItem.status || 'received'}</p><p className="font-mono text-[10px] text-gray-500">{eventItem.eventId} - {new Date(eventItem.createdAt).toLocaleString('pt-BR')}</p></div>)}</div>
+                  <div className="divide-y divide-white/10 max-h-160 overflow-y-auto">{paymentEvents.slice(0, visibleAdminRows.paymentEvents).map((eventItem) => <div key={eventItem.id} className="p-4"><p className="font-sans font-black text-sm uppercase">{eventItem.provider} - {eventItem.status || 'received'}</p><p className="font-mono text-[10px] text-gray-500">{eventItem.eventId} - {new Date(eventItem.createdAt).toLocaleString('pt-BR')}</p></div>)}</div>
+                  <AdminLoadMoreButton
+                    visible={visibleAdminRows.paymentEvents}
+                    total={paymentEvents.length}
+                    onClick={() => showMoreAdminRows('paymentEvents')}
+                  />
                 </div>
               </div>
             </motion.div>
@@ -3387,7 +3501,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                   <input value={logSearch} onChange={(event) => setLogSearch(event.target.value)} placeholder="Buscar acao, alvo, webhook" className="h-11 px-3 bg-[#080d14] border border-white/15 text-white font-mono text-xs outline-none focus:border-brutal-accent md:w-90" />
                 </div>
                 <div className="divide-y divide-white/10 max-h-[70vh] overflow-y-auto">
-                  {filteredLogs.slice(0, 250).map((log) => (
+                  {filteredLogs.slice(0, visibleAdminRows.logs).map((log) => (
                     <div key={log.id} className="p-4 grid gap-3 md:grid-cols-[220px_1fr_auto] md:items-start">
                       <div><p className="font-sans font-black text-sm uppercase text-white">{log.action}</p><p className="font-mono text-[10px] text-gray-500">{log.actorEmail || 'sistema'}</p></div>
                       <div><p className="font-mono text-[10px] uppercase text-gray-400">{log.targetType || 'evento'} {log.targetId ? `#${String(log.targetId).slice(0, 12)}` : ''}</p><pre className="mt-2 whitespace-pre-wrap break-all font-mono text-[10px] text-gray-600 max-h-24 overflow-hidden">{JSON.stringify(log.metadata || {}, null, 2)}</pre></div>
@@ -3395,6 +3509,11 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
                     </div>
                   ))}
                 </div>
+                <AdminLoadMoreButton
+                  visible={visibleAdminRows.logs}
+                  total={filteredLogs.length}
+                  onClick={() => showMoreAdminRows('logs')}
+                />
               </div>
             </motion.div>
           )}

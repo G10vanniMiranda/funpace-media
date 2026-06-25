@@ -74,7 +74,6 @@ export function useContentProtection({ enabled = true, scope = 'public-gallery' 
   const reportAttempt = React.useCallback((input: ReportInput) => {
     if (!enabled) return;
 
-    console.log('Proteção acionada por:', input.type, input.metadata || {});
     const message = input.message || getContentProtectionMessage(input.type);
     setNotice(message);
 

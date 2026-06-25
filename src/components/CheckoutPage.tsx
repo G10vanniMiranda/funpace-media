@@ -105,8 +105,6 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
         phone: phoneDigits,
         cpf: cpfDigits,
       };
-      console.log('CPF digitado:', cpfDigits ? `***${cpfDigits.slice(-2)}` : '');
-      console.log('Payload checkout:', { ...payload, cpf: payload.cpf ? `***${payload.cpf.slice(-2)}` : '' });
       const result = await onCheckout(payload, paymentMethod, normalizedCoupon || undefined);
 
       setCheckoutResult(result);
@@ -352,7 +350,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
                 className="border border-brutal-accent bg-brutal-accent/10 p-3"
               >
                 <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
-                  Parabéns! Você ganhou 15% de desconto por comprar 4 ou mais fotos.
+                  Parabens! Voce ganhou 15% de desconto por comprar 4 ou mais fotos.
                 </p>
               </motion.div>
             )}
@@ -371,7 +369,7 @@ export function CheckoutPage({ cartItems, onRemoveItem, onCheckout, onLoginReque
             </div>
             {displayedDiscount > 0 && (
               <p className="font-mono text-[10px] uppercase text-green-700">
-                Você economizou R$ {displayedDiscount.toFixed(2).replace('.', ',')}.
+                Voce economizou R$ {displayedDiscount.toFixed(2).replace('.', ',')}.
               </p>
             )}
             <div className="flex justify-between font-mono text-xs uppercase text-gray-500">

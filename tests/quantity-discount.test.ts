@@ -11,25 +11,25 @@ function video(id: string, price = 20) {
   return { id, price, type: 'VIDEO' as const };
 }
 
-test('bulk photo discount is inactive up to four photos', () => {
+test('bulk photo discount is inactive up to three photos', () => {
+  const pricing = calculateCartPricing([photo('1'), photo('2'), photo('3')]);
+
+  assert.equal(pricing.photoCount, 3);
+  assert.equal(pricing.subtotal, 30);
+  assert.equal(pricing.automaticDiscountActive, false);
+  assert.equal(pricing.automaticDiscountTotal, 0);
+  assert.equal(pricing.total, 30);
+});
+
+test('bulk photo discount applies fifteen percent from four photos', () => {
   const pricing = calculateCartPricing([photo('1'), photo('2'), photo('3'), photo('4')]);
 
   assert.equal(pricing.photoCount, 4);
   assert.equal(pricing.subtotal, 40);
-  assert.equal(pricing.automaticDiscountActive, false);
-  assert.equal(pricing.automaticDiscountTotal, 0);
-  assert.equal(pricing.total, 40);
-});
-
-test('bulk photo discount applies fifteen percent from five photos', () => {
-  const pricing = calculateCartPricing([photo('1'), photo('2'), photo('3'), photo('4'), photo('5')]);
-
-  assert.equal(pricing.photoCount, 5);
-  assert.equal(pricing.subtotal, 50);
   assert.equal(pricing.automaticDiscountActive, true);
   assert.equal(pricing.automaticDiscountPercent, 15);
-  assert.equal(pricing.automaticDiscountTotal, 7.5);
-  assert.equal(pricing.total, 42.5);
+  assert.equal(pricing.automaticDiscountTotal, 6);
+  assert.equal(pricing.total, 34);
 });
 
 test('bulk photo discount recalculates for six and twenty photos', () => {
@@ -42,27 +42,27 @@ test('bulk photo discount recalculates for six and twenty photos', () => {
   assert.equal(twenty.total, 170);
 });
 
-test('videos do not count toward the five-photo threshold or photo discount base', () => {
+test('videos do not count toward the four-photo threshold or photo discount base', () => {
+  const threePhotosOneVideo = calculateCartPricing([photo('1'), photo('2'), photo('3'), video('v1')]);
   const fourPhotosOneVideo = calculateCartPricing([photo('1'), photo('2'), photo('3'), photo('4'), video('v1')]);
-  const fivePhotosOneVideo = calculateCartPricing([photo('1'), photo('2'), photo('3'), photo('4'), photo('5'), video('v1')]);
 
+  assert.equal(threePhotosOneVideo.photoCount, 3);
+  assert.equal(threePhotosOneVideo.automaticDiscountTotal, 0);
+  assert.equal(threePhotosOneVideo.total, 50);
   assert.equal(fourPhotosOneVideo.photoCount, 4);
-  assert.equal(fourPhotosOneVideo.automaticDiscountTotal, 0);
-  assert.equal(fourPhotosOneVideo.total, 60);
-  assert.equal(fivePhotosOneVideo.photoCount, 5);
-  assert.equal(fivePhotosOneVideo.subtotal, 70);
-  assert.equal(fivePhotosOneVideo.automaticDiscountTotal, 7.5);
-  assert.equal(fivePhotosOneVideo.total, 62.5);
+  assert.equal(fourPhotosOneVideo.subtotal, 60);
+  assert.equal(fourPhotosOneVideo.automaticDiscountTotal, 6);
+  assert.equal(fourPhotosOneVideo.total, 54);
 });
 
 test('removing photos below threshold removes the automatic discount', () => {
-  const items = [photo('1'), photo('2'), photo('3'), photo('4'), photo('5')];
+  const items = [photo('1'), photo('2'), photo('3'), photo('4')];
   const before = calculateCartPricing(items);
-  const after = calculateCartPricing(items.slice(0, 4));
+  const after = calculateCartPricing(items.slice(0, 3));
 
   assert.equal(before.automaticDiscountActive, true);
   assert.equal(after.automaticDiscountActive, false);
-  assert.equal(after.total, 40);
+  assert.equal(after.total, 30);
 });
 
 test('checkout backend applies automatic discount and does not stack with coupons', () => {

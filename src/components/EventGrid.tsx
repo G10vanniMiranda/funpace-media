@@ -148,15 +148,6 @@ function buildEvents(products: Product[], registeredEvents: Event[] = [], eventM
 
 export function EventGrid({ products, registeredEvents = [], eventMediaCounts = {}, query, onSelectEvent }: EventGridProps) {
   const events = React.useMemo(() => buildEvents(products, registeredEvents, eventMediaCounts), [products, registeredEvents, eventMediaCounts]);
-  React.useEffect(() => {
-    console.info('[event-cover] event-grid:covers', {
-      count: events.length,
-      covers: events.map((event) => ({
-        name: event.name,
-        coverUrl: event.coverUrl,
-      })),
-    });
-  }, [events]);
   const filteredEvents = React.useMemo(() => {
     const normalizedQuery = normalizeText(query.trim());
     if (!normalizedQuery) return events;

@@ -3,27 +3,9 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import type { HeroSearchResults } from './components/Hero';
-import { PhotoGrid } from './components/PhotoGrid';
-import { VideoGrid } from './components/VideoGrid';
 import { EventGrid } from './components/EventGrid';
 import { CartDrawer } from './components/CartDrawer';
 import { Footer } from './components/Footer';
-import { AuthView } from './components/AuthView';
-import { PhotographerSection } from './components/PhotographerSection';
-import { PhotographerProfile } from './components/PhotographerProfile';
-import { PhotographerLogin } from './components/PhotographerLogin';
-import { PhotographerPasswordSetup } from './components/PhotographerPasswordSetup';
-import { AdminLogin } from './components/AdminLogin';
-import { FaceSearchModal } from './components/FaceSearchModal';
-import { WelcomeVoucherModal } from './components/WelcomeVoucherModal';
-import { PagamentoSucesso } from './routes/pagamento/sucesso';
-import { DownloadSeguro } from './routes/DownloadSeguro';
-import { ParaFotografos } from './routes/ParaFotografos';
-import { Precos } from './routes/Precos';
-import { Faq } from './routes/Faq';
-import { Contato } from './routes/Contato';
-import { Termos } from './routes/Termos';
-import { Privacidade } from './routes/Privacidade';
 import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, Customer, PaymentRecord, PaymentEventLog, Coupon, AdminActivityLog, FaceSearchMatch } from './types';
 import type { Event } from './types';
 import { useAuth } from './contexts/AuthContext';
@@ -41,6 +23,23 @@ const CustomerOrdersPage = React.lazy(() => import('./components/CustomerOrdersD
 const CustomerAccountPage = React.lazy(() => import('./components/CustomerAccountPage').then((module) => ({ default: module.CustomerAccountPage })));
 const PhotographerDashboard = React.lazy(() => import('./components/PhotographerDashboard').then((module) => ({ default: module.PhotographerDashboard })));
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
+const PhotoGrid = React.lazy(() => import('./components/PhotoGrid').then((module) => ({ default: module.PhotoGrid })));
+const VideoGrid = React.lazy(() => import('./components/VideoGrid').then((module) => ({ default: module.VideoGrid })));
+const AuthView = React.lazy(() => import('./components/AuthView').then((module) => ({ default: module.AuthView })));
+const FaceSearchModal = React.lazy(() => import('./components/FaceSearchModal').then((module) => ({ default: module.FaceSearchModal })));
+const WelcomeVoucherModal = React.lazy(() => import('./components/WelcomeVoucherModal').then((module) => ({ default: module.WelcomeVoucherModal })));
+const PhotographerProfile = React.lazy(() => import('./components/PhotographerProfile').then((module) => ({ default: module.PhotographerProfile })));
+const PhotographerLogin = React.lazy(() => import('./components/PhotographerLogin').then((module) => ({ default: module.PhotographerLogin })));
+const PhotographerPasswordSetup = React.lazy(() => import('./components/PhotographerPasswordSetup').then((module) => ({ default: module.PhotographerPasswordSetup })));
+const AdminLogin = React.lazy(() => import('./components/AdminLogin').then((module) => ({ default: module.AdminLogin })));
+const PagamentoSucesso = React.lazy(() => import('./routes/pagamento/sucesso').then((module) => ({ default: module.PagamentoSucesso })));
+const DownloadSeguro = React.lazy(() => import('./routes/DownloadSeguro').then((module) => ({ default: module.DownloadSeguro })));
+const ParaFotografos = React.lazy(() => import('./routes/ParaFotografos').then((module) => ({ default: module.ParaFotografos })));
+const Precos = React.lazy(() => import('./routes/Precos').then((module) => ({ default: module.Precos })));
+const Faq = React.lazy(() => import('./routes/Faq').then((module) => ({ default: module.Faq })));
+const Contato = React.lazy(() => import('./routes/Contato').then((module) => ({ default: module.Contato })));
+const Termos = React.lazy(() => import('./routes/Termos').then((module) => ({ default: module.Termos })));
+const Privacidade = React.lazy(() => import('./routes/Privacidade').then((module) => ({ default: module.Privacidade })));
 
 enum OperationType {
   CREATE = 'create',
@@ -58,7 +57,49 @@ interface DataErrorInfo {
 }
 
 const cartStorageKey = 'funpace:cart';
-const storefrontProductLimit = 5000;
+const storefrontInitialProductLimit = 600;
+const storefrontScopedProductLimit = 1200;
+const defaultSeoTitle = 'Funpace Media';
+const defaultSeoDescription = 'Funpace Media conecta atletas a fotos e videos oficiais de eventos esportivos, com busca por selfie, carrinho e downloads seguros.';
+
+type SeoMetadata = {
+  title?: string;
+  description?: string;
+  canonicalPath?: string;
+  canonicalUrl?: string;
+  image?: string | null;
+  type?: 'website' | 'article' | 'profile';
+};
+
+function LazyModalBoundary({ children }: { children: React.ReactNode }) {
+  return <React.Suspense fallback={null}>{children}</React.Suspense>;
+}
+
+function LazyGridBoundary({ children }: { children: React.ReactNode }) {
+  return (
+    <React.Suspense
+      fallback={
+        <div className="mx-auto w-full max-w-350 px-4 py-10 md:px-6">
+          <div className="skeleton h-8 w-48 brutal-border" />
+          <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} className="bg-white brutal-border">
+                <div className="skeleton aspect-4/3 border-b-2 border-brutal-black" />
+                <div className="space-y-3 p-4">
+                  <div className="skeleton h-4 w-28" />
+                  <div className="skeleton h-5 w-full" />
+                  <div className="skeleton h-4 w-3/5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      }
+    >
+      {children}
+    </React.Suspense>
+  );
+}
 
 function isValidCartProductId(value: unknown) {
   return typeof value === 'string' &&
@@ -138,6 +179,45 @@ function setLinkTag(selector: string, attributes: Record<string, string>) {
   Object.entries(attributes).forEach(([key, value]) => link?.setAttribute(key, value));
 }
 
+function removeMetaTag(selector: string) {
+  document.querySelector<HTMLMetaElement>(selector)?.remove();
+}
+
+function getAbsoluteUrl(pathOrUrl: string) {
+  if (/^https?:\/\//i.test(pathOrUrl)) return pathOrUrl;
+  return `${window.location.origin}${pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`}`;
+}
+
+function applySeoMetadata(input: SeoMetadata = {}) {
+  const title = input.title || defaultSeoTitle;
+  const description = input.description || defaultSeoDescription;
+  const canonicalUrl = input.canonicalUrl || getAbsoluteUrl(input.canonicalPath || window.location.pathname);
+  const type = input.type || 'website';
+
+  document.title = title;
+  setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
+  setMetaTag('meta[name="description"]', { name: 'description' }, description);
+  setMetaTag('meta[name="robots"]', { name: 'robots' }, 'index,follow');
+  setMetaTag('meta[property="og:site_name"]', { property: 'og:site_name' }, 'Funpace Media');
+  setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
+  setMetaTag('meta[property="og:description"]', { property: 'og:description' }, description);
+  setMetaTag('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl);
+  setMetaTag('meta[property="og:type"]', { property: 'og:type' }, type);
+  setMetaTag('meta[property="og:locale"]', { property: 'og:locale' }, 'pt_BR');
+  setMetaTag('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary_large_image');
+  setMetaTag('meta[name="twitter:title"]', { name: 'twitter:title' }, title);
+  setMetaTag('meta[name="twitter:description"]', { name: 'twitter:description' }, description);
+
+  if (input.image) {
+    const image = getAbsoluteUrl(input.image);
+    setMetaTag('meta[property="og:image"]', { property: 'og:image' }, image);
+    setMetaTag('meta[name="twitter:image"]', { name: 'twitter:image' }, image);
+  } else {
+    removeMetaTag('meta[property="og:image"]');
+    removeMetaTag('meta[name="twitter:image"]');
+  }
+}
+
 function loadStoredCart(): Product[] {
   try {
     const raw = localStorage.getItem(cartStorageKey);
@@ -188,6 +268,9 @@ function Storefront() {
   const [eventQuery, setEventQuery] = useState('');
   const [debouncedEventQuery, setDebouncedEventQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [latestProductOffset, setLatestProductOffset] = useState(0);
+  const [hasMoreLatestProducts, setHasMoreLatestProducts] = useState(false);
+  const [isLoadingMoreLatestProducts, setIsLoadingMoreLatestProducts] = useState(false);
   const [paymentNotice, setPaymentNotice] = useState<{
     status: 'paid' | 'pending' | 'cancelled' | 'canceled';
     orderId?: string | null;
@@ -209,7 +292,7 @@ function Storefront() {
       setIsLoading(true);
       try {
         const [products, eventRows, photographerRows, mediaCounts] = await Promise.all([
-          productService.getLatestProducts(storefrontProductLimit),
+          productService.getLatestProducts(storefrontInitialProductLimit),
           eventService.getPublishedEvents(300).catch((error) => {
             console.warn('Eventos cadastrados indisponíveis na vitrine; usando apenas mídias publicadas.', error);
             return [] as Event[];
@@ -225,6 +308,8 @@ function Storefront() {
         ]);
         setPhotos(products.filter(p => p.type === 'IMG'));
         setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
+        setLatestProductOffset(products.length);
+        setHasMoreLatestProducts(products.length === storefrontInitialProductLimit);
         setRegisteredEvents(eventRows);
         setEventMediaCounts(mediaCounts);
         setPublicPhotographers(photographerRows);
@@ -550,6 +635,38 @@ function Storefront() {
   const isEventDetailRoute = Boolean(eventSlugFromPath);
 
   React.useEffect(() => {
+    if (activePublicPhotographerSlug || publicEventSlug || isCustomerOrdersRoute) return;
+
+    if (eventSlugFromPath && selectedEventName) {
+      applySeoMetadata({
+        title: `${selectedEventName} | Funpace Media`,
+        description: `Veja videos publicos e encontre suas fotos do evento ${selectedEventName} com busca por selfie na Funpace Media.`,
+        canonicalPath: `/eventos/${eventSlugFromPath}`,
+        image: selectedEventCover,
+        type: 'article',
+      });
+      return;
+    }
+
+    if (isEventsRoute) {
+      applySeoMetadata({
+        title: 'Eventos esportivos | Funpace Media',
+        description: 'Explore eventos esportivos publicados na Funpace Media e encontre videos publicos, fotos oficiais e busca por selfie.',
+        canonicalPath: '/eventos',
+      });
+      return;
+    }
+
+    if (location.pathname === '/') {
+      applySeoMetadata({
+        title: defaultSeoTitle,
+        description: defaultSeoDescription,
+        canonicalPath: '/',
+      });
+    }
+  }, [activePublicPhotographerSlug, eventSlugFromPath, isCustomerOrdersRoute, isEventsRoute, location.pathname, publicEventSlug, selectedEventCover, selectedEventName]);
+
+  React.useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   }, [location.pathname]);
 
@@ -705,6 +822,26 @@ function Storefront() {
     setActiveView('photos');
   };
 
+  const loadMoreLatestProducts = async () => {
+    if (isLoadingMoreLatestProducts || !hasMoreLatestProducts) return;
+    setIsLoadingMoreLatestProducts(true);
+    try {
+      const nextProducts = await productService.getLatestProducts(storefrontInitialProductLimit, latestProductOffset);
+      const existingIds = new Set([...photos, ...videos].map((product) => product.id));
+      const uniqueProducts = nextProducts.filter((product) => !existingIds.has(product.id));
+      if (uniqueProducts.length > 0) {
+        setPhotos((current) => [...current, ...uniqueProducts.filter((product) => product.type === 'IMG')]);
+        setVideos((current) => [...current, ...uniqueProducts.filter((product) => product.type === 'VIDEO' || product.type === 'VIEW')]);
+      }
+      setLatestProductOffset((current) => current + nextProducts.length);
+      setHasMoreLatestProducts(nextProducts.length === storefrontInitialProductLimit);
+    } catch (error) {
+      console.error('Erro ao carregar mais midias recentes:', error);
+    } finally {
+      setIsLoadingMoreLatestProducts(false);
+    }
+  };
+
   const clearSearch = async () => {
     setIsLoading(true);
     setSearchBib(null);
@@ -715,9 +852,11 @@ function Storefront() {
     setEventQuery('');
 
     try {
-      const products = await productService.getLatestProducts(storefrontProductLimit);
+      const products = await productService.getLatestProducts(storefrontInitialProductLimit);
       setPhotos(products.filter(p => p.type === 'IMG'));
       setVideos(products.filter(p => p.type === 'VIDEO' || p.type === 'VIEW'));
+      setLatestProductOffset(products.length);
+      setHasMoreLatestProducts(products.length === storefrontInitialProductLimit);
     } catch (error) {
       console.error("Error clearing search:", error);
     } finally {
@@ -801,10 +940,12 @@ function Storefront() {
         />
         <AnimatePresence>
           {isAuthOpen && (
-            <AuthView
-              onClose={() => setIsAuthOpen(false)}
-              onSuccess={() => setIsAuthOpen(false)}
-            />
+            <LazyModalBoundary>
+              <AuthView
+                onClose={() => setIsAuthOpen(false)}
+                onSuccess={() => setIsAuthOpen(false)}
+              />
+            </LazyModalBoundary>
           )}
         </AnimatePresence>
       </>
@@ -861,10 +1002,12 @@ function Storefront() {
 
         <AnimatePresence>
           {isAuthOpen && (
-            <AuthView
-              onClose={() => setIsAuthOpen(false)}
-              onSuccess={() => setIsAuthOpen(false)}
-            />
+            <LazyModalBoundary>
+              <AuthView
+                onClose={() => setIsAuthOpen(false)}
+                onSuccess={() => setIsAuthOpen(false)}
+              />
+            </LazyModalBoundary>
           )}
         </AnimatePresence>
       </div>
@@ -911,10 +1054,12 @@ function Storefront() {
         onOpenAccount={() => user ? navigate('/minha-conta') : setIsAuthOpen(true)}
       />
 
-      <WelcomeVoucherModal
-        userId={user?.uid || null}
-        onStartShopping={handleStartShoppingFromWelcomeVoucher}
-      />
+      <LazyModalBoundary>
+        <WelcomeVoucherModal
+          userId={user?.uid || null}
+          onStartShopping={handleStartShoppingFromWelcomeVoucher}
+        />
+      </LazyModalBoundary>
 
       {selectedPhotographer ? (
         <PhotographerProfile
@@ -1000,13 +1145,27 @@ function Storefront() {
               )}
 
               {!isLoading && !searchBib && !searchType && !selectedEventName && (
-                <EventGrid
-                  products={allDisplayProducts}
-                  registeredEvents={registeredEvents}
-                  eventMediaCounts={eventMediaCounts}
-                  query={debouncedEventQuery}
-                  onSelectEvent={openGlobalEventResult}
-                />
+                <>
+                  <EventGrid
+                    products={allDisplayProducts}
+                    registeredEvents={registeredEvents}
+                    eventMediaCounts={eventMediaCounts}
+                    query={debouncedEventQuery}
+                    onSelectEvent={openGlobalEventResult}
+                  />
+                  {hasMoreLatestProducts && !debouncedEventQuery.trim() && (
+                    <div className="mx-auto flex max-w-350 justify-center px-4 pb-14 md:px-6">
+                      <button
+                        type="button"
+                        onClick={loadMoreLatestProducts}
+                        disabled={isLoadingMoreLatestProducts}
+                        className="premium-button min-h-12 bg-brutal-black px-6 font-display text-sm uppercase tracking-widest text-white brutal-border hover:bg-brutal-accent disabled:cursor-wait disabled:opacity-60"
+                      >
+                        {isLoadingMoreLatestProducts ? 'Carregando...' : 'Carregar mais eventos'}
+                      </button>
+                    </div>
+                  )}
+                </>
               )}
 
               {!isLoading && selectedEventName && !searchBib && !searchType && (
@@ -1121,7 +1280,8 @@ function Storefront() {
 
               {!isLoading && (selectedEventName || searchBib || searchType) && (activeView === 'photos' ? (
                 searchType === 'selfie' ? (
-                  <PhotoGrid
+                  <LazyGridBoundary>
+                    <PhotoGrid
                     title={`FOTOS ENCONTRADAS (${displayPhotos.length})`}
                     subtitle={searchType === 'selfie'
                       ? displayPhotos.length > 0
@@ -1137,10 +1297,12 @@ function Storefront() {
                     likedIds={likedProductIds}
                     heartCounts={heartCounts}
                     onToggleFavorite={handleToggleFavorite}
-                  />
+                    />
+                  </LazyGridBoundary>
                 ) : null
               ) : (
-                <VideoGrid
+                <LazyGridBoundary>
+                  <VideoGrid
                   videos={displayVideos}
                   onAddToCart={handleAddToCart}
                   cartItems={cart}
@@ -1150,7 +1312,8 @@ function Storefront() {
                   likedIds={likedProductIds}
                   heartCounts={heartCounts}
                   onToggleFavorite={handleToggleFavorite}
-                />
+                  />
+                </LazyGridBoundary>
               ))}
 
               {!searchType && !selectedEventName && activeView === 'photos' && (
@@ -1184,21 +1347,25 @@ function Storefront() {
         }}
       />
 
-      <FaceSearchModal
-        isOpen={isFaceSearchOpen}
-        eventName={selectedEventName || 'Evento'}
-        onClose={() => setIsFaceSearchOpen(false)}
-        onSearch={handleSelfieSearch}
-      />
+      <LazyModalBoundary>
+        <FaceSearchModal
+          isOpen={isFaceSearchOpen}
+          eventName={selectedEventName || 'Evento'}
+          onClose={() => setIsFaceSearchOpen(false)}
+          onSearch={handleSelfieSearch}
+        />
+      </LazyModalBoundary>
 
       <FloatingWhatsappSupport />
 
       <AnimatePresence>
         {isAuthOpen && (
-          <AuthView
-            onClose={() => setIsAuthOpen(false)}
-            onSuccess={() => setIsAuthOpen(false)}
-          />
+          <LazyModalBoundary>
+            <AuthView
+              onClose={() => setIsAuthOpen(false)}
+              onSuccess={() => setIsAuthOpen(false)}
+            />
+          </LazyModalBoundary>
         )}
       </AnimatePresence>
 
@@ -1261,27 +1428,9 @@ function PublicPhotographerPage({
         }
         const [profileEvents, profileProducts] = await Promise.all([
           eventService.getPublishedPhotographerEvents(profile.id, 300),
-          productService.getPublishedProductsByPhotographer(profile.id, storefrontProductLimit),
+          productService.getPublishedProductsByPhotographer(profile.id, storefrontScopedProductLimit),
         ]);
         if (cancelled) return;
-        console.info('[public-photographer] fotografo encontrado', {
-          photographerId: profile.id,
-          username: profile.username,
-          slug: profile.slug,
-          displayName: profile.displayName || profile.name,
-        });
-        console.info('[public-photographer] eventos retornados pela query', {
-          count: profileEvents.length,
-          events: profileEvents.map((event) => ({
-            eventId: event.id,
-            name: event.name,
-            coverImage: event.coverImage || null,
-            coverMediaId: event.coverMediaId || null,
-          })),
-        });
-        console.info('[public-photographer] midias retornadas para o fotografo', {
-          count: profileProducts.length,
-        });
         setPhotographer(profile);
         setEvents(profileEvents);
         setProducts(profileProducts);
@@ -1302,24 +1451,16 @@ function PublicPhotographerPage({
     if (!photographer) return;
     const titleName = getPhotographerPublicName(photographer);
     const publicSlug = photographer.username || photographer.slug || slug;
-    const canonicalUrl = `${window.location.origin}/${publicSlug}`;
     const title = `${titleName} - Fotógrafo Oficial | Funpace Media`;
     const description = `Perfil publico de ${titleName}${photographer.city ? ` em ${photographer.city}` : ''}: eventos, albuns e fotos na Funpace Media.`;
-    document.title = title;
-    setLinkTag('link[rel="canonical"]', { rel: 'canonical', href: canonicalUrl });
-    setMetaTag('meta[name="description"]', { name: 'description' }, description);
-    setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
-    setMetaTag('meta[property="og:description"]', { property: 'og:description' }, description);
-    setMetaTag('meta[property="og:url"]', { property: 'og:url' }, canonicalUrl);
-    setMetaTag('meta[property="og:type"]', { property: 'og:type' }, 'profile');
-    setMetaTag('meta[name="twitter:card"]', { name: 'twitter:card' }, 'summary_large_image');
-    setMetaTag('meta[name="twitter:title"]', { name: 'twitter:title' }, title);
-    setMetaTag('meta[name="twitter:description"]', { name: 'twitter:description' }, description);
     const ogImage = photographer.coverPhoto || photographer.profilePhoto || photographer.avatar;
-    if (ogImage) {
-      setMetaTag('meta[property="og:image"]', { property: 'og:image' }, ogImage);
-      setMetaTag('meta[name="twitter:image"]', { name: 'twitter:image' }, ogImage);
-    }
+    applySeoMetadata({
+      title,
+      description,
+      canonicalPath: `/${publicSlug}`,
+      image: ogImage,
+      type: 'profile',
+    });
   }, [photographer, slug]);
 
   const normalizedQuery = normalizeEventName(query.trim());
@@ -1412,21 +1553,6 @@ function PublicPhotographerPage({
       return matchesQuery && matchesCity && matchesDate;
     });
   }, [cityFilter, dateFilter, normalizedQuery, publicAlbums]);
-
-  React.useEffect(() => {
-    if (!photographer) return;
-    console.info('[public-photographer] albuns renderizados', {
-      photographerId: photographer.id,
-      totalAlbums: publicAlbums.length,
-      filteredAlbums: filteredAlbums.length,
-      covers: publicAlbums.map((album) => ({
-        id: album.id,
-        name: album.name,
-        coverUrl: album.coverUrl || null,
-        source: album.event?.bannerImage ? 'event.bannerImage' : album.event?.coverImage ? 'event.coverImage' : 'product.thumbnailUrl',
-      })),
-    });
-  }, [filteredAlbums.length, photographer, publicAlbums]);
 
   const filteredProducts = React.useMemo(() => products.filter((product) => {
     const event = events.find((item) => normalizeEventName(item.name) === normalizeEventName(product.event || ''));
@@ -1551,7 +1677,8 @@ function PublicPhotographerPage({
           )}
         </section>
       ) : (
-        <PhotoGrid
+        <LazyGridBoundary>
+          <PhotoGrid
           title="Fotos do fotógrafo"
           subtitle={`${filteredProducts.length === 1 ? '1 mídia encontrada' : `${filteredProducts.length} mídias encontradas`} no perfil de ${displayName}`}
           photos={filteredProducts.filter((product) => product.type === 'IMG')}
@@ -1561,7 +1688,8 @@ function PublicPhotographerPage({
           likedIds={likedProductIds}
           heartCounts={heartCounts}
           onToggleFavorite={onToggleFavorite}
-        />
+          />
+        </LazyGridBoundary>
       )}
     </main>
   );
@@ -1598,7 +1726,7 @@ function PublicEventPage({
         }
         const [owner, ownerProducts] = await Promise.all([
           eventRow.photographerId ? photographerService.getPhotographerById(eventRow.photographerId) : Promise.resolve(null),
-          productService.getPublishedProductsByEvent(eventRow.id, eventRow.name, eventRow.photographerId, storefrontProductLimit),
+          productService.getPublishedProductsByEvent(eventRow.id, eventRow.name, eventRow.photographerId, storefrontScopedProductLimit),
         ]);
         if (cancelled) return;
         setEvent(eventRow);
@@ -1621,15 +1749,14 @@ function PublicEventPage({
     if (!event) return;
     const title = `${event.name} | Fotos Funpace Media`;
     const description = event.description || `Evento ${event.name} na Funpace Media com videos publicos e busca facial para fotos.`;
-    document.title = title;
-    setMetaTag('meta[name="description"]', { name: 'description' }, description);
-    setMetaTag('meta[property="og:title"]', { property: 'og:title' }, title);
-    setMetaTag('meta[property="og:description"]', { property: 'og:description' }, description);
-    setMetaTag('meta[property="og:url"]', { property: 'og:url' }, window.location.href);
-    setMetaTag('meta[property="og:type"]', { property: 'og:type' }, 'article');
-    const ogImage = event.bannerImage || event.coverImage;
-    if (ogImage) setMetaTag('meta[property="og:image"]', { property: 'og:image' }, ogImage);
-  }, [event]);
+    applySeoMetadata({
+      title,
+      description,
+      canonicalPath: `/evento/${event.slug || slug}`,
+      image: event.bannerImage || event.coverImage,
+      type: 'article',
+    });
+  }, [event, slug]);
 
   if (isLoading) return <PublicLoading label="Carregando evento..." />;
   if (!event) return <PublicEmpty title="Evento não encontrado" actionLabel="Voltar para eventos" onAction={() => navigate('/eventos')} />;
@@ -1733,7 +1860,8 @@ function PublicEventPage({
 
       {activeView === 'photos' ? (
         faceMatches ? (
-          <PhotoGrid
+          <LazyGridBoundary>
+            <PhotoGrid
             title={`Fotos Encontradas (${photos.length})`}
             subtitle={photos.length > 0
               ? `Encontramos ${photos.length} ${photos.length === 1 ? 'foto sua' : 'fotos suas'} neste evento`
@@ -1748,10 +1876,12 @@ function PublicEventPage({
             heartCounts={heartCounts}
             onToggleFavorite={onToggleFavorite}
             compact
-          />
+            />
+          </LazyGridBoundary>
         ) : null
       ) : (
-        <VideoGrid
+        <LazyGridBoundary>
+          <VideoGrid
           videos={videos}
           onAddToCart={onAddToCart}
           cartItems={cartItems}
@@ -1762,23 +1892,26 @@ function PublicEventPage({
           heartCounts={heartCounts}
           onToggleFavorite={onToggleFavorite}
           compact
-        />
+          />
+        </LazyGridBoundary>
       )}
-      <FaceSearchModal
-        isOpen={isFaceSearchOpen}
-        eventName={event.name}
-        onClose={() => setIsFaceSearchOpen(false)}
-        onSearch={async (file, sessionId) => {
-          const matches = await productService.searchByFace(file, event.id, sessionId);
-          if (matches.length === 0) {
-            showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
+      <LazyModalBoundary>
+        <FaceSearchModal
+          isOpen={isFaceSearchOpen}
+          eventName={event.name}
+          onClose={() => setIsFaceSearchOpen(false)}
+          onSearch={async (file, sessionId) => {
+            const matches = await productService.searchByFace(file, event.id, sessionId);
+            if (matches.length === 0) {
+              showToast('Nenhuma foto sua foi encontrada neste evento. Tente utilizar outra selfie.', 'info');
+              return matches;
+            }
+            setFaceMatches(matches);
+            setActiveView('photos');
             return matches;
-          }
-          setFaceMatches(matches);
-          setActiveView('photos');
-          return matches;
-        }}
-      />
+          }}
+        />
+      </LazyModalBoundary>
     </main>
   );
 }
@@ -2033,10 +2166,12 @@ function LegacyCustomerOrdersRoute() {
 
       <AnimatePresence>
         {isAuthOpen && (
-          <AuthView
-            onClose={() => setIsAuthOpen(false)}
-            onSuccess={() => setIsAuthOpen(false)}
-          />
+          <LazyModalBoundary>
+            <AuthView
+              onClose={() => setIsAuthOpen(false)}
+              onSuccess={() => setIsAuthOpen(false)}
+            />
+          </LazyModalBoundary>
         )}
       </AnimatePresence>
     </div>
@@ -2107,7 +2242,11 @@ function CustomerAccountRoute() {
           </button>
         </div>
         <AnimatePresence>
-          {isAuthOpen && <AuthView onClose={() => setIsAuthOpen(false)} onSuccess={() => setIsAuthOpen(false)} />}
+          {isAuthOpen && (
+            <LazyModalBoundary>
+              <AuthView onClose={() => setIsAuthOpen(false)} onSuccess={() => setIsAuthOpen(false)} />
+            </LazyModalBoundary>
+          )}
         </AnimatePresence>
       </div>
     );
@@ -2334,15 +2473,15 @@ function AdminRoute() {
           allAdminLogs,
         ] = await Promise.all([
           recover('fotografos', photographerService.getAllPhotographers(), []),
-          recover('produtos', productService.getAdminProducts(10000), []),
-          recover('pedidos', orderService.getAdminOrders(5000), []),
-          recover('saques', withdrawalService.getAdminWithdrawals(5000), []),
+          recover('produtos', productService.getAdminProducts(2000), []),
+          recover('pedidos', orderService.getAdminOrders(500), []),
+          recover('saques', withdrawalService.getAdminWithdrawals(1000), []),
           recover('configuracoes', platformSettingsService.getPublicSettings(), { platformFeePercent: 30 }),
-          recover('clientes', adminService.getCustomers(5000), []),
-          recover('pagamentos', adminService.getPayments(5000), []),
-          recover('eventos de pagamento', adminService.getPaymentEvents(5000), []),
-          recover('cupons', adminService.getCoupons(1000), []),
-          recover('logs admin', adminService.getAdminLogs(5000), []),
+          recover('clientes', adminService.getCustomers(1000), []),
+          recover('pagamentos', adminService.getPayments(1000), []),
+          recover('eventos de pagamento', adminService.getPaymentEvents(1000), []),
+          recover('cupons', adminService.getCoupons(500), []),
+          recover('logs admin', adminService.getAdminLogs(1000), []),
         ]);
       }
 

@@ -181,7 +181,7 @@ export function WelcomeVoucherModal({ userId, onStartShopping }: WelcomeVoucherM
                   }}
                   className="min-h-13 w-full inline-flex items-center justify-center brutal-border bg-white px-4 py-3 font-display text-sm uppercase tracking-widest text-brutal-black transition-colors hover:bg-gray-50 sm:min-h-14 sm:px-5 sm:text-base sm:tracking-[0.14em]"
                 >
-                  <span className="whitespace-nowrap leading-none">Começar a Comprar</span>
+                  <span className="whitespace-nowrap leading-none">Comecar a Comprar</span>
                 </button>
               </div>
             </div>

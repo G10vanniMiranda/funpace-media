@@ -18,6 +18,36 @@ test('public event page queries only products from the selected event', () => {
   assert.match(sql, /payments_order_provider_updated_at_idx/);
 });
 
+test('storefront and admin snapshot use bounded server-side result windows', () => {
+  const app = readFileSync('src/App.tsx', 'utf8');
+  const services = readFileSync('src/lib/services.ts', 'utf8');
+  const snapshot = readFileSync('server/api/admin/snapshot.ts', 'utf8');
+  const adminDashboard = readFileSync('src/components/AdminDashboard.tsx', 'utf8');
+
+  assert.match(app, /storefrontInitialProductLimit = 600/);
+  assert.match(app, /storefrontScopedProductLimit = 1200/);
+  assert.doesNotMatch(app, /storefrontProductLimit = 5000/);
+  assert.match(app, /loadMoreLatestProducts/);
+  assert.match(app, /Carregar mais eventos/);
+  assert.match(services, /adminSnapshotLimits/);
+  assert.match(services, /async getLatestProducts\(count = 20, offset = 0\)/);
+  assert.match(services, /offset: String\(Math\.max\(0, offset\)\)/);
+  assert.match(services, /\/api\/admin\/snapshot\?\$\{snapshotParams\.toString\(\)\}/);
+  assert.match(snapshot, /readLimit/);
+  assert.match(snapshot, /fetchOrderItemsForOrders/);
+  assert.doesNotMatch(snapshot, /order_items\?select=\*&order=createdAt\.asc&limit=20000/);
+  assert.doesNotMatch(snapshot, /products\?select=\*&order=createdAt\.desc&limit=10000/);
+  assert.match(adminDashboard, /adminListPageSizes/);
+  assert.match(adminDashboard, /visibleAdminRows/);
+  assert.match(adminDashboard, /AdminLoadMoreButton/);
+  assert.match(adminDashboard, /showMoreAdminRows/);
+  assert.match(adminDashboard, /filteredPhotographers\.slice\(0, visibleAdminRows\.photographers\)/);
+  assert.match(adminDashboard, /filteredMedia\.slice\(0, visibleAdminRows\.media\)/);
+  assert.match(adminDashboard, /filteredOrders\.slice\(0, visibleAdminRows\.orders\)/);
+  assert.match(adminDashboard, /filteredLogs\.slice\(0, visibleAdminRows\.logs\)/);
+  assert.match(adminDashboard, /visiblePaymentIssues\.slice\(0, visibleAdminRows\.paymentIssues\)/);
+});
+
 test('download proxy blocks private destinations and streams files', () => {
   const source = readFileSync('server/api/downloads/authorize.ts', 'utf8');
 

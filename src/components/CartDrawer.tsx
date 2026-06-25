@@ -117,7 +117,7 @@ export function CartDrawer({
           {pricing.automaticDiscountActive && (
             <div className="mb-4 border-2 border-brutal-accent bg-brutal-accent/10 p-3">
               <p className="font-mono text-[10px] uppercase leading-relaxed text-brutal-accent font-bold">
-                Parabéns! Você ganhou 15% de desconto por comprar 4 ou mais fotos.
+                Parabens! Voce ganhou 15% de desconto por comprar 4 ou mais fotos.
               </p>
             </div>
           )}
@@ -136,7 +136,7 @@ export function CartDrawer({
             </div>
             {pricing.automaticDiscountTotal > 0 && (
               <p className="font-mono text-[10px] uppercase text-green-700">
-                Você economizou R$ {pricing.automaticDiscountTotal.toFixed(2).replace('.', ',')}.
+                Voce economizou R$ {pricing.automaticDiscountTotal.toFixed(2).replace('.', ',')}.
               </p>
             )}
           </div>

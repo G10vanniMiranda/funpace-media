@@ -101,11 +101,6 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
   const updateSelfieFile = React.useCallback((nextFile: File | null) => {
     fileRef.current = nextFile;
     setFile(nextFile);
-    console.log('State selfie atualizado', nextFile ? {
-      name: nextFile.name,
-      size: nextFile.size,
-      type: nextFile.type,
-    } : null);
   }, []);
 
   const updatePreviewUrl = React.useCallback((nextUrl: string) => {
@@ -115,7 +110,6 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     }
     previewObjectUrlRef.current = nextUrl.startsWith('blob:') ? nextUrl : '';
     setPreviewUrl(nextUrl);
-    console.log('Preview atualizado', { hasPreview: Boolean(nextUrl) });
   }, []);
 
   const clearFile = React.useCallback(() => {
@@ -168,7 +162,6 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
       streamRef.current = stream;
       await attachCameraStream();
-      console.log('Camera aberta');
     } catch {
       setError('Precisamos de acesso a camera para realizar a busca facial. Verifique as permissoes do navegador e tente novamente.');
     } finally {
@@ -223,7 +216,6 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       return;
     }
     setError('');
-    console.log('File criado', capturedFile);
     updateSelfieFile(capturedFile);
     updatePreviewUrl(URL.createObjectURL(capturedFile));
     stopCamera();
@@ -289,13 +281,11 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
       setCaptureFlash(true);
       window.setTimeout(() => setCaptureFlash(false), 140);
       const blob = dataUrlToBlob(canvas.toDataURL('image/jpeg', 0.9));
-      console.log('Blob criado', blob);
       if (!blob || blob.size === 0) {
         setError('Não foi possível gerar a selfie. Tente novamente.');
         return;
       }
 
-      console.log('Foto capturada');
       setCapturedSelfie(blob);
     } catch (captureError) {
       console.error('[face-search] selfie:capture-error', captureError);
@@ -307,11 +297,6 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
 
   const submit = async () => {
     const selectedFile = fileRef.current || file;
-    console.log('Iniciando busca facial', selectedFile ? {
-      name: selectedFile.name,
-      size: selectedFile.size,
-      type: selectedFile.type,
-    } : null);
     if (!selectedFile) {
       setError('Tire uma selfie ou carregue uma foto antes de iniciar a busca.');
       return;
@@ -319,7 +304,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
     const activeConsent = consent || readStoredConsent();
     if (!activeConsent) {
       setShowConsent(true);
-      setError('Permissão para uso de imagem necessária antes da busca facial.');
+      setError('Permissao para uso de imagem necessaria antes da busca facial.');
       return;
     }
     setError('');
@@ -390,7 +375,7 @@ export function FaceSearchModal({ isOpen, eventName, onClose, onSearch }: FaceSe
             {showConsent ? (
               <div className="p-5 sm:p-8">
                 <div className="mx-auto max-w-2xl text-center">
-                  <h3 className="font-display text-2xl uppercase text-brutal-accent sm:text-3xl">Permissão para Uso de Imagem</h3>
+                  <h3 className="font-display text-2xl uppercase text-brutal-accent sm:text-3xl">Permissao para Uso de Imagem</h3>
                   <p className="mt-5 text-base leading-relaxed text-gray-700">
                     Para encontrar suas fotos em nosso banco de dados, precisamos que você envie uma selfie. Sua privacidade é nossa prioridade, e seus dados serão tratados de acordo com a Lei Geral de Proteção de Dados (LGPD).
                   </p>

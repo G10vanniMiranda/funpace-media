@@ -1377,7 +1377,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
 
   const handleVerifyPhotographer = async (id: string) => {
     try {
-      await photographerService.verifyPhotographer(id);
+      await photographerService.setPhotographerAdminStatus(id, 'reactivate');
       onRefresh();
       alert("Fotógrafo aprovado com sucesso!");
     } catch (error) {

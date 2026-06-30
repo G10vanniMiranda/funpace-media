@@ -93,6 +93,53 @@ function devLog(message: string, metadata?: Record<string, unknown>) {
   console.info(`[photographer-signup] ${message}`, metadata || {});
 }
 
+function maskEmail(value: string) {
+  return value.replace(/^(.{2}).*(@.*)$/, '$1***$2');
+}
+
+function isUuid(value: unknown) {
+  return typeof value === 'string' &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function logApprovalStep(step: string, metadata: Record<string, unknown>) {
+  console.info('[photographer-approval]', { step, ...metadata });
+}
+
+async function findAuthUserByEmail(email: string) {
+  const { supabaseUrl, serviceRoleKey } = getSupabaseConfig();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  for (let page = 1; page <= 20; page += 1) {
+    const params = new URLSearchParams({ page: String(page), per_page: '100' });
+    const response = await fetch(`${supabaseUrl}/auth/v1/admin/users?${params.toString()}`, {
+      headers: {
+        apikey: serviceRoleKey,
+        Authorization: `Bearer ${serviceRoleKey}`,
+        'Content-Type': 'application/json',
+      },
+    });
+    const raw = await response.text();
+    let payload: any = null;
+    try {
+      payload = raw ? JSON.parse(raw) : null;
+    } catch {
+      payload = raw;
+    }
+
+    if (!response.ok) {
+      throw new Error(payload?.message || raw || `Supabase Auth HTTP ${response.status}`);
+    }
+
+    const users = Array.isArray(payload?.users) ? payload.users : Array.isArray(payload) ? payload : [];
+    const user = users.find((item: any) => String(item?.email || '').trim().toLowerCase() === normalizedEmail);
+    if (user?.id) return user;
+    if (users.length < 100) return null;
+  }
+
+  return null;
+}
+
 export default async function handler(req: any, res: any) {
   setCors(req, res);
   if (req.method === 'OPTIONS') return res.status(204).end();
@@ -108,7 +155,7 @@ export default async function handler(req: any, res: any) {
     if (!id) return res.status(400).json({ error: 'ID do fotógrafo é obrigatório.' });
 
     const [existing] = await supabaseRequest<any[]>(
-      `/rest/v1/photographers?id=eq.${encodeURIComponent(id)}&select=id,name,email,verified,blockedAt&limit=1`,
+      `/rest/v1/photographers?id=eq.${encodeURIComponent(id)}&select=id,auth_user_id,name,email,verified,approved,status,isPublic,blockedAt&limit=1`,
     );
     if (!existing) return res.status(404).json({ error: 'Fotógrafo não encontrado.' });
 
@@ -124,16 +171,54 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    if (action !== 'disable' && action !== 'reactivate') {
+    if (action !== 'disable' && action !== 'reactivate' && action !== 'approve') {
       return res.status(400).json({ error: 'Ação inválida para fotógrafo.' });
     }
 
-    const patch = action === 'disable'
-      ? { verified: false, approved: false, status: 'pending', blockedAt: new Date().toISOString(), updatedAt: new Date().toISOString() }
-      : { verified: true, approved: true, status: 'active', isPublic: true, blockedAt: null, updatedAt: new Date().toISOString() };
+    const isApprovalAction = action === 'reactivate' || action === 'approve';
+    const now = new Date().toISOString();
+    let targetId = id;
+    let patch: Record<string, unknown> = action === 'disable'
+      ? { verified: false, approved: false, status: 'pending', blockedAt: now, updatedAt: now }
+      : { verified: true, approved: true, status: 'active', isPublic: true, blockedAt: null, updatedAt: now };
+
+    if (isApprovalAction) {
+      logApprovalStep('approval_started', {
+        photographerId: existing.id,
+        email: maskEmail(String(existing.email || '')),
+        hasAuthUserId: Boolean(existing.auth_user_id),
+        currentStatus: existing.status,
+        verified: Boolean(existing.verified),
+        approved: Boolean(existing.approved),
+      });
+
+      const authUser = existing.auth_user_id ? { id: existing.auth_user_id, email: existing.email } : await findAuthUserByEmail(existing.email);
+      if (!authUser?.id || !isUuid(authUser.id)) {
+        logApprovalStep('auth_user_missing', {
+          photographerId: existing.id,
+          email: maskEmail(String(existing.email || '')),
+        });
+        return res.status(409).json({
+          error: 'Fotografo encontrado, mas nao existe usuario confirmado no Supabase Auth para este e-mail. Peca para o fotografo confirmar/criar a conta antes da aprovacao.',
+          code: 'AUTH_USER_MISSING',
+        });
+      }
+
+      patch = {
+        ...patch,
+        id: authUser.id,
+        auth_user_id: authUser.id,
+      };
+
+      logApprovalStep('auth_user_found', {
+        photographerId: existing.id,
+        authUserId: authUser.id,
+        email: maskEmail(String(existing.email || '')),
+      });
+    }
 
     const [photographer] = await supabaseRequest<any[]>(
-      `/rest/v1/photographers?id=eq.${encodeURIComponent(id)}&select=*`,
+      `/rest/v1/photographers?id=eq.${encodeURIComponent(targetId)}&select=*`,
       {
         method: 'PATCH',
         headers: { Prefer: 'return=representation' },
@@ -142,7 +227,7 @@ export default async function handler(req: any, res: any) {
     );
     if (!photographer) return res.status(404).json({ error: 'Fotógrafo não encontrado.' });
 
-    if (action === 'reactivate') {
+    if (isApprovalAction) {
       await supabaseRequest(`/rest/v1/photographer_referrals?referredPhotographerId=eq.${encodeURIComponent(id)}&status=eq.pending`, {
         method: 'PATCH',
         headers: { Prefer: 'return=minimal' },
@@ -151,7 +236,14 @@ export default async function handler(req: any, res: any) {
           approvedAt: new Date().toISOString(),
         }),
       }).catch((error) => devLog('Nao foi possivel aprovar indicacao do fotografo', { photographerId: id, error: String(error?.message || error) }));
-      devLog('Aprovado; login liberado', { photographerId: id });
+      logApprovalStep('approval_completed', {
+        previousPhotographerId: id,
+        photographerId: photographer.id,
+        authUserId: photographer.auth_user_id,
+        verified: Boolean(photographer.verified),
+        approved: Boolean(photographer.approved),
+        status: photographer.status,
+      });
     }
 
     return res.json({

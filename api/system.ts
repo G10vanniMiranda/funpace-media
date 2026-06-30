@@ -2,7 +2,7 @@ import healthHandler from '../server/api/health.js';
 import checkoutDebugHandler from '../server/api/checkout/debug.js';
 import eventMediaCountsHandler from '../server/api/events/media-counts.js';
 import paymentsReconcileHandler from '../server/api/payments/reconcile.js';
-import { handleOptions, rateLimit, setSecurityHeaders } from '../server/shared/security.js';
+import { handleOptions, rateLimitAsync, setSecurityHeaders } from '../server/shared/security.js';
 
 function routeName(req: any) {
   const queryRoute = String(req.query?.route || '').trim();
@@ -25,7 +25,7 @@ export default async function handler(req: any, res: any) {
   }
 
   if (handleOptions(req, res, 'GET,POST,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'system', windowMs: 60 * 1000, max: 120 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'system', windowMs: 60 * 1000, max: 120 })) return;
   setSecurityHeaders(res);
 
   if (route === 'health') {

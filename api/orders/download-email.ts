@@ -1,4 +1,4 @@
-import { assertRequestSize, handleOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { assertRequestSize, handleOptions, publicError, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 import { sendPaidOrderEmail } from '../../server/shared/checkoutFulfillment.js';
 import { getSupabaseApiConfig, supabaseRequest } from '../../server/shared/utils.js';
 
@@ -43,7 +43,7 @@ function isUuid(value: unknown) {
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res, 'POST,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'download-email', windowMs: 60 * 1000, max: 20 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'download-email', windowMs: 60 * 1000, max: 20 })) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Metodo nao permitido.' });
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 

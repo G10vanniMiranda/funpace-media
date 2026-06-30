@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../server/shared/security.js';
+import { handleOptions, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../server/shared/security.js';
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from '../server/face/face-handlers.js';
 import { shouldBypassFaceBackfillRateLimit } from '../server/face/face-rate-limit.js';
 
@@ -23,11 +23,11 @@ function routeName(req: any) {
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res, 'GET,POST,OPTIONS', 'Authorization, Content-Type, X-Photo-Id, X-Event-Id')) return;
   const bypassBackfillRateLimit = shouldBypassFaceBackfillRateLimit(req);
-  if (!bypassBackfillRateLimit && rateLimit(req, res, { keyPrefix: 'face', windowMs: 60 * 1000, max: 30 })) return;
+  if (!bypassBackfillRateLimit && await rateLimitAsync(req, res, { keyPrefix: 'face', windowMs: 60 * 1000, max: 30 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   const route = routeName(req);
-  if (route === 'backfill' && !bypassBackfillRateLimit && rateLimit(req, res, { keyPrefix: 'face-backfill', windowMs: 60 * 1000, max: 4 })) return;
+  if (route === 'backfill' && !bypassBackfillRateLimit && await rateLimitAsync(req, res, { keyPrefix: 'face-backfill', windowMs: 60 * 1000, max: 4 })) return;
   if (route === 'consent' && req.method === 'POST') return faceConsentHandler(req, res);
   if (route === 'search' && req.method === 'POST') return searchFaceHandler(req, res);
   if (route === 'index' && req.method === 'POST') return indexPhotoHandler(req, res);

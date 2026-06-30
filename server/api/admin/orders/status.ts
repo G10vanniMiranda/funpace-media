@@ -1,4 +1,4 @@
-import { fulfillPaidOrder, recordPayment } from '../../../shared/checkoutFulfillment.js';
+import { adjustProductSalesCounts, fulfillPaidOrder, recordPayment } from '../../../shared/checkoutFulfillment.js';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -192,17 +192,8 @@ export default async function handler(req: any, res: any) {
           body: JSON.stringify({ status: 'cancelled' }),
         }).catch((error) => console.error('Não foi possível cancelar transações do fotógrafo:', error));
 
-        for (const item of items) {
-          const rows = await supabaseRequest<any[]>(
-            `/rest/v1/products?select=salesCount&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
-          ).catch(() => []);
-          const nextSalesCount = Math.max(0, Number(rows[0]?.salesCount || 0) - 1);
-          await supabaseRequest(`/rest/v1/products?id=eq.${encodeURIComponent(item.productId)}`, {
-            method: 'PATCH',
-            headers: { Prefer: 'return=minimal' },
-            body: JSON.stringify({ salesCount: nextSalesCount }),
-          }).catch(() => undefined);
-        }
+        await adjustProductSalesCounts(items.map((item) => item.productId), -1)
+          .catch((error) => console.error('NÃ£o foi possÃ­vel ajustar contagem de vendas:', error));
       }
 
       await supabaseRequest('/rest/v1/payment_events?on_conflict=provider,eventId', {

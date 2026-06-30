@@ -1,6 +1,6 @@
 import { createHash, createHmac, randomUUID, timingSafeEqual } from 'crypto';
 import { Readable } from 'node:stream';
-import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../../shared/security.js';
+import { handleOptions as handleSecurityOptions, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../shared/security.js';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -535,7 +535,7 @@ function redirectToFriendlyDownload(req: any, res: any, payload?: Partial<Downlo
 
 export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'GET,POST,OPTIONS')) return;
-  if (rateLimit(req, res, {
+  if (await rateLimitAsync(req, res, {
     keyPrefix: 'downloads',
     windowMs: 60 * 1000,
     max: 120,

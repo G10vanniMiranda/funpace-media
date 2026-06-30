@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { assertRequestSize, getClientIp, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { assertRequestSize, getClientIp, handleOptions as handleSecurityOptions, publicError, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 
 function setCors(req: any, res: any) {
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -272,7 +272,7 @@ function photographerUpdatePayload(input: {
 
 export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'GET,POST,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'photographer-request', windowMs: 60 * 1000, max: 20 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'photographer-request', windowMs: 60 * 1000, max: 20 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method === 'GET') {

@@ -1,4 +1,4 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 
 const previewFields = ['thumbnailUrl', 'watermarkUrl'] as const;
 
@@ -125,7 +125,7 @@ async function loadAllowedPreviewPaths(paths: string[], user: { id: string; isAd
 
 export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'media-sign', windowMs: 60 * 1000, max: 45 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'media-sign', windowMs: 60 * 1000, max: 45 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {

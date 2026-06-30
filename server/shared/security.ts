@@ -1,4 +1,5 @@
 // Shared security primitives for Vercel functions and the Express-compatible backend.
+import { ensureRequestId, logEvent } from './observability.js';
 type RateLimitBucket = {
   count: number;
   resetAt: number;
@@ -9,6 +10,12 @@ type RateLimitOptions = {
   windowMs: number;
   max: number;
   onLimit?: (retryAfterSeconds: number) => void;
+};
+
+type RateLimitDecision = {
+  limited: boolean;
+  retryAfterSeconds: number;
+  store: 'memory' | 'upstash';
 };
 
 declare global {
@@ -80,6 +87,14 @@ export function rejectUntrustedBrowserOrigin(req: any, res: any) {
   const method = String(req.method || '').toUpperCase();
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) return false;
   if (isTrustedBrowserOrigin(req)) return false;
+  const requestId = ensureRequestId(req, res);
+  logEvent('warn', 'browser_origin_blocked', {
+    requestId,
+    method,
+    path: req.url || req.originalUrl || null,
+    origin: req.headers?.origin || null,
+    referer: req.headers?.referer || null,
+  });
   res.status(403).json({ error: 'Origem não autorizada.' });
   return true;
 }
@@ -99,29 +114,108 @@ function cleanupRateLimitBuckets(buckets: Map<string, RateLimitBucket>, now: num
   }
 }
 
-export function rateLimit(req: any, res: any, options: RateLimitOptions) {
+function getDistributedRateLimitConfig() {
+  const url = String(process.env.UPSTASH_REDIS_REST_URL || process.env.RATE_LIMIT_REDIS_REST_URL || '').replace(/\/+$/, '');
+  const token = String(process.env.UPSTASH_REDIS_REST_TOKEN || process.env.RATE_LIMIT_REDIS_REST_TOKEN || '');
+  return url && token ? { url, token } : null;
+}
+
+function rateLimitKey(options: RateLimitOptions, req: any) {
+  return `funpace:rate-limit:${options.keyPrefix}:${getClientIp(req)}`.replace(/[^a-zA-Z0-9:._-]/g, '_');
+}
+
+function readUpstashResult(entry: any) {
+  return Number(entry?.result ?? entry?.[0] ?? entry ?? 0);
+}
+
+async function checkDistributedRateLimit(key: string, options: RateLimitOptions): Promise<RateLimitDecision | null> {
+  const config = getDistributedRateLimitConfig();
+  if (!config) return null;
+
+  const response = await fetch(`${config.url}/pipeline`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${config.token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify([
+      ['INCR', key],
+      ['PEXPIRE', key, options.windowMs, 'NX'],
+      ['PTTL', key],
+    ]),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Upstash rate limit HTTP ${response.status}`);
+  }
+
+  const payload: any = await response.json();
+  const count = readUpstashResult(payload?.[0]);
+  const ttlMs = Math.max(0, readUpstashResult(payload?.[2]));
+  return {
+    limited: count > options.max,
+    retryAfterSeconds: Math.max(1, Math.ceil(ttlMs / 1000)),
+    store: 'upstash',
+  };
+}
+
+function checkMemoryRateLimit(req: any, options: RateLimitOptions): RateLimitDecision {
   const now = Date.now();
-  const key = `${options.keyPrefix}:${getClientIp(req)}`;
+  const key = rateLimitKey(options, req);
   const buckets = rateLimitBuckets();
   cleanupRateLimitBuckets(buckets, now);
   const bucket = buckets.get(key);
 
   if (!bucket || bucket.resetAt <= now) {
     buckets.set(key, { count: 1, resetAt: now + options.windowMs });
-    return false;
+    return { limited: false, retryAfterSeconds: 0, store: 'memory' };
   }
 
   bucket.count += 1;
-  if (bucket.count <= options.max) return false;
+  if (bucket.count <= options.max) return { limited: false, retryAfterSeconds: 0, store: 'memory' };
 
   const retryAfterSeconds = Math.ceil((bucket.resetAt - now) / 1000);
-  res.setHeader('Retry-After', String(retryAfterSeconds));
+  return { limited: true, retryAfterSeconds, store: 'memory' };
+}
+
+function respondRateLimited(req: any, res: any, options: RateLimitOptions, decision: RateLimitDecision) {
+  const requestId = ensureRequestId(req, res);
+  logEvent('warn', 'rate_limit_exceeded', {
+    requestId,
+    keyPrefix: options.keyPrefix,
+    store: decision.store,
+    method: req.method || null,
+    path: req.url || req.originalUrl || null,
+    retryAfterSeconds: decision.retryAfterSeconds,
+  });
+  res.setHeader('Retry-After', String(decision.retryAfterSeconds));
   if (options.onLimit) {
-    options.onLimit(retryAfterSeconds);
+    options.onLimit(decision.retryAfterSeconds);
     return true;
   }
   res.status(429).json({ error: 'Muitas tentativas. Aguarde e tente novamente.' });
   return true;
+}
+
+export function rateLimit(req: any, res: any, options: RateLimitOptions) {
+  const decision = checkMemoryRateLimit(req, options);
+  return decision.limited ? respondRateLimited(req, res, options, decision) : false;
+}
+
+export async function rateLimitAsync(req: any, res: any, options: RateLimitOptions) {
+  let decision: RateLimitDecision | null = null;
+  try {
+    decision = await checkDistributedRateLimit(rateLimitKey(options, req), options);
+  } catch (error) {
+    logEvent('warn', 'distributed_rate_limit_failed', {
+      requestId: ensureRequestId(req, res),
+      keyPrefix: options.keyPrefix,
+      error: error instanceof Error ? error.message : String(error || 'unknown_error'),
+    });
+  }
+
+  decision = decision ?? checkMemoryRateLimit(req, options);
+  return decision.limited ? respondRateLimited(req, res, options, decision) : false;
 }
 
 export function assertRequestSize(req: any, maxBytes: number) {
@@ -143,6 +237,7 @@ export function assertRequestSize(req: any, maxBytes: number) {
 }
 
 export function handleOptions(req: any, res: any, methods?: string, headers?: string) {
+  ensureRequestId(req, res);
   setCors(req, res, methods, headers);
   if (req.method === 'OPTIONS') {
     res.status(204).end();

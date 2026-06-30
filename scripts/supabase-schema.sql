@@ -424,6 +424,29 @@ set
 where (status = 'removed' or type <> 'IMG')
   and "faceIndexStatus" in ('pending', 'processing');
 
+create or replace function public.adjust_product_sales_counts(product_ids uuid[], delta integer)
+returns void
+language sql
+security definer
+set search_path = ''
+as $$
+  with counted as (
+    select item.product_id, count(*)::integer as quantity
+    from unnest(product_ids) as item(product_id)
+    where item.product_id is not null
+    group by item.product_id
+  )
+  update public.products p
+  set
+    "salesCount" = greatest(0, coalesce(p."salesCount", 0) + counted.quantity * delta),
+    "updatedAt" = now()
+  from counted
+  where p.id = counted.product_id;
+$$;
+
+revoke all on function public.adjust_product_sales_counts(uuid[], integer) from public;
+grant execute on function public.adjust_product_sales_counts(uuid[], integer) to service_role;
+
 create table if not exists public.events (
   id uuid primary key default gen_random_uuid(),
   "photographerId" text references public.photographers(id) on delete cascade,

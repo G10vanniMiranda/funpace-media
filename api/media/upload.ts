@@ -1,4 +1,4 @@
-import { handleOptions as handleSecurityOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { handleOptions as handleSecurityOptions, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
 
 export const config = {
   api: {
@@ -324,7 +324,7 @@ async function verifyUploadedMedia(uploaded: { path: string; publicUrl?: string 
 
 export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'POST,OPTIONS', mediaUploadCorsHeaders)) return;
-  if (rateLimit(req, res, { keyPrefix: 'media-upload', windowMs: 60 * 1000, max: 120 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'media-upload', windowMs: 60 * 1000, max: 120 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (req.method !== 'POST') {

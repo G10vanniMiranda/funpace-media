@@ -1,15 +1,8 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, rateLimit, setSecurityHeaders } from '../../server/shared/security.js';
-import { fulfillPaidOrder } from '../../server/shared/checkoutFulfillment.js';
+import { assertRequestSize, handleOptions as handleSecurityOptions, rateLimitAsync, setSecurityHeaders } from '../../server/shared/security.js';
+import { ensureRequestId, errorToLog, logEvent } from '../../server/shared/observability.js';
+import { fulfillPaidOrder, recordPayment } from '../../server/shared/checkoutFulfillment.js';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
-
-function setCors(res: any) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-}
 
 function getJsonBody(req: any) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -176,84 +169,6 @@ async function recordPaymentEvent(input: { eventId: string; orderId: string; sta
   }).catch((error) => console.error('webhook:event_record_failed', error));
 }
 
-async function recordPayment(input: { orderId: string; providerPaymentId: string; method: string; status: PaymentStatus; rawResponse: any }) {
-  await supabaseRequest('/rest/v1/payments?on_conflict=provider,providerPaymentId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({
-      orderId: input.orderId,
-      provider: 'infinitepay',
-      providerPaymentId: input.providerPaymentId,
-      method: input.method || 'checkout',
-      status: input.status,
-      rawResponse: input.rawResponse,
-      updatedAt: new Date().toISOString(),
-    }),
-  });
-
-  await supabaseRequest(`/rest/v1/payments?orderId=eq.${encodeURIComponent(input.orderId)}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ status: input.status, updatedAt: new Date().toISOString() }),
-  }).catch((error) => console.error('webhook:payment_rollup_failed', error));
-}
-
-async function releaseDownloadAccess(orderId: string) {
-  const orders = await supabaseRequest<any[]>(
-    `/rest/v1/orders?select=id,userId,buyerEmail,status&id=eq.${encodeURIComponent(orderId)}&limit=1`,
-  );
-  const order = orders[0];
-  if (!order || order.status !== 'paid') return;
-
-  const items = await supabaseRequest<any[]>(
-    `/rest/v1/order_items?select=id,orderId,productId,vendedorId,price&orderId=eq.${encodeURIComponent(orderId)}`,
-  );
-  if (!items.length) return;
-
-  const expiresAt = new Date(Date.now() + Number(process.env.DOWNLOAD_ACCESS_DAYS || 30) * 24 * 60 * 60 * 1000).toISOString();
-  await supabaseRequest('/rest/v1/download_access?on_conflict=orderId,photoId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(items.map((item) => ({
-      orderId,
-      photoId: item.productId,
-      orderItemId: item.id,
-      userId: order.userId || null,
-      customerEmail: order.buyerEmail,
-      isActive: true,
-      expiresAt,
-    }))),
-  });
-
-  const existing = await supabaseRequest<any[]>(
-    `/rest/v1/photographer_transactions?select=orderItemId&orderId=eq.${encodeURIComponent(orderId)}`,
-  ).catch(() => []);
-  const processed = new Set(existing.map((item) => String(item.orderItemId || '')));
-  const newItems = items.filter((item) => !processed.has(String(item.id)));
-  if (!newItems.length) return;
-
-  const settings = await supabaseRequest<any[]>('/rest/v1/platform_settings?select=platformFeePercent&id=eq.default&limit=1').catch(() => []);
-  const feePercent = Number(settings[0]?.platformFeePercent ?? 30);
-  await supabaseRequest('/rest/v1/photographer_transactions?on_conflict=orderItemId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-    body: JSON.stringify(newItems.map((item) => {
-      const grossAmount = Number(item.price || 0);
-      const platformFee = Number((grossAmount * feePercent / 100).toFixed(2));
-      const netAmount = Number(Math.max(0, grossAmount - platformFee).toFixed(2));
-      return {
-        photographerId: item.vendedorId,
-        orderId,
-        orderItemId: item.id,
-        grossAmount,
-        platformFee,
-        netAmount,
-        status: 'pending',
-      };
-    })),
-  }).catch((error) => console.error('webhook:photographer_transactions_failed', error));
-}
-
 function normalizePaymentMethod(value: string) {
   const normalized = value.toLowerCase();
   if (normalized.includes('pix')) return 'pix';
@@ -262,14 +177,16 @@ function normalizePaymentMethod(value: string) {
 }
 
 export default async function handler(req: any, res: any) {
+  const requestId = ensureRequestId(req, res, 'wh');
   if (handleSecurityOptions(req, res, 'POST,OPTIONS', 'Content-Type, Authorization, X-Webhook-Secret, X-InfinitePay-Token, X-InfinitePay-Signature, X-Webhook-Signature, X-Signature')) return;
   setSecurityHeaders(res);
-  if (rateLimit(req, res, { keyPrefix: 'webhook-infinitepay', windowMs: 60 * 1000, max: 240 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'webhook-infinitepay', windowMs: 60 * 1000, max: 240 })) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
   try {
     assertRequestSize(req, Number(process.env.WEBHOOK_MAX_BODY_BYTES || 200 * 1024));
     if (!(await isWebhookAuthorized(req))) {
+      logEvent('warn', 'webhook_unauthorized', { requestId, provider: 'infinitepay' });
       return res.status(401).json({ success: false, received: false, error: 'Webhook não autorizado.' });
     }
 
@@ -298,6 +215,7 @@ export default async function handler(req: any, res: any) {
       });
       await recordPayment({
         orderId,
+        provider: 'infinitepay',
         providerPaymentId: transactionNsu || `infinitepay:${orderId}:missing-identifiers`,
         method: normalizePaymentMethod(getPayloadValue(payload, ['capture_method', 'payment_method', 'method'])),
         status: payloadStatus,
@@ -313,6 +231,7 @@ export default async function handler(req: any, res: any) {
         orderId,
         status: payloadStatus,
         requiresAdminRecovery: payloadStatus === 'paid',
+        requestId,
       warning: 'Webhook sem transaction_nsu ou invoice_slug; evento registrado para recuperação.',
       });
     }
@@ -324,6 +243,7 @@ export default async function handler(req: any, res: any) {
     await recordPaymentEvent({ eventId, orderId, status, payload: rawResponse });
     await recordPayment({
       orderId,
+      provider: 'infinitepay',
       providerPaymentId: transactionNsu,
       method: normalizePaymentMethod(getPayloadValue(payload, ['capture_method', 'payment_method', 'method'])),
       status,
@@ -353,13 +273,17 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    return res.status(200).json({ success: true, received: true, orderId, status });
+    return res.status(200).json({ success: true, received: true, orderId, status, requestId });
   } catch (error: any) {
-    console.error('webhook:infinitepay_failed', error);
+    logEvent('error', 'webhook_infinitepay_failed', {
+      requestId,
+      error: errorToLog(error),
+    });
     return res.status(400).json({
       success: false,
       received: false,
       error: error?.message || 'Falha ao processar webhook InfinitePay.',
+      requestId,
     });
   }
 }

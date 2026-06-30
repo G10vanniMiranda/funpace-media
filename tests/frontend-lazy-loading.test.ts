@@ -8,15 +8,22 @@ test('optional public modals are lazy loaded outside the initial app bundle', ()
   assert.match(app, /const AuthView = React\.lazy\(\(\) => import\('\.\/components\/AuthView'\)/);
   assert.match(app, /const FaceSearchModal = React\.lazy\(\(\) => import\('\.\/components\/FaceSearchModal'\)/);
   assert.match(app, /const WelcomeVoucherModal = React\.lazy\(\(\) => import\('\.\/components\/WelcomeVoucherModal'\)/);
+  assert.match(app, /const PaymentNoticeModal = React\.lazy\(\(\) => import\('\.\/components\/PaymentNoticeModal'\)/);
+  assert.match(app, /const CartDrawer = React\.lazy\(\(\) => import\('\.\/components\/CartDrawer'\)/);
   assert.match(app, /const PhotoGrid = React\.lazy\(\(\) => import\('\.\/components\/PhotoGrid'\)/);
   assert.match(app, /const VideoGrid = React\.lazy\(\(\) => import\('\.\/components\/VideoGrid'\)/);
   assert.match(app, /function LazyModalBoundary/);
+  assert.match(app, /function LazyCartDrawer/);
+  assert.match(app, /if \(!props\.isOpen && props\.cartItems\.length === 0\) return null/);
   assert.match(app, /function LazyGridBoundary/);
   assert.match(app, /<React\.Suspense fallback=\{null\}>/);
 
   assert.doesNotMatch(app, /import \{ AuthView \} from '\.\/components\/AuthView'/);
   assert.doesNotMatch(app, /import \{ FaceSearchModal \} from '\.\/components\/FaceSearchModal'/);
   assert.doesNotMatch(app, /import \{ WelcomeVoucherModal \} from '\.\/components\/WelcomeVoucherModal'/);
+  assert.doesNotMatch(app, /import \{ PaymentNoticeModal \} from '\.\/components\/PaymentNoticeModal'/);
+  assert.doesNotMatch(app, /function LegacyPaymentNoticeModal/);
+  assert.doesNotMatch(app, /import \{ CartDrawer \} from '\.\/components\/CartDrawer'/);
   assert.doesNotMatch(app, /import \{ PhotoGrid \} from '\.\/components\/PhotoGrid'/);
   assert.doesNotMatch(app, /import \{ VideoGrid \} from '\.\/components\/VideoGrid'/);
 });

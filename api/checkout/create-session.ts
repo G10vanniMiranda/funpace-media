@@ -1,4 +1,6 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { ensureRequestId, errorToLog, logEvent } from '../../server/shared/observability.js';
+import { recordPayment } from '../../server/shared/checkoutFulfillment.js';
 import { BULK_PHOTO_DISCOUNT_PERCENT, calculateCartPricing, isPhotoType } from '../../src/lib/cart-pricing.js';
 
 const WELCOME_VOUCHER_CODE = 'FUNPACE10';
@@ -17,21 +19,15 @@ type CheckoutProviderResult = {
   rawResponse: any;
 };
 
-function createRequestId() {
-  return `chk_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
 function logCheckout(level: 'info' | 'error', message: string, detail: Record<string, unknown> = {}) {
-  const payload = { source: 'checkout-create-session', message, ...detail };
-  if (level === 'error') {
-    console.error(payload);
-    return;
-  }
-  console.info(payload);
+  logEvent(level, `checkout_create_session_${message}`, {
+    source: 'checkout-create-session',
+    ...detail,
+  });
 }
 
 function sanitizeErrorMessage(error: any) {
-  return error instanceof Error ? error.message : String(error || 'erro desconhecido');
+  return errorToLog(error).message;
 }
 
 function setCors(req: any, res: any) {
@@ -433,32 +429,6 @@ async function createProviderCheckout(input: Parameters<typeof createInfinitePay
   return createInfinitePayCheckout(input);
 }
 
-async function recordPayment(input: {
-  orderId: string;
-  provider: string;
-  providerPaymentId?: string | null;
-  method?: string | null;
-  status: PaymentStatus;
-  rawResponse?: any;
-}) {
-  const providerPaymentId = input.providerPaymentId || `${input.provider}:${input.orderId}`;
-
-  await supabaseRequest('/rest/v1/payments?on_conflict=provider,providerPaymentId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({
-      orderId: input.orderId,
-      provider: input.provider,
-      providerPaymentId,
-      method: input.method || 'checkout',
-      status: input.status,
-      rawResponse: input.rawResponse ?? {},
-      updatedAt: new Date().toISOString(),
-    }),
-  }).catch((error) => {
-    console.error('Não foi possível registrar payment:', error);
-  });
-}
 
 function getAllowedRedirectOrigins(req: any) {
   const proto = req.headers['x-forwarded-proto'] || 'https';
@@ -539,10 +509,10 @@ async function getAuthenticatedRequestUser(req: any): Promise<{ id: string; emai
 }
 
 export default async function handler(req: any, res: any) {
-  const requestId = createRequestId();
+  const requestId = ensureRequestId(req, res, 'chk');
   try {
     if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
-    if (rateLimit(req, res, { keyPrefix: 'checkout', windowMs: 60 * 1000, max: 30 })) return;
+    if (await rateLimitAsync(req, res, { keyPrefix: 'checkout', windowMs: 60 * 1000, max: 30 })) return;
     if (rejectUntrustedBrowserOrigin(req, res)) return;
 
     if (req.method !== 'POST') {

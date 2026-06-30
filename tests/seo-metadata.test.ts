@@ -5,6 +5,7 @@ import test from 'node:test';
 test('public pages expose consistent SEO and social metadata', () => {
   const app = readFileSync('src/App.tsx', 'utf8');
   const html = readFileSync('index.html', 'utf8');
+  const server = readFileSync('server.ts', 'utf8');
 
   assert.match(html, /<meta name="description" content="Funpace Media conecta atletas/);
   assert.match(html, /<meta name="robots" content="index,follow" \/>/);
@@ -23,4 +24,14 @@ test('public pages expose consistent SEO and social metadata', () => {
   assert.match(app, /canonicalPath: `\/evento\/\$\{event\.slug \|\| slug\}`/);
   assert.match(app, /setMetaTag\('meta\[property="og:locale"\]/);
   assert.match(app, /setMetaTag\('meta\[name="twitter:image"\]/);
+
+  assert.match(server, /function getPublicEventSlug/);
+  assert.match(server, /async function getPublicEventMeta/);
+  assert.match(server, /\.from\("events"\)/);
+  assert.match(server, /\.eq\("isPublished", true\)/);
+  assert.match(server, /const eventSlug = getPublicEventSlug\(req\.path\)/);
+  assert.match(server, /const canonicalUrl = `\$\{getRequestOrigin\(req\)\}\/evento\/\$\{eventMeta\.slug\}`/);
+  assert.match(server, /type: eventMeta\.type/);
+  assert.match(server, /<meta property="og:type" content="\$\{escapeHtml\(meta\.type \|\| "website"\)\}">/);
+  assert.match(server, /event_seo_injection_failed/);
 });

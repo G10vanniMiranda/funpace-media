@@ -99,7 +99,7 @@ test('only valid operations backfill requests bypass all face rate limits', () =
   const helper = readFileSync('server/face/face-rate-limit.ts', 'utf8');
 
   assert.match(express, /skip: shouldBypassFaceBackfillRateLimit/);
-  assert.match(vercel, /!bypassBackfillRateLimit && rateLimit/);
+  assert.match(vercel, /!bypassBackfillRateLimit && await rateLimitAsync/);
   assert.match(helper, /process\.env\.OPERATIONS_SECRET/);
   assert.match(helper, /method !== 'POST'/);
   assert.match(helper, /\/api\/face\/backfill/);

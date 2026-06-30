@@ -243,17 +243,14 @@ async function registerPhotographerTransactions(orderId) {
     })),
   });
 
-  for (const item of newItems) {
-    const rows = await supabaseRequest(
-      `/rest/v1/products?select=salesCount&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
-    ).catch(() => []);
-    const nextSalesCount = Number(rows[0]?.salesCount || 0) + 1;
-    await supabaseRequest(`/rest/v1/products?id=eq.${encodeURIComponent(item.productId)}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ salesCount: nextSalesCount }),
-    }).catch(() => undefined);
-  }
+  await supabaseRequest('/rest/v1/rpc/adjust_product_sales_counts', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      product_ids: newItems.map((item) => item.productId).filter(Boolean),
+      delta: 1,
+    }),
+  });
 }
 
 async function fulfillPaidOrder(orderId) {

@@ -1,4 +1,4 @@
-import { getClientIp, handleOptions, rateLimit, rejectUntrustedBrowserOrigin } from '../server/shared/security.js';
+import { getClientIp, handleOptions, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../server/shared/security.js';
 
 function isIpAllowed(req: any) {
   const allowlist = String(process.env.ADMIN_IP_ALLOWLIST || '')
@@ -22,7 +22,7 @@ function routeName(req: any) {
 
 export default async function handler(req: any, res: any) {
   if (handleOptions(req, res, 'GET,POST,PATCH,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'admin', windowMs: 60 * 1000, max: 60 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'admin', windowMs: 60 * 1000, max: 60 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
 
   if (!isIpAllowed(req)) {

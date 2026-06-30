@@ -27,6 +27,11 @@ import { getCurrentAccessToken, getCurrentUser, supabaseConfig, supabaseRest } f
 import { FUNPACE_CONTACT_EMAIL } from './contact';
 
 type SupabaseRow<T> = T & { id: string };
+export type ProductPage = {
+  products: Product[];
+  nextOffset: number | null;
+  hasMore: boolean;
+};
 
 const selectAll = 'select=*';
 let mockProducts = [...MOCK_PHOTOS, ...MOCK_VIDEOS];
@@ -804,16 +809,51 @@ export const productService = {
   },
 
   async getPublishedProductsByEvent(eventId: string, eventName: string, photographerId?: string | null, count = 5000): Promise<Product[]> {
+    const products: Product[] = [];
+    let nextOffset: number | null = 0;
+
+    while (products.length < count && nextOffset !== null) {
+      const page = await this.getPublishedProductsByEventPage(
+        eventId,
+        eventName,
+        photographerId,
+        Math.min(96, count - products.length),
+        nextOffset,
+      );
+      products.push(...page.products);
+      nextOffset = page.nextOffset;
+      if (!page.hasMore) break;
+    }
+
+    return products.slice(0, count);
+  },
+
+  async getPublishedProductsByEventPage(
+    eventId: string,
+    eventName: string,
+    photographerId?: string | null,
+    pageSize = 48,
+    offset = 0,
+  ): Promise<ProductPage> {
+    const safePageSize = Math.max(1, Math.min(96, pageSize));
+    const safeOffset = Math.max(0, offset);
+
     if (isMockMode) {
       const normalizedEventName = eventName.trim().toLocaleLowerCase('pt-BR');
-      return mockProducts
+      const rows = mockProducts
         .filter((product) => (
           isPubliclyListableProduct(product) &&
           (product.eventId === eventId || String(product.event || '').trim().toLocaleLowerCase('pt-BR') === normalizedEventName) &&
           (!photographerId || product.vendedorId === photographerId) &&
           (product.status ?? 'published') === 'published'
         ))
-        .slice(0, count);
+        .sort((left, right) => String(right.createdAt || '').localeCompare(String(left.createdAt || '')));
+      const page = rows.slice(safeOffset, safeOffset + safePageSize + 1);
+      return {
+        products: page.slice(0, safePageSize),
+        nextOffset: page.length > safePageSize ? safeOffset + safePageSize : null,
+        hasMore: page.length > safePageSize,
+      };
     }
 
     const eventIdParams = new URLSearchParams({
@@ -821,21 +861,46 @@ export const productService = {
       eventId: `eq.${eventId}`,
       status: 'eq.published',
       order: 'createdAt.desc',
+      limit: String(safePageSize + 1),
+      offset: String(safeOffset),
     });
     if (photographerId) eventIdParams.set('vendedorId', `eq.${photographerId}`);
 
-    const byEventId = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${eventIdParams.toString()}`, count);
-    if (byEventId.length > 0) return signMediaUrls(byEventId.filter(isPubliclyListableProduct), { protectOriginals: true });
+    const byEventId = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${eventIdParams.toString()}`);
+    const hasEventIdProducts = byEventId.length > 0 || (safeOffset > 0 && await supabaseRest.get<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${new URLSearchParams({
+        select: 'id',
+        eventId: `eq.${eventId}`,
+        status: 'eq.published',
+        limit: '1',
+      }).toString()}${photographerId ? `&vendedorId=eq.${encodeURIComponent(photographerId)}` : ''}`,
+    ).then((rows) => rows.length > 0));
+
+    if (hasEventIdProducts) {
+      const products = await signMediaUrls(byEventId.slice(0, safePageSize).filter(isPubliclyListableProduct), { protectOriginals: true });
+      return {
+        products,
+        nextOffset: byEventId.length > safePageSize ? safeOffset + safePageSize : null,
+        hasMore: byEventId.length > safePageSize,
+      };
+    }
 
     const legacyParams = new URLSearchParams({
       select: '*',
       event: `eq.${eventName}`,
       status: 'eq.published',
       order: 'createdAt.desc',
+      limit: String(safePageSize + 1),
+      offset: String(safeOffset),
     });
     if (photographerId) legacyParams.set('vendedorId', `eq.${photographerId}`);
-    const legacyProducts = await getPagedRows<SupabaseRow<Product>>(`/rest/v1/products?${legacyParams.toString()}`, count);
-    return signMediaUrls(legacyProducts.filter(isPubliclyListableProduct), { protectOriginals: true });
+    const legacyProducts = await supabaseRest.get<SupabaseRow<Product>[]>(`/rest/v1/products?${legacyParams.toString()}`);
+    const products = await signMediaUrls(legacyProducts.slice(0, safePageSize).filter(isPubliclyListableProduct), { protectOriginals: true });
+    return {
+      products,
+      nextOffset: legacyProducts.length > safePageSize ? safeOffset + safePageSize : null,
+      hasMore: legacyProducts.length > safePageSize,
+    };
   },
 
   async addProduct(product: Omit<Product, 'id'>): Promise<string> {

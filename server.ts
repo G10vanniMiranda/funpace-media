@@ -19,6 +19,8 @@ import eventMediaCountsHandler from "./server/api/events/media-counts";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
+import { ensureRequestId, errorToLog, getRequestId, logEvent } from "./server/shared/observability";
+import { rateLimitAsync as sharedRateLimitAsync } from "./server/shared/security";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -32,13 +34,6 @@ app.use(helmet({
   crossOriginResourcePolicy: { policy: "same-site" },
   strictTransportSecurity: isLocalViteDevelopment ? false : undefined,
 }));
-
-type RateLimitBucket = {
-  count: number;
-  resetAt: number;
-};
-
-const rateLimitBuckets = new Map<string, RateLimitBucket>();
 
 function getClientIp(req: express.Request) {
   const forwarded = String(req.header("x-forwarded-for") || "").split(",")[0]?.trim();
@@ -99,6 +94,24 @@ app.use((_req, res, next) => {
   next();
 });
 
+app.use((req, res, next) => {
+  const requestId = ensureRequestId(req, res);
+  const startedAt = Date.now();
+  res.on("finish", () => {
+    if (!req.path.startsWith("/api/")) return;
+    const durationMs = Date.now() - startedAt;
+    if (res.statusCode < 400 && durationMs < Number(process.env.SLOW_REQUEST_LOG_MS || 1500)) return;
+    logEvent(res.statusCode >= 500 ? "error" : "info", "http_request", {
+      requestId,
+      method: req.method,
+      path: req.path,
+      statusCode: res.statusCode,
+      durationMs,
+    });
+  });
+  next();
+});
+
 function normalizeOriginValue(origin: string) {
   return origin.trim().replace(/\/+$/, "");
 }
@@ -134,7 +147,8 @@ function isAllowedRequestOrigin(value: string) {
 function logBlockedOrigin(req: express.Request, input: { source: "cors" | "browser-origin"; origin?: string; referer?: string }) {
   if (process.env.NODE_ENV !== "production" && process.env.CORS_DEBUG !== "true") return;
 
-  console.warn("Origem bloqueada pelo CORS/origin guard:", {
+  logEvent("warn", "origin_blocked", {
+    requestId: getRequestId(req),
     source: input.source,
     method: req.method,
     path: req.originalUrl || req.url,
@@ -163,38 +177,15 @@ function rejectUntrustedBrowserOrigin(req: express.Request, res: express.Respons
 }
 
 function createRateLimiter(options: { windowMs: number; max: number; keyPrefix: string; skip?: (req: express.Request) => boolean }) {
-  return (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (options.skip?.(req)) {
       next();
       return;
     }
-    const now = Date.now();
-    const key = `${options.keyPrefix}:${getClientIp(req)}`;
-    const bucket = rateLimitBuckets.get(key);
-
-    if (!bucket || bucket.resetAt <= now) {
-      rateLimitBuckets.set(key, { count: 1, resetAt: now + options.windowMs });
-      next();
-      return;
-    }
-
-    bucket.count += 1;
-    if (bucket.count > options.max) {
-      res.setHeader("Retry-After", String(Math.ceil((bucket.resetAt - now) / 1000)));
-      res.status(429).json({ error: "Muitas tentativas. Aguarde e tente novamente." });
-      return;
-    }
-
+    if (await sharedRateLimitAsync(req, res, options)) return;
     next();
   };
 }
-
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, bucket] of rateLimitBuckets.entries()) {
-    if (bucket.resetAt <= now) rateLimitBuckets.delete(key);
-  }
-}, 60_000).unref();
 
 app.use((req, res, next) => {
   cors({
@@ -596,6 +587,12 @@ function getRootPublicSlug(pathname: string) {
   return slug && !reservedRootSlugs.has(slug) ? slug : "";
 }
 
+function getPublicEventSlug(pathname: string) {
+  const match = pathname.match(/^\/evento\/([^/?#]+)\/?$/);
+  if (!match) return "";
+  return normalizePublicSlug(decodeURIComponent(match[1] || ""));
+}
+
 function escapeHtml(value: string) {
   return value
     .replace(/&/g, "&amp;")
@@ -626,14 +623,43 @@ async function getPublicPhotographerMeta(slug: string) {
   };
 }
 
-function injectSeoMeta(html: string, meta: { title: string; description: string; image: string; url: string }) {
+async function getPublicEventMeta(slug: string) {
+  const { data, error } = await getSupabaseAdmin()
+    .from("events")
+    .select("slug,name,description,date,location,checkpoint,coverImage,bannerImage,isPublished,status")
+    .eq("slug", slug)
+    .eq("isPublished", true)
+    .maybeSingle();
+
+  if (error || !data) return null;
+
+  const eventName = String((data as any).name || "Evento Funpace");
+  const location = String((data as any).location || (data as any).checkpoint || "").trim();
+  const date = String((data as any).date || "").trim();
+  const fallbackDescription = [
+    `Fotos e videos oficiais do evento ${eventName} na Funpace Media.`,
+    location ? `Local: ${location}.` : "",
+    date ? `Data: ${date}.` : "",
+    "Use busca por selfie para encontrar suas fotos com privacidade.",
+  ].filter(Boolean).join(" ");
+
+  return {
+    title: `${eventName} | Fotos e Videos Funpace Media`,
+    description: String((data as any).description || fallbackDescription).slice(0, 220),
+    image: createPublicMediaUrl(String((data as any).bannerImage || (data as any).coverImage || "")),
+    slug: String((data as any).slug || slug),
+    type: "article" as const,
+  };
+}
+
+function injectSeoMeta(html: string, meta: { title: string; description: string; image: string; url: string; type?: "website" | "article" | "profile" }) {
   const tags = [
     `<title>${escapeHtml(meta.title)}</title>`,
     `<link rel="canonical" href="${escapeHtml(meta.url)}">`,
     `<meta name="description" content="${escapeHtml(meta.description)}">`,
     `<meta property="og:title" content="${escapeHtml(meta.title)}">`,
     `<meta property="og:description" content="${escapeHtml(meta.description)}">`,
-    `<meta property="og:type" content="profile">`,
+    `<meta property="og:type" content="${escapeHtml(meta.type || "website")}">`,
     `<meta property="og:url" content="${escapeHtml(meta.url)}">`,
     meta.image ? `<meta property="og:image" content="${escapeHtml(meta.image)}">` : "",
     `<meta name="twitter:card" content="summary_large_image">`,
@@ -644,6 +670,16 @@ function injectSeoMeta(html: string, meta: { title: string; description: string;
 
   return html
     .replace(/<title>.*?<\/title>/i, "")
+    .replace(/<link rel="canonical"[^>]*>/i, "")
+    .replace(/<meta name="description"[^>]*>/i, "")
+    .replace(/<meta property="og:title"[^>]*>/i, "")
+    .replace(/<meta property="og:description"[^>]*>/i, "")
+    .replace(/<meta property="og:type"[^>]*>/i, "")
+    .replace(/<meta property="og:url"[^>]*>/i, "")
+    .replace(/<meta property="og:image"[^>]*>/i, "")
+    .replace(/<meta name="twitter:title"[^>]*>/i, "")
+    .replace(/<meta name="twitter:description"[^>]*>/i, "")
+    .replace(/<meta name="twitter:image"[^>]*>/i, "")
     .replace("</head>", `    ${tags}\n  </head>`);
 }
 
@@ -3104,12 +3140,19 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
     return;
   }
 
+  const requestId = ensureRequestId(req, res);
   const message = String(error?.message || "");
   const status = Number(error?.status || error?.statusCode || 500);
   const isCorsOriginError = message === "Origem nao permitida pelo CORS.";
 
   if (isCorsOriginError) {
-    res.status(403).json({ error: "Origem nao permitida pelo CORS." });
+    logEvent("warn", "cors_origin_rejected", {
+      requestId,
+      method: req.method,
+      path: req.path,
+      error: errorToLog(error),
+    });
+    res.status(403).json({ error: "Origem nao permitida pelo CORS.", requestId });
     return;
   }
 
@@ -3118,16 +3161,30 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
 
   if (isUploadBodyError) {
     const limit = process.env.MEDIA_UPLOAD_LIMIT || "300mb";
+    logEvent("warn", "upload_body_too_large", {
+      requestId,
+      method: req.method,
+      path: req.path,
+      limit,
+      error: errorToLog(error),
+    });
     res.status(413).json({
       error: `Arquivo maior que o limite aceito pelo backend (${limit}). Ajuste MEDIA_UPLOAD_LIMIT e o client_max_body_size do proxy/Nginx ativo ou envie um arquivo menor.`,
+      requestId,
     });
     return;
   }
 
   if (req.path.startsWith("/api/")) {
-    console.error("Erro nao tratado na API:", error);
+    logEvent("error", "api_unhandled_error", {
+      requestId,
+      method: req.method,
+      path: req.path,
+      error: errorToLog(error),
+    });
     res.status(status >= 400 && status < 600 ? status : 500).json({
       error: "Erro interno da API.",
+      requestId,
     });
     return;
   }
@@ -3150,7 +3207,32 @@ async function setupViteAndListen() {
     app.use(express.static(distPath));
     app.get("*", async (req, res) => {
       const indexPath = path.join(distPath, "index.html");
+      const eventSlug = getPublicEventSlug(req.path);
       const publicSlug = getRootPublicSlug(req.path);
+
+      if (eventSlug) {
+        try {
+          const eventMeta = await getPublicEventMeta(eventSlug);
+          if (eventMeta) {
+            const html = await fs.readFile(indexPath, "utf8");
+            const canonicalUrl = `${getRequestOrigin(req)}/evento/${eventMeta.slug}`;
+            res.setHeader("Content-Type", "text/html; charset=utf-8");
+            res.send(injectSeoMeta(html, {
+              title: eventMeta.title,
+              description: eventMeta.description,
+              image: eventMeta.image,
+              url: canonicalUrl,
+              type: eventMeta.type,
+            }));
+            return;
+          }
+        } catch (error) {
+          logEvent("warn", "event_seo_injection_failed", {
+            slug: eventSlug,
+            error: errorToLog(error),
+          });
+        }
+      }
 
       if (publicSlug) {
         try {
@@ -3164,13 +3246,14 @@ async function setupViteAndListen() {
               description: photographerMeta.description,
               image: photographerMeta.image,
               url: canonicalUrl,
+              type: "profile",
             }));
             return;
           }
         } catch (error) {
-          console.error("Erro ao gerar SEO do fotografo publico:", {
+          logEvent("warn", "photographer_seo_injection_failed", {
             slug: publicSlug,
-            message: error instanceof Error ? error.message : String(error),
+            error: errorToLog(error),
           });
         }
       }

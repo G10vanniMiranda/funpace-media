@@ -1,25 +1,7 @@
-import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimit, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
-import { fulfillPaidOrder } from '../../server/shared/checkoutFulfillment.js';
+import { assertRequestSize, handleOptions as handleSecurityOptions, publicError, rateLimitAsync, rejectUntrustedBrowserOrigin } from '../../server/shared/security.js';
+import { fulfillPaidOrder, recordPayment } from '../../server/shared/checkoutFulfillment.js';
 
 type PaymentStatus = 'pending' | 'paid' | 'failed' | 'cancelled' | 'canceled' | 'refused' | 'refunded';
-
-function setCors(req: any, res: any) {
-  res.setHeader('X-Content-Type-Options', 'nosniff');
-  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('X-Frame-Options', 'DENY');
-  res.setHeader('Access-Control-Allow-Methods', 'POST,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  const origins = new Set([
-    'https://funpace.media',
-    'https://www.funpace.media',
-    process.env.FRONTEND_URL,
-    ...(process.env.ALLOWED_ORIGINS || process.env.CORS_ORIGINS || '').split(','),
-  ].filter(Boolean).map((origin) => String(origin).replace(/\/+$/, '')));
-  const origin = String(req.headers.origin || '').replace(/\/+$/, '');
-  if (origin && origins.has(origin)) res.setHeader('Access-Control-Allow-Origin', origin);
-  res.setHeader('Vary', 'Origin');
-}
 
 function getJsonBody(req: any) {
   if (req.body && typeof req.body === 'object') return req.body;
@@ -136,84 +118,6 @@ async function recordPaymentEvent(input: { orderId: string; status: string; payl
   }).catch((error) => console.error('confirm:event_record_failed', error));
 }
 
-async function recordPayment(input: { orderId: string; providerPaymentId: string; method: string; status: PaymentStatus; rawResponse: any }) {
-  await supabaseRequest('/rest/v1/payments?on_conflict=provider,providerPaymentId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify({
-      orderId: input.orderId,
-      provider: 'infinitepay',
-      providerPaymentId: input.providerPaymentId,
-      method: input.method || 'checkout',
-      status: input.status,
-      rawResponse: input.rawResponse,
-      updatedAt: new Date().toISOString(),
-    }),
-  });
-
-  await supabaseRequest(`/rest/v1/payments?orderId=eq.${encodeURIComponent(input.orderId)}`, {
-    method: 'PATCH',
-    headers: { Prefer: 'return=minimal' },
-    body: JSON.stringify({ status: input.status, updatedAt: new Date().toISOString() }),
-  }).catch((error) => console.error('confirm:payment_rollup_failed', error));
-}
-
-async function releaseDownloadAccess(orderId: string) {
-  const orders = await supabaseRequest<any[]>(
-    `/rest/v1/orders?select=id,userId,buyerEmail,status&id=eq.${encodeURIComponent(orderId)}&limit=1`,
-  );
-  const order = orders[0];
-  if (!order || order.status !== 'paid') return;
-
-  const items = await supabaseRequest<any[]>(
-    `/rest/v1/order_items?select=id,orderId,productId,vendedorId,price&orderId=eq.${encodeURIComponent(orderId)}`,
-  );
-  if (!items.length) return;
-
-  const expiresAt = new Date(Date.now() + Number(process.env.DOWNLOAD_ACCESS_DAYS || 30) * 24 * 60 * 60 * 1000).toISOString();
-  await supabaseRequest('/rest/v1/download_access?on_conflict=orderId,photoId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
-    body: JSON.stringify(items.map((item) => ({
-      orderId,
-      photoId: item.productId,
-      orderItemId: item.id,
-      userId: order.userId || null,
-      customerEmail: order.buyerEmail,
-      isActive: true,
-      expiresAt,
-    }))),
-  });
-
-  const existing = await supabaseRequest<any[]>(
-    `/rest/v1/photographer_transactions?select=orderItemId&orderId=eq.${encodeURIComponent(orderId)}`,
-  ).catch(() => []);
-  const processed = new Set(existing.map((item) => String(item.orderItemId || '')));
-  const newItems = items.filter((item) => !processed.has(String(item.id)));
-  if (!newItems.length) return;
-
-  const settings = await supabaseRequest<any[]>('/rest/v1/platform_settings?select=platformFeePercent&id=eq.default&limit=1').catch(() => []);
-  const feePercent = Number(settings[0]?.platformFeePercent ?? 30);
-  await supabaseRequest('/rest/v1/photographer_transactions?on_conflict=orderItemId', {
-    method: 'POST',
-    headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' },
-    body: JSON.stringify(newItems.map((item) => {
-      const grossAmount = Number(item.price || 0);
-      const platformFee = Number((grossAmount * feePercent / 100).toFixed(2));
-      const netAmount = Number(Math.max(0, grossAmount - platformFee).toFixed(2));
-      return {
-        photographerId: item.vendedorId,
-        orderId,
-        orderItemId: item.id,
-        grossAmount,
-        platformFee,
-        netAmount,
-        status: 'pending',
-      };
-    })),
-  }).catch((error) => console.error('confirm:photographer_transactions_failed', error));
-}
-
 function normalizePaymentMethod(value: string) {
   const normalized = value.toLowerCase();
   if (normalized.includes('pix')) return 'pix';
@@ -223,7 +127,7 @@ function normalizePaymentMethod(value: string) {
 
 export default async function handler(req: any, res: any) {
   if (handleSecurityOptions(req, res, 'POST,OPTIONS')) return;
-  if (rateLimit(req, res, { keyPrefix: 'checkout-confirm', windowMs: 60 * 1000, max: 60 })) return;
+  if (await rateLimitAsync(req, res, { keyPrefix: 'checkout-confirm', windowMs: 60 * 1000, max: 60 })) return;
   if (rejectUntrustedBrowserOrigin(req, res)) return;
   if (req.method !== 'POST') return res.status(405).json({ error: 'Método não permitido.' });
 
@@ -276,6 +180,7 @@ export default async function handler(req: any, res: any) {
 
     await recordPayment({
       orderId,
+      provider: 'infinitepay',
       providerPaymentId: transactionNsu,
       method: normalizePaymentMethod(captureMethod),
       status,

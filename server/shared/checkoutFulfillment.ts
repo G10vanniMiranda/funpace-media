@@ -29,6 +29,14 @@ export async function recordPayment(input: {
   }).catch((error) => {
     console.error('Nao foi possivel registrar payment:', error);
   });
+
+  await supabaseRequest(`/rest/v1/payments?orderId=eq.${encodeURIComponent(input.orderId)}`, {
+    method: 'PATCH',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({ status: input.status, updatedAt: new Date().toISOString() }),
+  }).catch((error) => {
+    console.error('Nao foi possivel atualizar status agregado de payments:', error);
+  });
 }
 
 export async function releaseDownloadAccess(orderId: string) {
@@ -57,6 +65,23 @@ export async function releaseDownloadAccess(orderId: string) {
       isActive: true,
       expiresAt,
     }))),
+  });
+}
+
+export async function adjustProductSalesCounts(productIds: unknown[], delta: 1 | -1) {
+  const normalizedProductIds = productIds
+    .map((productId) => String(productId || '').trim())
+    .filter(Boolean);
+
+  if (normalizedProductIds.length === 0) return;
+
+  await supabaseRequest('/rest/v1/rpc/adjust_product_sales_counts', {
+    method: 'POST',
+    headers: { Prefer: 'return=minimal' },
+    body: JSON.stringify({
+      product_ids: normalizedProductIds,
+      delta,
+    }),
   });
 }
 
@@ -103,17 +128,7 @@ export async function registerPhotographerTransactions(orderId: string) {
     }
   });
 
-  for (const item of newItems) {
-    const rows = await supabaseRequest<any[]>(
-      `/rest/v1/products?select=salesCount&id=eq.${encodeURIComponent(item.productId)}&limit=1`,
-    ).catch(() => []);
-    const nextSalesCount = Number(rows[0]?.salesCount || 0) + 1;
-    await supabaseRequest(`/rest/v1/products?id=eq.${encodeURIComponent(item.productId)}`, {
-      method: 'PATCH',
-      headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ salesCount: nextSalesCount }),
-    }).catch(() => undefined);
-  }
+  await adjustProductSalesCounts(newItems.map((item) => item.productId), 1);
 
   const saleAmountByPhotographer = new Map<string, number>();
   for (const item of newItems) {

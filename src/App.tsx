@@ -4,7 +4,6 @@ import { Navbar } from './components/Navbar';
 import { Hero } from './components/Hero';
 import type { HeroSearchResults } from './components/Hero';
 import { EventGrid } from './components/EventGrid';
-import { CartDrawer } from './components/CartDrawer';
 import { Footer } from './components/Footer';
 import { Product, Photographer, Buyer, AdminMetrics, Order, WithdrawalRequest, Customer, PaymentRecord, PaymentEventLog, Coupon, AdminActivityLog, FaceSearchMatch } from './types';
 import type { Event } from './types';
@@ -13,8 +12,8 @@ import { isMockMode } from './lib/config';
 import { CheckoutPaymentMethod, adminService, customerAccountService, productService, photographerService, orderService, withdrawalService, paymentService, platformSettingsService, eventService, normalizePhotographerUsername, reservedPublicSlugs, referralService } from './lib/services';
 import { clearStoredSession, logout } from './lib/supabase';
 import { fetchProductEngagementCounts, loadFavoriteProducts, loadLikedProductIds, saveFavoriteProducts, saveLikedProductIds, setProductHeart } from './lib/customer-engagement';
-import { AnimatePresence, motion } from 'motion/react';
-import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Clock3, Image as ImageIcon, Images, Instagram, Loader2, MapPin, ReceiptText, Scan, ScanFace, Search, Upload, UserCircle, Video, X, XCircle } from 'lucide-react';
+import { AnimatePresence } from 'motion/react';
+import { ArrowLeft, CalendarDays, Camera, CheckCircle2, Clock3, Image as ImageIcon, Images, Instagram, Loader2, MapPin, Scan, ScanFace, Search, Upload, UserCircle, Video } from 'lucide-react';
 import { useToast } from './contexts/ToastContext';
 import { buildWhatsappUrl } from './lib/contact';
 
@@ -23,11 +22,13 @@ const CustomerOrdersPage = React.lazy(() => import('./components/CustomerOrdersD
 const CustomerAccountPage = React.lazy(() => import('./components/CustomerAccountPage').then((module) => ({ default: module.CustomerAccountPage })));
 const PhotographerDashboard = React.lazy(() => import('./components/PhotographerDashboard').then((module) => ({ default: module.PhotographerDashboard })));
 const AdminDashboard = React.lazy(() => import('./components/AdminDashboard').then((module) => ({ default: module.AdminDashboard })));
+const CartDrawer = React.lazy(() => import('./components/CartDrawer').then((module) => ({ default: module.CartDrawer })));
 const PhotoGrid = React.lazy(() => import('./components/PhotoGrid').then((module) => ({ default: module.PhotoGrid })));
 const VideoGrid = React.lazy(() => import('./components/VideoGrid').then((module) => ({ default: module.VideoGrid })));
 const AuthView = React.lazy(() => import('./components/AuthView').then((module) => ({ default: module.AuthView })));
 const FaceSearchModal = React.lazy(() => import('./components/FaceSearchModal').then((module) => ({ default: module.FaceSearchModal })));
 const WelcomeVoucherModal = React.lazy(() => import('./components/WelcomeVoucherModal').then((module) => ({ default: module.WelcomeVoucherModal })));
+const PaymentNoticeModal = React.lazy(() => import('./components/PaymentNoticeModal').then((module) => ({ default: module.PaymentNoticeModal })));
 const PhotographerProfile = React.lazy(() => import('./components/PhotographerProfile').then((module) => ({ default: module.PhotographerProfile })));
 const PhotographerLogin = React.lazy(() => import('./components/PhotographerLogin').then((module) => ({ default: module.PhotographerLogin })));
 const PhotographerPasswordSetup = React.lazy(() => import('./components/PhotographerPasswordSetup').then((module) => ({ default: module.PhotographerPasswordSetup })));
@@ -59,6 +60,7 @@ interface DataErrorInfo {
 const cartStorageKey = 'funpace:cart';
 const storefrontInitialProductLimit = 600;
 const storefrontScopedProductLimit = 1200;
+const publicEventMediaPageSize = 48;
 const defaultSeoTitle = 'Funpace Media';
 const defaultSeoDescription = 'Funpace Media conecta atletas a fotos e videos oficiais de eventos esportivos, com busca por selfie, carrinho e downloads seguros.';
 
@@ -71,8 +73,28 @@ type SeoMetadata = {
   type?: 'website' | 'article' | 'profile';
 };
 
+type LazyCartDrawerProps = {
+  isOpen: boolean;
+  onClose: () => void;
+  cartItems: Product[];
+  onRemoveItem: (id: string) => void;
+  isAuthenticated: boolean;
+  onLoginRequested: () => void;
+  onOpenCheckout: () => void;
+};
+
 function LazyModalBoundary({ children }: { children: React.ReactNode }) {
   return <React.Suspense fallback={null}>{children}</React.Suspense>;
+}
+
+function LazyCartDrawer(props: LazyCartDrawerProps) {
+  if (!props.isOpen && props.cartItems.length === 0) return null;
+
+  return (
+    <LazyModalBoundary>
+      <CartDrawer {...props} />
+    </LazyModalBoundary>
+  );
 }
 
 function LazyGridBoundary({ children }: { children: React.ReactNode }) {
@@ -987,7 +1009,7 @@ function Storefront() {
           onToggleFavorite={handleToggleFavorite}
         />
 
-        <CartDrawer
+        <LazyCartDrawer
           isOpen={isCartOpen}
           onClose={() => setIsCartOpen(false)}
           cartItems={cart}
@@ -1324,7 +1346,7 @@ function Storefront() {
         </>
       )}
 
-      <CartDrawer
+        <LazyCartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cartItems={cart}
@@ -1337,15 +1359,19 @@ function Storefront() {
         }}
       />
 
-      <PaymentNoticeModal
-        notice={paymentNotice}
-        onClose={() => setPaymentNotice(null)}
-        onOpenOrders={() => {
-          const orderQuery = paymentNotice?.orderId ? `?order=${encodeURIComponent(paymentNotice.orderId)}` : '';
-          setPaymentNotice(null);
-          navigate(`/minha-conta${orderQuery}`);
-        }}
-      />
+      {paymentNotice && (
+        <LazyModalBoundary>
+          <PaymentNoticeModal
+            notice={paymentNotice}
+            onClose={() => setPaymentNotice(null)}
+            onOpenOrders={() => {
+              const orderQuery = paymentNotice.orderId ? `?order=${encodeURIComponent(paymentNotice.orderId)}` : '';
+              setPaymentNotice(null);
+              navigate(`/minha-conta${orderQuery}`);
+            }}
+          />
+        </LazyModalBoundary>
+      )}
 
       <LazyModalBoundary>
         <FaceSearchModal
@@ -1713,25 +1739,33 @@ function PublicEventPage({
   const [activeView, setActiveView] = React.useState<'photos' | 'videos'>('photos');
   const [isFaceSearchOpen, setIsFaceSearchOpen] = React.useState(false);
   const [faceMatches, setFaceMatches] = React.useState<FaceSearchMatch[] | null>(null);
+  const [nextMediaOffset, setNextMediaOffset] = React.useState<number | null>(null);
+  const [hasMoreEventMedia, setHasMoreEventMedia] = React.useState(false);
+  const [isLoadingMoreEventMedia, setIsLoadingMoreEventMedia] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
     async function loadPublicEvent() {
       setIsLoading(true);
+      setProducts([]);
+      setNextMediaOffset(null);
+      setHasMoreEventMedia(false);
       try {
         const eventRow = await eventService.getEventBySlug(slug);
         if (!eventRow) {
           if (!cancelled) setEvent(null);
           return;
         }
-        const [owner, ownerProducts] = await Promise.all([
+        const [owner, productPage] = await Promise.all([
           eventRow.photographerId ? photographerService.getPhotographerById(eventRow.photographerId) : Promise.resolve(null),
-          productService.getPublishedProductsByEvent(eventRow.id, eventRow.name, eventRow.photographerId, storefrontScopedProductLimit),
+          productService.getPublishedProductsByEventPage(eventRow.id, eventRow.name, eventRow.photographerId, publicEventMediaPageSize, 0),
         ]);
         if (cancelled) return;
         setEvent(eventRow);
         setPhotographer(owner);
-        setProducts(ownerProducts);
+        setProducts(productPage.products);
+        setNextMediaOffset(productPage.nextOffset);
+        setHasMoreEventMedia(productPage.hasMore);
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -1744,6 +1778,31 @@ function PublicEventPage({
       cancelled = true;
     };
   }, [slug]);
+
+  const loadMoreEventMedia = async () => {
+    if (!event || isLoadingMoreEventMedia || nextMediaOffset === null) return;
+    setIsLoadingMoreEventMedia(true);
+    try {
+      const page = await productService.getPublishedProductsByEventPage(
+        event.id,
+        event.name,
+        event.photographerId,
+        publicEventMediaPageSize,
+        nextMediaOffset,
+      );
+      setProducts((current) => {
+        const existingIds = new Set(current.map((product) => product.id));
+        const appended = page.products.filter((product) => !existingIds.has(product.id));
+        return [...current, ...appended];
+      });
+      setNextMediaOffset(page.nextOffset);
+      setHasMoreEventMedia(page.hasMore);
+    } catch (error) {
+      showToast('Nao foi possivel carregar mais midias deste evento.', 'error');
+    } finally {
+      setIsLoadingMoreEventMedia(false);
+    }
+  };
 
   React.useEffect(() => {
     if (!event) return;
@@ -1880,20 +1939,35 @@ function PublicEventPage({
           </LazyGridBoundary>
         ) : null
       ) : (
-        <LazyGridBoundary>
-          <VideoGrid
-          videos={videos}
-          onAddToCart={onAddToCart}
-          cartItems={cartItems}
-          activeView={activeView}
-          onViewChange={setActiveView}
-          favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
-          likedIds={likedProductIds}
-          heartCounts={heartCounts}
-          onToggleFavorite={onToggleFavorite}
-          compact
-          />
-        </LazyGridBoundary>
+        <>
+          <LazyGridBoundary>
+            <VideoGrid
+            videos={videos}
+            onAddToCart={onAddToCart}
+            cartItems={cartItems}
+            activeView={activeView}
+            onViewChange={setActiveView}
+            favoriteIds={new Set(favoriteProducts.map((item) => item.id))}
+            likedIds={likedProductIds}
+            heartCounts={heartCounts}
+            onToggleFavorite={onToggleFavorite}
+            compact
+            />
+          </LazyGridBoundary>
+          {hasMoreEventMedia && (
+            <div className="mx-auto max-w-350 px-4 pb-12 md:px-6">
+              <button
+                type="button"
+                onClick={loadMoreEventMedia}
+                disabled={isLoadingMoreEventMedia}
+                className="mx-auto flex min-h-11 items-center justify-center gap-2 rounded-lg border border-black/15 bg-white px-5 font-mono text-[10px] font-bold uppercase tracking-[0.18em] text-brutal-black transition-colors hover:border-brutal-accent hover:text-brutal-accent disabled:cursor-wait disabled:opacity-60"
+              >
+                {isLoadingMoreEventMedia ? <Loader2 className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                {isLoadingMoreEventMedia ? 'Carregando...' : 'Carregar mais videos'}
+              </button>
+            </div>
+          )}
+        </>
       )}
       <LazyModalBoundary>
         <FaceSearchModal
@@ -1993,88 +2067,6 @@ function FloatingWhatsappSupport() {
   );
 }
 
-function PaymentNoticeModal({
-  notice,
-  onClose,
-  onOpenOrders,
-}: {
-  notice: { status: 'paid' | 'pending' | 'cancelled' | 'canceled'; orderId?: string | null; message: string } | null;
-  onClose: () => void;
-  onOpenOrders: () => void;
-}) {
-  return (
-    <AnimatePresence>
-      {notice && (
-        <div className="fixed inset-0 z-120 flex items-center justify-center p-6">
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={onClose}
-            className="absolute inset-0 bg-brutal-black/80 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ scale: 0.92, y: 20 }}
-            animate={{ scale: 1, y: 0 }}
-            exit={{ scale: 0.92, y: 20 }}
-            className="relative w-full max-w-xl overflow-hidden bg-white brutal-border brutal-shadow-heavy p-5 sm:p-8"
-          >
-            <button
-              onClick={onClose}
-              className="absolute right-4 top-4 p-2 text-gray-400 hover:text-brutal-black transition-colors cursor-pointer"
-              aria-label="Fechar"
-            >
-              <X className="w-5 h-5" />
-            </button>
-
-            <div className="flex flex-col items-start gap-5 sm:flex-row">
-              <div className={`p-4 brutal-border ${notice.status === 'paid' ? 'bg-green-50 text-green-600' :
-                notice.status === 'pending' ? 'bg-yellow-50 text-yellow-700' :
-                  'bg-red-50 text-red-600'
-                }`}>
-                {notice.status === 'paid' ? <CheckCircle2 className="w-8 h-8" /> : <XCircle className="w-8 h-8" />}
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <p className="font-mono text-[10px] uppercase tracking-[0.25em] text-gray-400 mb-2 wrap-break-word">
-                  Retorno da InfinitePay
-                </p>
-                <h2 className="max-w-full font-display text-[clamp(1.65rem,8vw,2.4rem)] uppercase tracking-normal leading-[1.02] wrap-break-word">
-                  {notice.status === 'paid' ? 'Pagamento confirmado' : notice.status === 'pending' ? 'Confirmação pendente' : 'Pagamento cancelado'}
-                </h2>
-                <p className="font-mono text-xs uppercase leading-relaxed text-gray-500 mt-3">
-                  {notice.message}
-                </p>
-                {notice.orderId && (
-                  <p className="font-mono text-[10px] uppercase text-gray-400 mt-4">
-                    Pedido #{notice.orderId.slice(0, 8)}
-                  </p>
-                )}
-
-                <div className="flex w-full flex-col gap-3 mt-8 sm:flex-row">
-                  <button
-                    onClick={onOpenOrders}
-                    className="min-h-12 w-full px-5 py-3 bg-brutal-black text-white brutal-border font-display text-sm uppercase tracking-widest hover:bg-brutal-accent transition-colors cursor-pointer inline-flex items-center justify-center gap-2 sm:w-auto"
-                  >
-                    <ReceiptText className="w-4 h-4" />
-                    Abrir minha conta
-                  </button>
-                  <button
-                    onClick={onClose}
-                    className="min-h-12 w-full px-5 py-3 bg-white text-brutal-black brutal-border font-display text-sm uppercase tracking-widest hover:bg-gray-50 transition-colors cursor-pointer sm:w-auto"
-                  >
-                    Continuar na loja
-                  </button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
-
 function CustomerOrdersRoute() {
   const location = useLocation();
   return <Navigate to={`/minha-conta${location.search}`} replace />;
@@ -2151,7 +2143,7 @@ function LegacyCustomerOrdersRoute() {
         onToggleFavorite={handleToggleFavorite}
       />
 
-      <CartDrawer
+      <LazyCartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cartItems={cart}
@@ -2271,7 +2263,7 @@ function CustomerAccountRoute() {
         onToggleFavorite={handleToggleFavorite}
       />
 
-      <CartDrawer
+      <LazyCartDrawer
         isOpen={isCartOpen}
         onClose={() => setIsCartOpen(false)}
         cartItems={cart}

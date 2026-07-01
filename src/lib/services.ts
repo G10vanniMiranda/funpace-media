@@ -926,6 +926,55 @@ export const productService = {
     return created.id;
   },
 
+  async addProductsBatch(products: Array<Omit<Product, 'id'>>): Promise<string[]> {
+    if (products.length === 0) return [];
+
+    if (isMockMode) {
+      const created = products.map((product) => ({ id: `mock-${crypto.randomUUID()}`, ...product }));
+      mockProducts = [...created, ...mockProducts];
+      return created.map((product) => product.id);
+    }
+
+    const createdAt = new Date().toISOString();
+    const created = await supabaseRest.post<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${selectAll}`,
+      products.map((product) => ({
+        ...product,
+        status: product.status ?? 'published',
+        faceIndexStatus: product.type === 'IMG' ? product.faceIndexStatus ?? 'pending' : 'disabled',
+        faceIndexError: product.type === 'IMG' ? product.faceIndexError ?? null : 'MÃ­dia nÃ£o suportada pelo backfill facial.',
+        faceIndexedAt: product.type === 'IMG' ? product.faceIndexedAt ?? null : null,
+        createdAt,
+      })),
+      true,
+    );
+
+    if (created.length !== products.length) {
+      throw new Error(`Batch insert de produtos retornou ${created.length} registro(s) para ${products.length} item(ns).`);
+    }
+
+    return created.map((product) => product.id);
+  },
+
+  async addProductsBatchResilient(products: Array<Omit<Product, 'id'>>): Promise<string[]> {
+    if (products.length === 0) return [];
+
+    try {
+      return await this.addProductsBatch(products);
+    } catch (error) {
+      console.warn('[photographer-upload] db:batch-create-fallback', {
+        count: products.length,
+        uploadBatchId: products[0]?.uploadBatchId || null,
+        message: error instanceof Error ? error.message : String(error || ''),
+      });
+      const ids: string[] = [];
+      for (const product of products) {
+        ids.push(await this.addProductResilient(product));
+      }
+      return ids;
+    }
+  },
+
   async addProductResilient(product: Omit<Product, 'id'>): Promise<string> {
     const findExistingCreatedProduct = async () => {
       if (isMockMode || !product.vendedorId || !product.event) return null;

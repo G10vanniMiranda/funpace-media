@@ -38,8 +38,10 @@ test('database publication failures can resume after storage upload without reup
   assert.match(dashboard, /status: 'uploaded'/);
   assert.match(dashboard, /status: 'db_saved'/);
   assert.match(dashboard, /status: 'published'/);
-  assert.match(dashboard, /addProductResilient\(productPayload\)/);
+  assert.match(dashboard, /createProductBatched\(productPayload\)/);
   assert.match(services, /addProductResilient/);
+  assert.match(services, /addProductsBatchResilient/);
+  assert.match(services, /db:batch-create-fallback/);
   assert.match(services, /db:create-recovered/);
   assert.match(services, /products\.find-created-after-failure/);
 });

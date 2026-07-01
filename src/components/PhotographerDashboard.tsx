@@ -189,7 +189,7 @@ const eventCoverOptimizeThresholdBytes = 5 * 1024 * 1024;
 const profileImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'image/webp']);
 const uploadVisibleListLimit = 160;
 const uploadOfflineRetryDelayMs = 1500;
-const uploadConcurrencyLimit = Number(import.meta.env.VITE_PHOTOGRAPHER_UPLOAD_CONCURRENCY || 1);
+const uploadConcurrencyLimit = Math.min(5, Math.max(1, Number(import.meta.env.VITE_PHOTOGRAPHER_UPLOAD_CONCURRENCY || 4)));
 
 type UploadRuntimeMetrics = {
   batchId: string | null;
@@ -428,6 +428,23 @@ function formatUploadSpeed(bytesPerSecond: number) {
 
 function wait(ms: number) {
   return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+}
+
+async function runLimitedConcurrency<T>(
+  items: T[],
+  concurrency: number,
+  worker: (item: T, order: number) => Promise<void>,
+) {
+  let cursor = 0;
+  const safeConcurrency = Math.min(items.length, Math.max(1, concurrency));
+  const workers = Array.from({ length: safeConcurrency }, async () => {
+    while (cursor < items.length) {
+      const order = cursor;
+      cursor += 1;
+      await worker(items[order], order);
+    }
+  });
+  await Promise.all(workers);
 }
 
 function getUploadStatusLabel(status: UploadItemStatus) {
@@ -2659,6 +2676,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const currentBatchHashes = new Set<string>();
       const failedUploads: Array<{ index: number; name: string; message: string; stage: UploadPublishStage }> = [];
       const previewWarnings: Array<{ name: string; message: string }> = [];
+      let completedUploadCount = 0;
+      let duplicatePromptChain = Promise.resolve();
       const usedFileNames = new Set(
         products
           .filter((product) => (
@@ -2672,7 +2691,71 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       duplicateBatchActionRef.current = null;
       setPublishProgress({ done: 0, total: uploadQueue.length });
 
-      for (const [queueIndex, { item, index }] of uploadQueue.entries()) {
+      const markUploadCompleted = () => {
+        completedUploadCount += 1;
+        setPublishProgress({ done: completedUploadCount, total: uploadQueue.length });
+      };
+      const updateUploadRuntimeMetric = (changes: Partial<UploadRuntimeMetrics> | ((current: UploadRuntimeMetrics) => UploadRuntimeMetrics)) => {
+        setUploadRuntimeMetrics((current) => (
+          typeof changes === 'function' ? changes(current) : { ...current, ...changes }
+        ));
+      };
+      const requestDuplicateResolutionQueued = async (conflict: DuplicateUploadConflict) => {
+        let resolvedAction: DuplicateUploadAction = 'cancel';
+        const run = duplicatePromptChain.then(async () => {
+          resolvedAction = await requestDuplicateResolution(conflict);
+        });
+        duplicatePromptChain = run.catch(() => undefined);
+        await run;
+        return resolvedAction;
+      };
+      const pendingProductCreates: Array<{
+        product: Omit<Product, 'id'>;
+        resolve: (id: string) => void;
+        reject: (error: unknown) => void;
+      }> = [];
+      let productCreateFlushTimer: number | null = null;
+      let productCreateFlushChain = Promise.resolve();
+      const flushPendingProductCreates = async () => {
+        if (productCreateFlushTimer !== null) {
+          window.clearTimeout(productCreateFlushTimer);
+          productCreateFlushTimer = null;
+        }
+        const batch = pendingProductCreates.splice(0, 25);
+        if (batch.length === 0) return;
+
+        const dbStartedAt = performance.now();
+        try {
+          const ids = await productService.addProductsBatchResilient(batch.map((entry) => entry.product));
+          batch.forEach((entry, entryIndex) => entry.resolve(ids[entryIndex]));
+          console.info('[photographer-upload] db:batch-published', {
+            uploadBatchId,
+            count: batch.length,
+            durationMs: Math.round(performance.now() - dbStartedAt),
+          });
+        } catch (error) {
+          batch.forEach((entry) => entry.reject(error));
+        }
+      };
+      const scheduleProductCreateFlush = (immediate = false) => {
+        if (productCreateFlushTimer !== null) {
+          window.clearTimeout(productCreateFlushTimer);
+          productCreateFlushTimer = null;
+        }
+        if (immediate) {
+          productCreateFlushChain = productCreateFlushChain.then(flushPendingProductCreates);
+          return;
+        }
+        productCreateFlushTimer = window.setTimeout(() => {
+          productCreateFlushChain = productCreateFlushChain.then(flushPendingProductCreates);
+        }, 350);
+      };
+      const createProductBatched = (product: Omit<Product, 'id'>) => new Promise<string>((resolve, reject) => {
+        pendingProductCreates.push({ product, resolve, reject });
+        scheduleProductCreateFlush(pendingProductCreates.length >= 25);
+      });
+
+      await runLimitedConcurrency(uploadQueue, Math.max(1, uploadConcurrencyLimit), async ({ item, index }, queueIndex) => {
         let uploadStage: UploadPublishStage = 'validacao';
         const fileStartedAt = performance.now();
         let lastStageStartedAt = fileStartedAt;
@@ -2685,9 +2768,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         };
         try {
           await waitUntilUploadCanContinue();
-          setUploadRuntimeMetrics((current) => ({
+          updateUploadRuntimeMetric((current) => ({
             ...current,
-            activeUploads: 1,
+            activeUploads: current.activeUploads + 1,
             retries: current.retries + Math.max(0, item.attempts > 0 ? 1 : 0),
           }));
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => (
@@ -2716,7 +2799,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           let resolvedDescription = item.description.trim();
 
           if (existingNameProduct) {
-            duplicateAction = await requestDuplicateResolution({
+            duplicateAction = await requestDuplicateResolutionQueued({
               index,
               item,
               existingProduct: existingNameProduct,
@@ -2751,6 +2834,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             uploadSize: uploadFile.size,
             uploadType: uploadFile.type,
           });
+          if (uploadFile.size !== item.file.size) {
+            updateUploadRuntimeMetric((current) => ({
+              ...current,
+              totalBytes: Math.max(0, current.totalBytes - item.file.size + uploadFile.size),
+            }));
+          }
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, preparedFileSize: uploadFile.size, uploadBatchId } : uploadItem));
 
           markStage('hash-original');
@@ -2766,8 +2855,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               fileHash,
             });
             setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'skipped', uploadedAt: new Date().toISOString(), stage: uploadStage } : uploadItem));
-            setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
-            continue;
+            markUploadCompleted();
+            return;
           }
           currentBatchHashes.add(fileHash);
 
@@ -2783,8 +2872,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               productId: existingProduct.id,
             });
             setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'skipped', uploadedAt: new Date().toISOString(), stage: uploadStage } : uploadItem));
-            setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
-            continue;
+            markUploadCompleted();
+            return;
           }
 
           markStage('upload-original');
@@ -2808,7 +2897,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             storagePath: uploadedFile.path,
             reused: 'reused' in uploadedFile ? uploadedFile.reused : false,
           });
-          setUploadRuntimeMetrics((current) => ({
+          updateUploadRuntimeMetric((current) => ({
             ...current,
             uploadedBytes: current.uploadedBytes + uploadFile.size,
           }));
@@ -2830,6 +2919,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           }
           markStage('hash-preview');
           const thumbnailHash = item.thumbnailHash || (thumbnailFile ? await calculateUploadFileSha256(thumbnailFile) : null);
+          if (thumbnailFile && !item.uploadedThumbnailPath) {
+            updateUploadRuntimeMetric((current) => ({
+              ...current,
+              totalBytes: current.totalBytes + thumbnailFile.size,
+            }));
+          }
           markStage('upload-preview');
           const uploadedThumbnail = thumbnailFile
             ? item.uploadedThumbnailPath
@@ -2844,7 +2939,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               reused: 'reused' in uploadedThumbnail ? uploadedThumbnail.reused : false,
             });
             if (thumbnailFile) {
-              setUploadRuntimeMetrics((current) => ({
+              updateUploadRuntimeMetric((current) => ({
                 ...current,
                 uploadedBytes: current.uploadedBytes + thumbnailFile.size,
               }));
@@ -2891,7 +2986,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             });
             replacedCount += 1;
           } else {
-            const productId = await productService.addProductResilient(productPayload);
+            const productId = await createProductBatched(productPayload);
             indexedPhotoId = productId;
             if (duplicateAction === 'copy') {
               await productService.logUploadConflictAction({
@@ -2927,7 +3022,9 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           }
           markStage('indexacao-facial');
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'published', uploadedAt: new Date().toISOString(), error: '', productId: indexedPhotoId, stage: uploadStage } : uploadItem));
-          setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
+          markUploadCompleted();
+          const finishedAt = performance.now();
+          stageDurations[uploadStage] = Math.round((stageDurations[uploadStage] || 0) + finishedAt - lastStageStartedAt);
           console.info('[photographer-upload] file:done', {
             uploadBatchId,
             index: queueIndex + 1,
@@ -2935,12 +3032,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             fileName: item.file.name,
             originalSize: item.file.size,
             uploadSize: uploadFile.size,
-            durationMs: Math.round(performance.now() - fileStartedAt),
+            durationMs: Math.round(finishedAt - fileStartedAt),
             stageDurationsMs: stageDurations,
           });
         } catch (fileError) {
           const message = fileError instanceof Error ? fileError.message : String(fileError);
-          if (/Upload cancelado pelo fotografo/i.test(message)) {
+          if (/Upload cancelado pelo fot/i.test(message)) {
             throw fileError;
           }
           const friendlyMessage = /sess[aã]o expirada/i.test(message)
@@ -2968,20 +3065,19 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             message: formattedMessage,
             stage: uploadStage,
           });
-          setUploadRuntimeMetrics((current) => ({
+          updateUploadRuntimeMetric((current) => ({
             ...current,
             failedFiles: current.failedFiles + 1,
-            activeUploads: 0,
           }));
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: browserOnlineRef.current ? 'failed' : 'paused', error: formattedMessage, stage: uploadStage } : uploadItem));
-          setPublishProgress({ done: queueIndex + 1, total: uploadQueue.length });
+          markUploadCompleted();
         } finally {
-          setUploadRuntimeMetrics((current) => ({
+          updateUploadRuntimeMetric((current) => ({
             ...current,
-            activeUploads: 0,
+            activeUploads: Math.max(0, current.activeUploads - 1),
           }));
         }
-      }
+      });
       console.info('[photographer-upload] batch:done', {
         uploadBatchId,
         total: uploadQueue.length,

@@ -27,6 +27,22 @@ import { getCurrentAccessToken, getCurrentUser, supabaseConfig, supabaseRest } f
 import { FUNPACE_CONTACT_EMAIL } from './contact';
 
 type SupabaseRow<T> = T & { id: string };
+export type MediaProcessingJobKind = 'thumbnail' | 'watermark' | 'optimization';
+export type MediaProcessingJob = {
+  id: string;
+  productId: string;
+  photographerId: string;
+  kind: MediaProcessingJobKind;
+  status: 'pending' | 'processing' | 'done' | 'failed';
+  sourceUrl?: string | null;
+  outputUrl?: string | null;
+  error?: string | null;
+  attempts?: number;
+  lastStartedAt?: string | null;
+  completedAt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
+};
 export type ProductPage = {
   products: Product[];
   nextOffset: number | null;
@@ -41,6 +57,7 @@ const localEventsStorageKey = 'funpace:local-events:v1';
 const defaultUploadLimitBytes = 300 * 1024 * 1024;
 const clientUploadLimitBytes = Number(import.meta.env.VITE_MEDIA_UPLOAD_MAX_BYTES || defaultUploadLimitBytes);
 const clientUploadTimeoutMs = Number(import.meta.env.VITE_MEDIA_UPLOAD_TIMEOUT_MS || 600_000);
+const directMediaUploadEnabled = String(import.meta.env.VITE_MEDIA_DIRECT_UPLOAD || '').toLowerCase() === 'true';
 const adminSnapshotLimits = {
   photographers: 1000,
   products: 2000,
@@ -366,10 +383,90 @@ async function signMediaUrls<T extends { url?: string; thumbnailUrl?: string | n
   }
 }
 
+async function uploadMediaFileDirectSupabase(
+  path: string,
+  file: File,
+  accessToken: string,
+  metadata?: { fileHash?: string; uploadBatchId?: string },
+) {
+  const requestStartedAt = performance.now();
+  const response = await fetch(apiUrl('/api/media/direct-upload'), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      path,
+      contentType: file.type || 'application/octet-stream',
+      fileSize: file.size,
+      fileHash: metadata?.fileHash || null,
+      uploadBatchId: metadata?.uploadBatchId || null,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || `Direct upload token HTTP ${response.status}`);
+  }
+  if (payload?.provider !== 'supabase' || !payload?.signedUrl || !payload?.path) {
+    throw new Error('Endpoint de upload direto nao retornou URL assinada valida.');
+  }
+
+  const formData = new FormData();
+  formData.append('cacheControl', '31536000');
+  formData.append('', file);
+
+  const uploadStartedAt = performance.now();
+  const uploadResponse = await fetch(String(payload.signedUrl), {
+    method: 'PUT',
+    body: formData,
+  });
+  const raw = await uploadResponse.text();
+  if (!uploadResponse.ok) {
+    let message = raw;
+    try {
+      const parsed = raw ? JSON.parse(raw) : {};
+      message = parsed?.message || parsed?.error || raw;
+    } catch {
+      // Keep raw response.
+    }
+    throw new Error(message || `Supabase direct upload HTTP ${uploadResponse.status}`);
+  }
+
+  console.info('[media-upload] direct:done', {
+    provider: 'supabase',
+    fileName: file.name,
+    size: file.size,
+    path: payload.path,
+    uploadBatchId: metadata?.uploadBatchId || null,
+    tokenDurationMs: Math.round(uploadStartedAt - requestStartedAt),
+    uploadDurationMs: Math.round(performance.now() - uploadStartedAt),
+  });
+
+  return {
+    path: String(payload.path),
+    publicUrl: String(payload.publicUrl || payload.path),
+    reused: false,
+  };
+}
+
 async function uploadMediaFile(path: string, file: File, metadata?: { fileHash?: string; uploadBatchId?: string }) {
   let accessToken = await getCurrentAccessToken();
   if (!accessToken) {
     throw new Error('Sessão de fotógrafo ausente. Entre novamente no painel para enviar arquivos.');
+  }
+
+  if (directMediaUploadEnabled) {
+    try {
+      return await uploadMediaFileDirectSupabase(path, file, accessToken, metadata);
+    } catch (error) {
+      console.warn('[media-upload] direct upload unavailable, falling back to proxy', {
+        fileName: file.name,
+        fileSize: file.size,
+        uploadBatchId: metadata?.uploadBatchId || null,
+        message: error instanceof Error ? error.message : String(error || ''),
+      });
+    }
   }
 
   const uploadUrl = apiUrl('/api/media/upload');
@@ -1253,6 +1350,88 @@ export const productService = {
 
     if (!updated) throw new Error('Produto não encontrado.');
     return updated;
+  },
+
+  async updateProductProcessingMedia(id: string, changes: Partial<Pick<Product, 'thumbnailUrl' | 'watermarkUrl' | 'thumbnailHash'>>): Promise<Product> {
+    if (isMockMode) {
+      const existingProduct = mockProducts.find((item) => item.id === id);
+      if (!existingProduct) throw new Error('Produto nÃ£o encontrado.');
+
+      const updatedProduct = { ...existingProduct, ...changes };
+      mockProducts = mockProducts.map((item) => (item.id === id ? updatedProduct : item));
+      return updatedProduct;
+    }
+
+    const params = new URLSearchParams({ id: `eq.${id}` });
+    const [updated] = await supabaseRest.patch<SupabaseRow<Product>[]>(
+      `/rest/v1/products?${params.toString()}&${selectAll}`,
+      changes,
+      true,
+    );
+
+    if (!updated) throw new Error('Produto nÃ£o encontrado.');
+    return updated;
+  },
+
+  async enqueueMediaProcessingJobs(input: {
+    productId: string;
+    photographerId: string;
+    sourceUrl: string;
+    kinds?: MediaProcessingJobKind[];
+  }): Promise<MediaProcessingJob[]> {
+    const kinds: MediaProcessingJobKind[] = input.kinds?.length ? input.kinds : ['thumbnail', 'watermark'];
+    if (isMockMode) {
+      return kinds.map((kind) => ({
+        id: `mock-job-${crypto.randomUUID()}`,
+        productId: input.productId,
+        photographerId: input.photographerId,
+        kind,
+        status: 'pending',
+        sourceUrl: input.sourceUrl,
+        outputUrl: null,
+        error: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }));
+    }
+
+    try {
+      return await supabaseRest.post<MediaProcessingJob[]>('/rest/v1/media_processing_jobs?select=*', kinds.map((kind) => ({
+        productId: input.productId,
+        photographerId: input.photographerId,
+        kind,
+        status: 'pending',
+        sourceUrl: input.sourceUrl,
+        outputUrl: null,
+        error: null,
+        createdAt: new Date().toISOString(),
+      })), true);
+    } catch (error) {
+      console.warn('[photographer-upload] media-job:enqueue-failed', {
+        productId: input.productId,
+        photographerId: input.photographerId,
+        kinds,
+        message: error instanceof Error ? error.message : String(error || ''),
+      });
+      return [];
+    }
+  },
+
+  async getMediaProcessingJobs(productIds: string[]): Promise<MediaProcessingJob[]> {
+    const uniqueIds = Array.from(new Set(productIds.filter(Boolean)));
+    if (uniqueIds.length === 0 || isMockMode) return [];
+
+    const quotedIds = uniqueIds.map((id) => `"${id}"`).join(',');
+    return supabaseRest.get<MediaProcessingJob[]>(
+      `/rest/v1/media_processing_jobs?select=*&productId=in.(${encodeURIComponent(quotedIds)})&order=createdAt.desc`,
+      true,
+    ).catch((error) => {
+      console.warn('[photographer-upload] media-job:list-failed', {
+        count: uniqueIds.length,
+        message: error instanceof Error ? error.message : String(error || ''),
+      });
+      return [];
+    });
   },
 
   async updateProductStatus(id: string, status: NonNullable<Product['status']>): Promise<Product> {

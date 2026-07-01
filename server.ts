@@ -16,6 +16,8 @@ import { ensurePhotographerReferralCode, markReferralApproved, registerPendingRe
 import adminApiHandler from "./api/admin";
 import downloadEmailHandler from "./api/orders/download-email";
 import eventMediaCountsHandler from "./server/api/events/media-counts";
+import directUploadHandler from "./server/api/media/direct-upload";
+import mediaJobsHandler from "./server/api/media/jobs";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
@@ -1462,6 +1464,9 @@ app.get("/api/health", async (req, res) => {
 });
 
 app.get("/api/events/media-counts", eventMediaCountsHandler);
+app.post("/api/media/direct-upload", directUploadHandler);
+app.all("/api/media/jobs", mediaJobsHandler);
+app.all("/api/media/jobs/process", mediaJobsHandler);
 
 app.all([
   "/api/admin",

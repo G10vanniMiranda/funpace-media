@@ -39,8 +39,31 @@ test('database publication failures can resume after storage upload without reup
   assert.match(dashboard, /status: 'db_saved'/);
   assert.match(dashboard, /status: 'published'/);
   assert.match(dashboard, /createProductBatched\(productPayload\)/);
+  assert.match(dashboard, /scheduleDeferredThumbnailProcessing/);
+  assert.match(dashboard, /enqueueMediaProcessingJobs/);
+  assert.match(dashboard, /media-job:queued/);
+  assert.match(dashboard, /deferredThumbnailConcurrencyLimit/);
+  assert.match(dashboard, /deferredThumbnailQueue/);
+  assert.match(dashboard, /thumbnail:deferred:queued/);
+  assert.match(dashboard, /thumbnail:deferred:progress/);
+  assert.match(dashboard, /thumbnail:deferred:start/);
+  assert.match(dashboard, /thumbnail:deferred:done/);
+  assert.match(dashboard, /stageDurationsMs/);
+  assert.match(dashboard, /stageAverageMs/);
+  assert.match(dashboard, /primaryBottleneckStage/);
+  assert.match(dashboard, /primaryBottleneckDurationMs/);
+  assert.match(dashboard, /effectiveOriginalUploadMBps/);
+  assert.match(dashboard, /batchUploadedOriginalBytes/);
+  assert.match(dashboard, /uploadProcessingJobsByProduct/);
+  assert.match(dashboard, /getMediaProcessingJobs\(productIds\)/);
+  assert.match(dashboard, /media-job:status-refresh/);
+  assert.match(dashboard, /getProcessingStatusLabel/);
+  assert.match(dashboard, /Proc\. fila/);
   assert.match(services, /addProductResilient/);
   assert.match(services, /addProductsBatchResilient/);
+  assert.match(services, /updateProductProcessingMedia/);
+  assert.match(services, /media_processing_jobs/);
+  assert.match(services, /media-job:enqueue-failed/);
   assert.match(services, /db:batch-create-fallback/);
   assert.match(services, /db:create-recovered/);
   assert.match(services, /products\.find-created-after-failure/);
@@ -70,9 +93,67 @@ test('browser upload retries network/proxy drops and requires storage confirmati
   const services = readFileSync('src/lib/services.ts', 'utf8');
 
   assert.match(services, /clientUploadTimeoutMs/);
+  assert.match(services, /directMediaUploadEnabled/);
+  assert.match(services, /uploadMediaFileDirectSupabase/);
+  assert.match(services, /direct upload unavailable, falling back to proxy/);
   assert.match(services, /\[media-upload\] network retry/);
   assert.match(services, /\[media-upload\] http retry/);
   assert.match(services, /payload\?\.verified === false/);
+});
+
+test('optional Supabase direct upload is multiplexed and keeps external bucket fallback', () => {
+  const directUpload = readFileSync('server/api/media/direct-upload.ts', 'utf8');
+  const system = readFileSync('api/system.ts', 'utf8');
+  const vercel = readFileSync('vercel.json', 'utf8');
+
+  assert.match(directUpload, /createSignedUploadUrl/);
+  assert.match(directUpload, /external_bucket/);
+  assert.match(directUpload, /BUCKET_API_TOKEN/);
+  assert.match(directUpload, /isSafeStoragePath/);
+  assert.match(system, /media-direct-upload/);
+  assert.match(vercel, /\/api\/media\/direct-upload/);
+  assert.match(vercel, /\/api\/system\?route=media-direct-upload/);
+});
+
+test('media processing jobs are queued and exposed only through operations diagnostics', () => {
+  const dashboard = readFileSync('src/components/PhotographerDashboard.tsx', 'utf8');
+  const services = readFileSync('src/lib/services.ts', 'utf8');
+  const mediaJobs = readFileSync('server/api/media/jobs.ts', 'utf8');
+  const mediaWorker = readFileSync('server/media/media-processing-worker.ts', 'utf8');
+  const mediaRepository = readFileSync('server/media/media-job-repository.ts', 'utf8');
+  const sql = readFileSync('scripts/add-media-processing-worker.sql', 'utf8');
+  const system = readFileSync('api/system.ts', 'utf8');
+  const vercel = readFileSync('vercel.json', 'utf8');
+
+  assert.match(dashboard, /media-job:queued/);
+  assert.match(services, /media_processing_jobs/);
+  assert.match(mediaJobs, /OPERATIONS_SECRET/);
+  assert.match(mediaJobs, /CRON_SECRET/);
+  assert.match(mediaJobs, /worker:\s*\{/);
+  assert.match(mediaJobs, /runMediaProcessingWorker/);
+  assert.match(mediaJobs, /action=process/);
+  assert.match(mediaJobs, /reprocess-failed/);
+  assert.match(mediaJobs, /requeueFailedMediaJobs/);
+  assert.match(mediaWorker, /MEDIA_PROCESSOR_ENABLED/);
+  assert.match(mediaWorker, /batch:disabled/);
+  assert.match(mediaWorker, /claimPendingMediaJobs\(batchSize\)/);
+  assert.match(mediaWorker, /sharp/);
+  assert.match(mediaWorker, /processImageJob/);
+  assert.match(mediaWorker, /updateProductProcessedMedia/);
+  assert.match(mediaRepository, /rpc\/claim_media_processing_jobs/);
+  assert.match(mediaRepository, /rpc\/count_media_processing_pending/);
+  assert.match(mediaRepository, /requeueFailedMediaJobs/);
+  assert.match(mediaRepository, /status: 'pending'/);
+  assert.match(sql, /for update skip locked/i);
+  assert.match(sql, /limit least\(greatest\(batch_size, 1\), 50\)/i);
+  assert.match(sql, /attempts = j\.attempts \+ 1/);
+  assert.match(sql, /grant execute on function public\.claim_media_processing_jobs\(integer, integer\) to service_role/);
+  assert.match(system, /media-jobs/);
+  assert.match(vercel, /\/api\/media\/jobs/);
+  assert.match(vercel, /\/api\/media\/jobs\/process/);
+  assert.match(vercel, /"api\/system\.ts"[\s\S]*?"maxDuration": 300/);
+  assert.match(vercel, /\/api\/system\?route=media-jobs/);
+  assert.match(vercel, /\/api\/system\?route=media-jobs&action=process/);
 });
 
 test('nginx reference config supports large media uploads without proxy buffering', () => {

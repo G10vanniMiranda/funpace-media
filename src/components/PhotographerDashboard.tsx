@@ -33,7 +33,7 @@ import {
   Copy
 } from 'lucide-react';
 import { Event, Product, Photographer, PhotographerDashboardMetrics, PhotographerProductPerformance, PhotographerReferral, PhotographerSale, WithdrawalRequest } from '../types';
-import { calculateFileSha256, eventService, normalizePhotographerUsername, photographerDashboardService, photographerService, productService, referralService, withdrawalService } from '../lib/services';
+import { calculateFileSha256, eventService, normalizePhotographerUsername, photographerDashboardService, photographerService, productService, referralService, withdrawalService, type MediaProcessingJob } from '../lib/services';
 import { isMockMode } from '../lib/config';
 import { getCurrentUser } from '../lib/supabase';
 import {
@@ -84,6 +84,17 @@ type UploadItem = {
 };
 
 type UploadItemStatus = ResumableUploadItemStatus;
+
+type UploadProcessingSummary = {
+  status: 'pending' | 'processing' | 'done' | 'failed';
+  total: number;
+  done: number;
+  failed: number;
+  processing: number;
+  pending: number;
+  attempts: number;
+  error: string | null;
+};
 
 type DuplicateUploadAction = 'replace' | 'copy' | 'cancel';
 
@@ -190,6 +201,7 @@ const profileImageTypes = new Set(['image/jpeg', 'image/jpg', 'image/png', 'imag
 const uploadVisibleListLimit = 160;
 const uploadOfflineRetryDelayMs = 1500;
 const uploadConcurrencyLimit = Math.min(5, Math.max(1, Number(import.meta.env.VITE_PHOTOGRAPHER_UPLOAD_CONCURRENCY || 4)));
+const deferredThumbnailConcurrencyLimit = Math.min(2, Math.max(1, Number(import.meta.env.VITE_PHOTOGRAPHER_THUMBNAIL_CONCURRENCY || 1)));
 
 type UploadRuntimeMetrics = {
   batchId: string | null;
@@ -471,6 +483,52 @@ function getUploadStatusClass(status: UploadItemStatus) {
   if (status === 'paused') return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-300';
   if (status === 'skipped') return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
   return 'border-white/10 bg-white/5 text-gray-300';
+}
+
+function summarizeMediaProcessingJobs(jobs: MediaProcessingJob[]): UploadProcessingSummary {
+  const summary: UploadProcessingSummary = {
+    status: 'pending',
+    total: jobs.length,
+    done: 0,
+    failed: 0,
+    processing: 0,
+    pending: 0,
+    attempts: 0,
+    error: null,
+  };
+
+  for (const job of jobs) {
+    if (job.status === 'done') summary.done += 1;
+    else if (job.status === 'failed') {
+      summary.failed += 1;
+      summary.error ||= job.error || null;
+    } else if (job.status === 'processing') summary.processing += 1;
+    else summary.pending += 1;
+    summary.attempts += Math.max(0, Number(job.attempts || 0));
+  }
+
+  if (summary.total > 0 && summary.done === summary.total) summary.status = 'done';
+  else if (summary.failed > 0) summary.status = 'failed';
+  else if (summary.processing > 0) summary.status = 'processing';
+  else summary.status = 'pending';
+
+  return summary;
+}
+
+function getProcessingStatusLabel(summary?: UploadProcessingSummary) {
+  if (!summary || summary.total === 0) return 'Processamento pendente';
+  if (summary.status === 'done') return 'Processamento concluido';
+  if (summary.status === 'failed') return 'Processamento com erro';
+  if (summary.status === 'processing') return 'Processando midia';
+  return 'Na fila de processamento';
+}
+
+function getProcessingStatusClass(summary?: UploadProcessingSummary) {
+  if (!summary || summary.total === 0) return 'border-white/10 bg-white/5 text-gray-400';
+  if (summary.status === 'done') return 'border-green-500/30 bg-green-500/10 text-green-300';
+  if (summary.status === 'failed') return 'border-red-500/30 bg-red-500/10 text-red-300';
+  if (summary.status === 'processing') return 'border-cyan-500/30 bg-cyan-500/10 text-cyan-200';
+  return 'border-yellow-500/30 bg-yellow-500/10 text-yellow-200';
 }
 
 function calculateUploadFileSha256(file: File) {
@@ -1195,6 +1253,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const [withdrawalError, setWithdrawalError] = useState('');
   const [isRequestingWithdrawal, setIsRequestingWithdrawal] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<UploadItem[]>([]);
+  const [uploadProcessingJobsByProduct, setUploadProcessingJobsByProduct] = useState<Record<string, UploadProcessingSummary>>({});
   const [resumeNotice, setResumeNotice] = useState('');
   const [uploadCompletionNotice, setUploadCompletionNotice] = useState('');
   const [duplicateConflict, setDuplicateConflict] = useState<DuplicateUploadConflict | null>(null);
@@ -1413,6 +1472,47 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       })),
     });
   }, [selectedFiles, photographer.id, eventInput, checkpointInput, selectedEventId]);
+
+  React.useEffect(() => {
+    const productIds = Array.from(new Set(selectedFiles.map((item) => item.productId).filter((id): id is string => Boolean(id))));
+    if (productIds.length === 0) {
+      setUploadProcessingJobsByProduct({});
+      return;
+    }
+
+    let cancelled = false;
+    const refreshProcessingJobs = async () => {
+      const startedAt = performance.now();
+      const jobs = await productService.getMediaProcessingJobs(productIds);
+      if (cancelled) return;
+
+      const grouped = jobs.reduce((acc, job) => {
+        if (!job.productId) return acc;
+        acc[job.productId] ||= [];
+        acc[job.productId].push(job);
+        return acc;
+      }, {} as Record<string, MediaProcessingJob[]>);
+      const next = Object.fromEntries(
+        productIds.map((productId) => [productId, summarizeMediaProcessingJobs(grouped[productId] || [])]),
+      );
+
+      setUploadProcessingJobsByProduct((current) => (
+        JSON.stringify(current) === JSON.stringify(next) ? current : next
+      ));
+      console.info('[photographer-upload] media-job:status-refresh', {
+        productCount: productIds.length,
+        jobCount: jobs.length,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
+    };
+
+    void refreshProcessingJobs();
+    const interval = window.setInterval(refreshProcessingJobs, 8000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [selectedFiles]);
 
   React.useEffect(() => {
     if (selectedFiles.length === 0) return;
@@ -1886,6 +1986,11 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
   const dbSavedUploadCount = uploadStatusCounts.db_saved || 0;
   const inProgressUploadCount = uploadStatusCounts.uploading || 0;
   const skippedUploadCount = uploadStatusCounts.skipped || 0;
+  const uploadProcessingSummaries = Object.values(uploadProcessingJobsByProduct);
+  const mediaProcessingPendingCount = uploadProcessingSummaries.filter((summary) => summary.status === 'pending').length;
+  const mediaProcessingActiveCount = uploadProcessingSummaries.filter((summary) => summary.status === 'processing').length;
+  const mediaProcessingDoneCount = uploadProcessingSummaries.filter((summary) => summary.status === 'done').length;
+  const mediaProcessingFailedCount = uploadProcessingSummaries.filter((summary) => summary.status === 'failed').length;
   const uploadElapsedMs = uploadRuntimeMetrics.startedAt
     ? (uploadRuntimeMetrics.completedAt || Date.now()) - uploadRuntimeMetrics.startedAt
     : 0;
@@ -2676,7 +2781,12 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
       const currentBatchHashes = new Set<string>();
       const failedUploads: Array<{ index: number; name: string; message: string; stage: UploadPublishStage }> = [];
       const previewWarnings: Array<{ name: string; message: string }> = [];
+      const batchStageDurations = new Map<UploadPublishStage, number>();
+      const batchStageCounts = new Map<UploadPublishStage, number>();
+      let batchPreparedBytes = 0;
+      let batchUploadedOriginalBytes = 0;
       let completedUploadCount = 0;
+      let deferredThumbnailCount = 0;
       let duplicatePromptChain = Promise.resolve();
       const usedFileNames = new Set(
         products
@@ -2699,6 +2809,14 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         setUploadRuntimeMetrics((current) => (
           typeof changes === 'function' ? changes(current) : { ...current, ...changes }
         ));
+      };
+      const recordStageDurations = (durations: Partial<Record<UploadPublishStage, number>>) => {
+        Object.entries(durations).forEach(([stage, duration]) => {
+          if (typeof duration !== 'number' || duration < 0) return;
+          const uploadStageKey = stage as UploadPublishStage;
+          batchStageDurations.set(uploadStageKey, (batchStageDurations.get(uploadStageKey) || 0) + duration);
+          batchStageCounts.set(uploadStageKey, (batchStageCounts.get(uploadStageKey) || 0) + 1);
+        });
       };
       const requestDuplicateResolutionQueued = async (conflict: DuplicateUploadConflict) => {
         let resolvedAction: DuplicateUploadAction = 'cancel';
@@ -2754,17 +2872,154 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         pendingProductCreates.push({ product, resolve, reject });
         scheduleProductCreateFlush(pendingProductCreates.length >= 25);
       });
+      type DeferredThumbnailTask = {
+        productId: string;
+        item: UploadItem;
+        itemIndex: number;
+        uploadFile: File;
+        uploadBatchId: string;
+      };
+      const deferredThumbnailQueue: DeferredThumbnailTask[] = [];
+      let activeDeferredThumbnailTasks = 0;
+      let completedDeferredThumbnailTasks = 0;
+      let failedDeferredThumbnailTasks = 0;
+      const runDeferredThumbnailProcessing = async (input: DeferredThumbnailTask) => {
+        const processingStartedAt = performance.now();
+        console.info('[photographer-upload] thumbnail:deferred:start', {
+          uploadBatchId: input.uploadBatchId,
+          productId: input.productId,
+          fileName: input.uploadFile.name,
+          originalFileName: input.item.file.name,
+          fileSize: input.uploadFile.size,
+          active: activeDeferredThumbnailTasks,
+          queued: deferredThumbnailQueue.length,
+          concurrencyLimit: deferredThumbnailConcurrencyLimit,
+        });
+
+        const thumbnailFile = await generateMediaThumbnail(input.uploadFile);
+        if (!thumbnailFile) {
+          console.warn('[photographer-upload] thumbnail:deferred:skipped', {
+            uploadBatchId: input.uploadBatchId,
+            productId: input.productId,
+            fileName: input.uploadFile.name,
+            reason: input.uploadFile.type.startsWith('video') ? 'video-preview-unavailable' : 'image-preview-unavailable',
+            durationMs: Math.round(performance.now() - processingStartedAt),
+          });
+          return;
+        }
+
+        const hashStartedAt = performance.now();
+        const thumbnailHash = input.item.thumbnailHash || await calculateUploadFileSha256(thumbnailFile);
+        const uploadStartedAt = performance.now();
+        const uploadedThumbnail = input.item.uploadedThumbnailPath
+          ? { path: input.item.uploadedThumbnailPath, publicUrl: input.item.uploadedThumbnailPath, reused: true }
+          : await productService.uploadProductThumbnail(photographer.id, thumbnailFile, { fileHash: thumbnailHash, uploadBatchId: input.uploadBatchId });
+        const dbStartedAt = performance.now();
+        const updatedProduct = await productService.updateProductProcessingMedia(input.productId, {
+          thumbnailUrl: uploadedThumbnail.path,
+          watermarkUrl: uploadedThumbnail.path,
+          thumbnailHash,
+        });
+
+        setSelectedFiles((current) => current.map((uploadItem, itemIndex) => (
+          itemIndex === input.itemIndex
+            ? { ...uploadItem, uploadedThumbnailPath: uploadedThumbnail.path, thumbnailHash }
+            : uploadItem
+        )));
+        setProducts((current) => current.map((product) => (
+          product.id === input.productId ? { ...product, ...updatedProduct } : product
+        )));
+
+        console.info('[photographer-upload] thumbnail:deferred:done', {
+          uploadBatchId: input.uploadBatchId,
+          productId: input.productId,
+          fileName: thumbnailFile.name,
+          thumbnailSize: thumbnailFile.size,
+          storagePath: uploadedThumbnail.path,
+          reused: 'reused' in uploadedThumbnail ? uploadedThumbnail.reused : false,
+          durationMs: Math.round(performance.now() - processingStartedAt),
+          hashDurationMs: Math.round(uploadStartedAt - hashStartedAt),
+          uploadDurationMs: Math.round(dbStartedAt - uploadStartedAt),
+          dbDurationMs: Math.round(performance.now() - dbStartedAt),
+        });
+      };
+      const pumpDeferredThumbnailQueue = () => {
+        while (activeDeferredThumbnailTasks < deferredThumbnailConcurrencyLimit && deferredThumbnailQueue.length > 0) {
+          const task = deferredThumbnailQueue.shift();
+          if (!task) return;
+          activeDeferredThumbnailTasks += 1;
+          void runDeferredThumbnailProcessing(task).then(() => {
+            completedDeferredThumbnailTasks += 1;
+          }).catch((error) => {
+            failedDeferredThumbnailTasks += 1;
+            console.error('[photographer-upload] thumbnail:deferred:failed', {
+              uploadBatchId: task.uploadBatchId,
+              productId: task.productId,
+              fileName: task.uploadFile.name,
+              message: error instanceof Error ? error.message : String(error || ''),
+            });
+          }).finally(() => {
+            activeDeferredThumbnailTasks = Math.max(0, activeDeferredThumbnailTasks - 1);
+            console.info('[photographer-upload] thumbnail:deferred:progress', {
+              uploadBatchId: task.uploadBatchId,
+              completed: completedDeferredThumbnailTasks,
+              failed: failedDeferredThumbnailTasks,
+              active: activeDeferredThumbnailTasks,
+              queued: deferredThumbnailQueue.length,
+              concurrencyLimit: deferredThumbnailConcurrencyLimit,
+            });
+            pumpDeferredThumbnailQueue();
+          });
+        }
+      };
+      const scheduleDeferredThumbnailProcessing = (input: DeferredThumbnailTask) => {
+        deferredThumbnailQueue.push(input);
+        console.info('[photographer-upload] thumbnail:deferred:queued', {
+          uploadBatchId: input.uploadBatchId,
+          productId: input.productId,
+          fileName: input.uploadFile.name,
+          queued: deferredThumbnailQueue.length,
+          active: activeDeferredThumbnailTasks,
+          concurrencyLimit: deferredThumbnailConcurrencyLimit,
+        });
+        pumpDeferredThumbnailQueue();
+      };
+      const enqueueMediaProcessingJobs = (input: { productId: string; storagePath: string; uploadBatchId: string }) => {
+        void productService.enqueueMediaProcessingJobs({
+          productId: input.productId,
+          photographerId: photographer.id,
+          sourceUrl: input.storagePath,
+          kinds: ['thumbnail', 'watermark'],
+        }).then((jobs) => {
+          console.info('[photographer-upload] media-job:queued', {
+            uploadBatchId: input.uploadBatchId,
+            productId: input.productId,
+            count: jobs.length,
+            kinds: jobs.map((job) => job.kind),
+          });
+        });
+      };
 
       await runLimitedConcurrency(uploadQueue, Math.max(1, uploadConcurrencyLimit), async ({ item, index }, queueIndex) => {
         let uploadStage: UploadPublishStage = 'validacao';
         const fileStartedAt = performance.now();
         let lastStageStartedAt = fileStartedAt;
         const stageDurations: Partial<Record<UploadPublishStage, number>> = {};
+        let stageDurationsRecorded = false;
         const markStage = (nextStage: UploadPublishStage) => {
           const now = performance.now();
           stageDurations[uploadStage] = Math.round((stageDurations[uploadStage] || 0) + now - lastStageStartedAt);
           uploadStage = nextStage;
           lastStageStartedAt = now;
+        };
+        const finalizeStageDurations = () => {
+          const now = performance.now();
+          if (!stageDurationsRecorded) {
+            stageDurations[uploadStage] = Math.round((stageDurations[uploadStage] || 0) + now - lastStageStartedAt);
+            recordStageDurations(stageDurations);
+            stageDurationsRecorded = true;
+          }
+          return now;
         };
         try {
           await waitUntilUploadCanContinue();
@@ -2826,6 +3081,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           markStage('preparo-arquivo');
           const uploadFile = await prepareImageForUpload(item.file);
           assertFileFitsUploadLimit(uploadFile);
+          batchPreparedBytes += uploadFile.size;
           console.info('[photographer-upload] file:prepared', {
             uploadBatchId,
             originalName: item.file.name,
@@ -2855,6 +3111,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               fileHash,
             });
             setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'skipped', uploadedAt: new Date().toISOString(), stage: uploadStage } : uploadItem));
+            finalizeStageDurations();
             markUploadCompleted();
             return;
           }
@@ -2872,6 +3129,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               productId: existingProduct.id,
             });
             setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'skipped', uploadedAt: new Date().toISOString(), stage: uploadStage } : uploadItem));
+            finalizeStageDurations();
             markUploadCompleted();
             return;
           }
@@ -2897,19 +3155,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             storagePath: uploadedFile.path,
             reused: 'reused' in uploadedFile ? uploadedFile.reused : false,
           });
+          if (!('reused' in uploadedFile) || !uploadedFile.reused) {
+            batchUploadedOriginalBytes += uploadFile.size;
+          }
           updateUploadRuntimeMetric((current) => ({
             ...current,
             uploadedBytes: current.uploadedBytes + uploadFile.size,
           }));
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'uploaded', uploadedFilePath: uploadedFile.path, fileHash, uploadBatchId, stage: uploadStage } : uploadItem));
+          const shouldProcessThumbnailInline = false;
           let thumbnailFile: File | null = null;
           try {
             markStage('preview');
-            thumbnailFile = await generateMediaThumbnail(uploadFile);
+            thumbnailFile = shouldProcessThumbnailInline ? await generateMediaThumbnail(uploadFile) : null;
           } catch (thumbnailError) {
             console.warn(`Preview não gerado para ${item.name}:`, thumbnailError);
           }
-          if (!thumbnailFile) {
+          if (!thumbnailFile && shouldProcessThumbnailInline) {
             previewWarnings.push({
               name: item.name,
               message: uploadFile.type.startsWith('video')
@@ -3020,11 +3282,25 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
               uploadBatchId,
             });
           }
+          if (indexedPhotoId) {
+            enqueueMediaProcessingJobs({
+              productId: indexedPhotoId,
+              storagePath: uploadedFile.path,
+              uploadBatchId,
+            });
+            deferredThumbnailCount += 1;
+            scheduleDeferredThumbnailProcessing({
+              productId: indexedPhotoId,
+              item,
+              itemIndex: index,
+              uploadFile,
+              uploadBatchId,
+            });
+          }
           markStage('indexacao-facial');
           setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index ? { ...uploadItem, status: 'published', uploadedAt: new Date().toISOString(), error: '', productId: indexedPhotoId, stage: uploadStage } : uploadItem));
           markUploadCompleted();
-          const finishedAt = performance.now();
-          stageDurations[uploadStage] = Math.round((stageDurations[uploadStage] || 0) + finishedAt - lastStageStartedAt);
+          const finishedAt = finalizeStageDurations();
           console.info('[photographer-upload] file:done', {
             uploadBatchId,
             index: queueIndex + 1,
@@ -3044,6 +3320,7 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             ? 'Credencial do bucket expirada ou invalida. Gere um novo BUCKET_API_TOKEN no provedor, atualize o .env/deploy e reinicie o backend.'
             : message;
           const formattedMessage = formatUploadErrorMessage(friendlyMessage, item.file);
+          const failedAt = finalizeStageDurations();
           console.error('[photographer-upload] file:failed', {
             uploadBatchId,
             index: queueIndex + 1,
@@ -3058,6 +3335,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             fileSize: item.file.size,
             fileType: item.file.type,
             message: formattedMessage,
+            durationMs: Math.round(failedAt - fileStartedAt),
+            stageDurationsMs: stageDurations,
           });
           failedUploads.push({
             index,
@@ -3078,6 +3357,15 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
           }));
         }
       });
+      const batchDurationMs = Math.round(performance.now() - batchStartedAt);
+      const batchStageDurationsMs = Object.fromEntries(batchStageDurations.entries());
+      const batchStageAverageMs = Object.fromEntries(
+        Array.from(batchStageDurations.entries()).map(([stage, duration]) => [
+          stage,
+          Math.round(duration / Math.max(1, batchStageCounts.get(stage) || 1)),
+        ]),
+      );
+      const primaryBottleneck = Array.from(batchStageDurations.entries()).sort(([, left], [, right]) => right - left)[0] || null;
       console.info('[photographer-upload] batch:done', {
         uploadBatchId,
         total: uploadQueue.length,
@@ -3086,8 +3374,20 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         copiedCount,
         skippedDuplicateCount,
         failedCount: failedUploads.length,
-        durationMs: Math.round(performance.now() - batchStartedAt),
+        durationMs: batchDurationMs,
         concurrencyLimit: Math.max(1, uploadConcurrencyLimit),
+        rawBytes: batchTotalBytes,
+        preparedBytes: batchPreparedBytes,
+        uploadedOriginalBytes: batchUploadedOriginalBytes,
+        effectiveOriginalUploadMBps: batchDurationMs > 0
+          ? Number((batchUploadedOriginalBytes / 1024 / 1024 / (batchDurationMs / 1000)).toFixed(3))
+          : 0,
+        stageDurationsMs: batchStageDurationsMs,
+        stageAverageMs: batchStageAverageMs,
+        primaryBottleneckStage: primaryBottleneck?.[0] || null,
+        primaryBottleneckLabel: primaryBottleneck ? getUploadStageLabel(primaryBottleneck[0]) : null,
+        primaryBottleneckDurationMs: primaryBottleneck?.[1] || 0,
+        deferredThumbnailCount,
       });
 
       if (publishedCount === 0 && failedUploads.length > 0) {
@@ -3109,7 +3409,8 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) dos arquivos publicados ficaram com fallback visual.`
           : '';
-        setUploadCompletionNotice(`Upload parcial concluido. Publicadas: ${publishedCount} foto(s). Falharam: ${failedUploads.length}. Duplicadas ignoradas: ${skippedDuplicateCount}.${previewWarningText} Primeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
+        const deferredText = deferredThumbnailCount > 0 ? ` ${deferredThumbnailCount} preview(s) seguem processando em segundo plano.` : '';
+        setUploadCompletionNotice(`Upload parcial concluido. Publicadas: ${publishedCount} foto(s). Falharam: ${failedUploads.length}. Duplicadas ignoradas: ${skippedDuplicateCount}.${previewWarningText}${deferredText} Primeiro erro: ${failedUploads[0].name} - etapa ${getUploadStageLabel(failedUploads[0].stage)} - ${failedUploads[0].message}`);
       } else {
         clearSelectedFiles();
         setPreviewIndex(0);
@@ -3117,9 +3418,10 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
         const previewWarningText = previewWarnings.length > 0
           ? ` ${previewWarnings.length} preview(s) não foram gerados e ficaram com fallback visual.`
           : '';
+        const deferredText = deferredThumbnailCount > 0 ? ` ${deferredThumbnailCount} preview(s) seguem processando em segundo plano.` : '';
         setUploadCompletionNotice(skippedDuplicateCount > 0
-          ? `Upload concluído: ${publishedCount} publicado(s), ${replacedCount} substituído(s), ${copiedCount} cópia(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}`
-          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s).${previewWarningText}`);
+          ? `Upload concluído: ${publishedCount} publicado(s), ${replacedCount} substituído(s), ${copiedCount} cópia(s), ${skippedDuplicateCount} duplicado(s) ignorado(s).${previewWarningText}${deferredText}`
+          : `Upload realizado com sucesso: ${publishedCount} arquivo(s) publicado(s), ${replacedCount} substituido(s), ${copiedCount} copia(s).${previewWarningText}${deferredText}`);
       }
     } catch (error) {
       console.error("Erro no upload:", error);
@@ -5447,6 +5749,22 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                             {isBrowserOnline ? 'Online' : 'Offline'}
                           </p>
                         </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Proc. fila</p>
+                          <p className="font-sans text-xl font-black text-yellow-200">{mediaProcessingPendingCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Proc. ativo</p>
+                          <p className="font-sans text-xl font-black text-cyan-200">{mediaProcessingActiveCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Proc. ok</p>
+                          <p className="font-sans text-xl font-black text-green-300">{mediaProcessingDoneCount}</p>
+                        </div>
+                        <div className="border border-white/10 bg-[#05080d] p-2">
+                          <p className="font-mono text-[9px] uppercase text-gray-500">Proc. erro</p>
+                          <p className="font-sans text-xl font-black text-red-300">{mediaProcessingFailedCount}</p>
+                        </div>
                       </div>
                       <div className="mb-2 flex items-center justify-between gap-3">
                         <span className="font-mono text-[10px] uppercase tracking-widest text-gray-400">
@@ -5493,6 +5811,23 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
                                   {getUploadStatusLabel(item.status)}
                                 </span>
                               </div>
+                              {item.productId && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className={`font-mono text-[8px] uppercase border px-2 py-1 ${getProcessingStatusClass(uploadProcessingJobsByProduct[item.productId])}`}>
+                                    {getProcessingStatusLabel(uploadProcessingJobsByProduct[item.productId])}
+                                  </span>
+                                  {uploadProcessingJobsByProduct[item.productId]?.attempts > 0 && (
+                                    <span className="font-mono text-[8px] uppercase text-gray-500">
+                                      {uploadProcessingJobsByProduct[item.productId].attempts} tentativa(s)
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {item.productId && uploadProcessingJobsByProduct[item.productId]?.error && (
+                                <p className="font-mono text-[9px] uppercase text-red-300 line-clamp-2">
+                                  {uploadProcessingJobsByProduct[item.productId].error}
+                                </p>
+                              )}
                               {item.error && (
                                 <p className="font-mono text-[9px] uppercase text-red-300 line-clamp-2">{item.error}</p>
                               )}

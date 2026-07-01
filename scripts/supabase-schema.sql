@@ -711,9 +711,16 @@ create table if not exists public.media_processing_jobs (
   "sourceUrl" text,
   "outputUrl" text,
   error text,
+  attempts integer not null default 0 check (attempts >= 0),
+  "lastStartedAt" timestamptz,
+  "completedAt" timestamptz,
   "createdAt" timestamptz not null default now(),
   "updatedAt" timestamptz not null default now()
 );
+
+alter table public.media_processing_jobs add column if not exists attempts integer not null default 0 check (attempts >= 0);
+alter table public.media_processing_jobs add column if not exists "lastStartedAt" timestamptz;
+alter table public.media_processing_jobs add column if not exists "completedAt" timestamptz;
 
 create table if not exists public.coupons (
   id uuid primary key default gen_random_uuid(),
@@ -868,6 +875,8 @@ create index if not exists photographer_transactions_created_at_idx on public.ph
 create index if not exists media_processing_jobs_photographer_id_idx on public.media_processing_jobs ("photographerId");
 create index if not exists media_processing_jobs_product_id_idx on public.media_processing_jobs ("productId");
 create index if not exists media_processing_jobs_status_idx on public.media_processing_jobs (status);
+create index if not exists media_processing_jobs_pending_idx on public.media_processing_jobs ("createdAt" asc)
+  where status in ('pending', 'processing');
 create index if not exists coupons_code_idx on public.coupons (code);
 create index if not exists coupons_active_idx on public.coupons ("isActive");
 create index if not exists admin_activity_logs_created_at_idx on public.admin_activity_logs ("createdAt" desc);
@@ -1185,6 +1194,69 @@ $$;
 
 revoke all on function public.count_face_backfill_pending() from public, anon, authenticated;
 grant execute on function public.count_face_backfill_pending() to service_role;
+
+create or replace function public.claim_media_processing_jobs(
+  batch_size integer default 25,
+  stale_after_minutes integer default 15
+)
+returns setof public.media_processing_jobs
+language sql
+security definer
+set search_path = public
+as $$
+  with candidates as (
+    select j.id
+    from public.media_processing_jobs j
+    where (
+      j.status = 'pending'
+      or (
+        j.status = 'processing'
+        and (
+          j."lastStartedAt" is null
+          or j."lastStartedAt" < now() - make_interval(mins => greatest(stale_after_minutes, 1))
+        )
+      )
+    )
+    order by j."createdAt" asc
+    for update skip locked
+    limit least(greatest(batch_size, 1), 50)
+  )
+  update public.media_processing_jobs j
+  set
+    status = 'processing',
+    attempts = j.attempts + 1,
+    error = null,
+    "lastStartedAt" = now(),
+    "completedAt" = null
+  from candidates
+  where j.id = candidates.id
+  returning j.*;
+$$;
+
+revoke all on function public.claim_media_processing_jobs(integer, integer) from public, anon, authenticated;
+grant execute on function public.claim_media_processing_jobs(integer, integer) to service_role;
+
+create or replace function public.count_media_processing_pending()
+returns bigint
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select count(*)
+  from public.media_processing_jobs j
+  where j.status = 'pending'
+    or (
+      j.status = 'processing'
+      and (
+        j."lastStartedAt" is null
+        or j."lastStartedAt" < now() - interval '15 minutes'
+      )
+    );
+$$;
+
+revoke all on function public.count_media_processing_pending() from public, anon, authenticated;
+grant execute on function public.count_media_processing_pending() to service_role;
 
 drop policy if exists "user_sessions_owner_or_admin" on public.user_sessions;
 create policy "user_sessions_owner_or_admin"

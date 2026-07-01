@@ -7,7 +7,8 @@
 - Definir `INFINITEPAY_WEBHOOK_SECRET` e configurar o mesmo segredo na InfinitePay.
 - Manter `INFINITEPAY_ALLOW_UNSIGNED_WEBHOOKS=false` em producao.
 - Definir `DOWNLOAD_TOKEN_SECRET` com valor aleatorio forte.
-- Definir `CRON_SECRET` para `/api/payments/reconcile`.
+- Definir `CRON_SECRET` para `/api/payments/reconcile` e `/api/media/jobs/process`.
+- Antes de habilitar `MEDIA_PROCESSOR_ENABLED=true`, confirmar `MEDIA_STORAGE_PROVIDER=supabase`, `MEDIA_BUCKET`, `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY`.
 - Definir `API_JSON_BODY_LIMIT_BYTES=204800` e `WEBHOOK_MAX_BODY_BYTES=204800` para limitar payloads JSON.
 - Definir `OPERATIONS_SECRET` se `/api/system?route=checkout-debug` for usado em staging.
 - Nunca expor `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `BUCKET_API_TOKEN` ou `RESEND_API_KEY` em variaveis `VITE_*`.

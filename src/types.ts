@@ -91,6 +91,11 @@ export interface Product {
   faceIndexStatus?: 'pending' | 'processing' | 'indexed' | 'no_face' | 'failed' | 'disabled';
   faceIndexError?: string | null;
   faceIndexedAt?: string | null;
+  faceIndexAttempts?: number;
+  faceIndexErrorCode?: string | null;
+  faceProcessingStartedAt?: string | null;
+  faceProcessedAt?: string | null;
+  faceIndexRunId?: string | null;
   status?: 'draft' | 'pending' | 'processing' | 'published' | 'sold' | 'hidden' | 'removed';
   createdAt?: string;
   favoriteCount?: number;

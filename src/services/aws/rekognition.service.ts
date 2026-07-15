@@ -3,6 +3,7 @@ import {
   DeleteFacesCommand,
   DescribeCollectionCommand,
   IndexFacesCommand,
+  ListFacesCommand,
   ListCollectionsCommand,
   RekognitionClient,
   SearchFacesByImageCommand,
@@ -89,6 +90,38 @@ export async function listCollections() {
   const { region, timeoutMs } = getRekognitionConfig();
   const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new ListCollectionsCommand({ MaxResults: 100 }), { abortSignal }));
   return result.CollectionIds || [];
+}
+
+export async function getCollectionMetadata() {
+  await ensureCollection();
+  const { collectionId, region, timeoutMs } = getRekognitionConfig();
+  const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new DescribeCollectionCommand({
+    CollectionId: collectionId,
+  }), { abortSignal }));
+  return {
+    collectionId,
+    faceCount: result.FaceCount || 0,
+    faceModelVersion: result.FaceModelVersion || null,
+  };
+}
+
+export async function listFacesByExternalImageId(externalImageId: string): Promise<FaceRecord[]> {
+  await ensureCollection();
+  const { collectionId, region, timeoutMs } = getRekognitionConfig();
+  const records: FaceRecord[] = [];
+  let nextToken: string | undefined;
+  do {
+    const result = await sendWithTimeout(timeoutMs, (abortSignal) => getClient(region).send(new ListFacesCommand({
+      CollectionId: collectionId,
+      MaxResults: 4096,
+      NextToken: nextToken,
+    }), { abortSignal }));
+    records.push(...(result.Faces || [])
+      .filter((face) => face.ExternalImageId === externalImageId)
+      .map((Face) => ({ Face })));
+    nextToken = result.NextToken;
+  } while (nextToken);
+  return records;
 }
 
 export async function indexFaces(input: { bucket: string; key: string; photoId: string }): Promise<FaceRecord[]> {

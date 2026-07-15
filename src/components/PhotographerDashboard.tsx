@@ -81,6 +81,8 @@ type UploadItem = {
   uploadedThumbnailPath?: string | null;
   preparedFileSize?: number | null;
   productId?: string | null;
+  faceIndexStatus?: Product['faceIndexStatus'];
+  faceIndexError?: string | null;
 };
 
 type UploadItemStatus = ResumableUploadItemStatus;
@@ -3276,11 +3278,43 @@ export function PhotographerDashboard({ photographer, onLogout }: PhotographerDa
             action: duplicateAction === 'replace' ? 'replace' : duplicateAction === 'copy' ? 'copy' : 'create',
           });
           if (indexedPhotoId && selectedEvent?.id && uploadFile.type.startsWith('image/')) {
-            console.info('[face-index] automatic:queued-background', {
+            const faceIndexPhotoId = indexedPhotoId;
+            const faceIndexEventId = selectedEvent.id;
+            console.info('[face-index] request:start', {
               photoId: indexedPhotoId,
-              eventId: selectedEvent.id,
+              eventId: faceIndexEventId,
               uploadBatchId,
             });
+            setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index
+              ? { ...uploadItem, faceIndexStatus: 'pending', faceIndexError: null }
+              : uploadItem));
+            void productService.indexProductFace(faceIndexPhotoId, faceIndexEventId)
+              .then((result) => {
+                setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index
+                  ? { ...uploadItem, faceIndexStatus: result.status as Product['faceIndexStatus'], faceIndexError: null }
+                  : uploadItem));
+                console.info('[face-index] request:accepted', {
+                  photoId: faceIndexPhotoId,
+                  eventId: faceIndexEventId,
+                  uploadBatchId,
+                  status: result.status,
+                  facesIndexed: result.facesIndexed,
+                  attempt: result.attempt,
+                  reused: result.reused,
+                });
+              })
+              .catch((faceIndexError) => {
+                const message = faceIndexError instanceof Error ? faceIndexError.message : String(faceIndexError || '');
+                setSelectedFiles((current) => current.map((uploadItem, itemIndex) => itemIndex === index
+                  ? { ...uploadItem, faceIndexStatus: 'failed', faceIndexError: message }
+                  : uploadItem));
+                console.error('[face-index] request:failed', {
+                  photoId: faceIndexPhotoId,
+                  eventId: faceIndexEventId,
+                  uploadBatchId,
+                  message,
+                });
+              });
           }
           if (indexedPhotoId) {
             enqueueMediaProcessingJobs({

@@ -1,25 +1,22 @@
 import { randomUUID } from 'node:crypto';
 import { getClientIp } from '../shared/security.js';
 import { deletePrivateObject, getAwsS3Config, testS3Connection, uploadPrivateImage } from '../../src/services/aws/s3.service.js';
-import { getRekognitionConfig, indexFaces, removeFaces, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
-import { faceError, isUuid, parseSelfieMultipart, readJsonBody, readRequestBuffer, validateImage } from './face-utils.js';
+import { getRekognitionConfig, searchFaces, testRekognitionConnection } from '../../src/services/aws/rekognition.service.js';
+import { faceError, isUuid, parseSelfieMultipart, readJsonBody, validateImage } from './face-utils.js';
 import { runFaceBackfill } from './face-backfill.js';
+import { processPhotoFaceIndex } from './face-indexing.js';
 import {
   createFaceSearchConsent,
   getAuthenticatedUser,
   getEvent,
   getMatchesByEvent,
   getOwnedPhoto,
-  getPhotoFaces,
   hasValidFaceSearchConsent,
-  replacePhotoFaces,
-  updatePhotoFaceStatus,
 } from './face-repository.js';
 
 export async function indexPhotoHandler(req: any, res: any) {
   const photoId = String(req.headers?.['x-photo-id'] || '').trim();
   const eventId = String(req.headers?.['x-event-id'] || '').trim();
-  const contentType = String(req.headers?.['content-type'] || '').toLowerCase();
   const authUser = await getAuthenticatedUser(req);
 
   if (!authUser?.id) return res.status(401).json({ error: 'Autenticação de fotógrafo necessária.' });
@@ -32,29 +29,11 @@ export async function indexPhotoHandler(req: any, res: any) {
   if (!event?.id || event.photographerId !== authUser.id) return res.status(403).json({ error: 'Evento não pertence a este fotógrafo.' });
 
   try {
-    const buffer = await readRequestBuffer(req);
-    validateImage(buffer, contentType);
-    await updatePhotoFaceStatus(photoId, 'processing');
-    const key = `face-index/events/${eventId}/photos/${photoId}`;
-    const object = await uploadPrivateImage({ key, buffer, contentType, metadata: { photoId, eventId } });
-    const oldFaces = await getPhotoFaces(photoId);
-    await removeFaces(oldFaces.map((face) => face.face_id));
-    const records = await indexFaces({ ...object, photoId });
-    await replacePhotoFaces({
-      photoId,
-      eventId,
-      faces: records.flatMap((record) => record.Face?.FaceId ? [{
-        faceId: record.Face.FaceId,
-        imageId: record.Face.ImageId,
-        confidence: record.Face.Confidence,
-      }] : []),
-    });
-    await updatePhotoFaceStatus(photoId, records.length > 0 ? 'indexed' : 'no_face');
-    return res.status(200).json({ status: records.length > 0 ? 'indexed' : 'no_face', facesIndexed: records.length });
+    const result = await processPhotoFaceIndex({ photoId, eventId, photographerId: authUser.id });
+    return res.status(result.status === 'processing' ? 202 : 200).json(result);
   } catch (error: any) {
     const response = faceError(error, 'Não foi possível indexar a foto.');
-    await updatePhotoFaceStatus(photoId, response.statusCode === 422 ? 'no_face' : 'failed', response.message).catch(() => undefined);
-    console.error('[aws-rekognition] index:error', { photoId, eventId, name: error?.name, message: error?.message });
+    console.error('[face-index] request:error', { photoId, eventId, photographerId: authUser.id, name: error?.name, message: error?.message });
     return res.status(response.statusCode).json({ error: response.message });
   }
 }

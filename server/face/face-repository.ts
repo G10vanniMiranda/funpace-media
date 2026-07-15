@@ -8,6 +8,20 @@ export type FaceRow = {
   confidence: number | null;
 };
 
+export type FaceIndexPhoto = {
+  id: string;
+  eventId: string | null;
+  vendedorId: string;
+  storagePath: string | null;
+  url: string;
+  type: string;
+  status: string;
+  faceIndexStatus: string;
+  faceIndexAttempts: number;
+  faceIndexRunId: string | null;
+  faceIndexError: string | null;
+};
+
 export type BackfillPhoto = {
   id: string;
   eventId: string | null;
@@ -37,7 +51,24 @@ export async function getAuthenticatedUser(req: any) {
 }
 
 export async function getOwnedPhoto(photoId: string, photographerId: string) {
-  const rows = await supabaseRequest<any[]>(`/rest/v1/products?select=id,type,status,eventId,vendedorId&id=eq.${encodeURIComponent(photoId)}&vendedorId=eq.${encodeURIComponent(photographerId)}&limit=1`);
+  const rows = await supabaseRequest<FaceIndexPhoto[]>(`/rest/v1/products?select=id,type,status,eventId,vendedorId,storagePath,url,faceIndexStatus,faceIndexAttempts,faceIndexRunId,faceIndexError&id=eq.${encodeURIComponent(photoId)}&vendedorId=eq.${encodeURIComponent(photographerId)}&limit=1`);
+  return rows[0] || null;
+}
+
+export async function claimPhotoFaceIndex(input: {
+  photoId: string;
+  eventId: string;
+  photographerId: string;
+}) {
+  const rows = await supabaseRequest<FaceIndexPhoto[]>('/rest/v1/rpc/claim_photo_face_index', {
+    method: 'POST',
+    body: JSON.stringify({
+      target_photo_id: input.photoId,
+      target_event_id: input.eventId,
+      target_photographer_id: input.photographerId,
+      stale_after_minutes: 15,
+    }),
+  });
   return rows[0] || null;
 }
 
@@ -134,6 +165,52 @@ export async function replacePhotoFaces(input: {
       }))),
     });
   }
+}
+
+export async function completePhotoFaceIndex(input: {
+  photoId: string;
+  eventId: string;
+  photographerId: string;
+  runId: string;
+  collectionId: string;
+  modelVersion?: string | null;
+  faces: Array<{ faceId: string; imageId?: string; confidence?: number }>;
+}) {
+  const rows = await supabaseRequest<FaceIndexPhoto[]>('/rest/v1/rpc/complete_photo_face_index', {
+    method: 'POST',
+    body: JSON.stringify({
+      target_photo_id: input.photoId,
+      target_event_id: input.eventId,
+      target_photographer_id: input.photographerId,
+      target_run_id: input.runId,
+      target_collection_id: input.collectionId,
+      target_model_version: input.modelVersion || null,
+      indexed_faces: input.faces.map((face) => ({
+        face_id: face.faceId,
+        image_id: face.imageId || null,
+        confidence: face.confidence ?? null,
+      })),
+    }),
+  });
+  return rows[0] || null;
+}
+
+export async function failPhotoFaceIndex(input: {
+  photoId: string;
+  runId: string;
+  errorCode: string;
+  errorMessage: string;
+}) {
+  const rows = await supabaseRequest<FaceIndexPhoto[]>('/rest/v1/rpc/fail_photo_face_index', {
+    method: 'POST',
+    body: JSON.stringify({
+      target_photo_id: input.photoId,
+      target_run_id: input.runId,
+      target_error_code: input.errorCode.slice(0, 120),
+      target_error_message: input.errorMessage.slice(0, 1000),
+    }),
+  });
+  return rows[0] || null;
 }
 
 export async function updatePhotoFaceStatus(photoId: string, status: string, error?: string) {

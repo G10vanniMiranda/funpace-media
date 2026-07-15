@@ -855,23 +855,37 @@ export const productService = {
     return signed.map((product, index) => ({ product, similarity: Number(matches[index]?.similarity || 0) }));
   },
 
-  async indexProductFace(photoId: string, eventId: string, file: File) {
-    if (isMockMode || !file.type.startsWith('image/')) return { status: 'disabled', facesIndexed: 0 };
+  async indexProductFace(photoId: string, eventId: string) {
+    if (isMockMode) return { status: 'disabled', facesIndexed: 0, attempt: 0, reused: false };
     const accessToken = await getCurrentAccessToken();
     if (!accessToken) throw new Error('Sessão de fotógrafo ausente para indexação facial.');
-    const response = await fetch(apiUrl('/api/face/index'), {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': file.type,
-        'X-Photo-Id': photoId,
-        'X-Event-Id': eventId,
-      },
-      body: file,
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload?.error || `Indexação facial falhou com HTTP ${response.status}.`);
-    return payload as { status: string; facesIndexed: number };
+    const maxAttempts = 3;
+    let lastError: unknown = null;
+    for (let requestAttempt = 1; requestAttempt <= maxAttempts; requestAttempt += 1) {
+      try {
+        const response = await fetch(apiUrl('/api/face/index'), {
+          method: 'POST',
+          keepalive: true,
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'X-Photo-Id': photoId,
+            'X-Event-Id': eventId,
+          },
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok) return payload as { status: string; facesIndexed: number; attempt: number; reused: boolean };
+        const error = new Error(payload?.error || `Indexação facial falhou com HTTP ${response.status}.`);
+        if (response.status < 500) throw Object.assign(error, { retryable: false });
+        if (requestAttempt === maxAttempts) throw error;
+        lastError = error;
+      } catch (error) {
+        lastError = error;
+        if ((error as Error & { retryable?: boolean })?.retryable === false) throw error;
+        if (requestAttempt === maxAttempts) throw error;
+      }
+      await new Promise((resolve) => window.setTimeout(resolve, requestAttempt * 500));
+    }
+    throw lastError instanceof Error ? lastError : new Error('Não foi possível solicitar a indexação facial.');
   },
 
   async getVendedorProducts(vendedorId: string): Promise<Product[]> {
@@ -1248,6 +1262,10 @@ export const productService = {
           faceIndexStatus: changes.type === 'IMG' ? 'pending' : 'disabled',
           faceIndexError: changes.type === 'IMG' ? null : 'Mídia não suportada pelo backfill facial.',
           faceIndexedAt: null,
+          faceIndexAttempts: 0,
+          faceIndexErrorCode: null,
+          faceProcessingStartedAt: null,
+          faceIndexRunId: null,
         } : {}),
         updatedAt: new Date().toISOString(),
       },

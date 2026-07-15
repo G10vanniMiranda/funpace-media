@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-07-15T17:28:17.236Z",
+  "manifestSha": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+  "proposalSha": "1662daf50ae340fd5a31a87d257e71d66898b0b2e998d3e7249365312404cc04",
+  "mode": "apply_requested",
+  "snapshotArtifacts": [
+    {
+      "file": "preflight/products.json",
+      "count": 8151,
+      "sha256": "f791c8a718c81fcdfdc3ca4235a06dbb2953a0e7984e24dbc3d2107b93990ce9"
+    },
+    {
+      "file": "preflight/photo_faces.json",
+      "count": 16763,
+      "sha256": "b598c402fe9cdd887d0253091f2e4fd90351e268e20c0878f937514160705f50"
+    },
+    {
+      "file": "preflight/events.json",
+      "count": 16,
+      "sha256": "ba045d62bf97ac2075a6b545d98e5dd79d3b3234880a146e5feb30d55e6b1310"
+    },
+    {
+      "file": "preflight/photographers.json",
+      "count": 24,
+      "sha256": "95cb25c4917d7976bd1576b6a8645d50aabb12afcca4744459a7cf6afe369d6c"
+    },
+    {
+      "file": "preflight/aws_faces.json",
+      "count": 19800,
+      "sha256": "f60f11b2ce018f61a84cb4179518bd15bfaab3599479d95352ab86dd5b2053f4"
+    }
+  ],
+  "awsCount": 19800,
+  "audit": {
+    "products": 8151,
+    "photo_faces": 16763,
+    "event_issues": 3056,
+    "photographer_issues": 13754,
+    "indexed_without_photo_faces": 2066,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 13142
+  },
+  "divergences": []
+}

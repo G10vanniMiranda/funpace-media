@@ -1,0 +1,175 @@
+{
+  "executionId": "phase3b-20260715-approved-138395",
+  "status": "completed",
+  "approvedManifestSha": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+  "proposalSha": "1662daf50ae340fd5a31a87d257e71d66898b0b2e998d3e7249365312404cc04",
+  "applyMode": true,
+  "before": {
+    "database": {
+      "products": 8159,
+      "photo_faces": 16778,
+      "event_issues": 2707,
+      "photographer_issues": 13754,
+      "indexed_without_photo_faces": 2066,
+      "duplicate_face_ids": 0,
+      "duplicate_photo_face_pairs": 0,
+      "face_event_mismatches": 0,
+      "face_photographer_mismatches": 13142
+    },
+    "awsFaces": 19815
+  },
+  "eventResult": {
+    "stage": "event_updates",
+    "expected": 349,
+    "corrected": 0,
+    "ignored": 349,
+    "rejected": 0,
+    "checkpoints": 14,
+    "audit": {
+      "products": 8159,
+      "photo_faces": 16778,
+      "event_issues": 2707,
+      "photographer_issues": 13754,
+      "indexed_without_photo_faces": 2066,
+      "duplicate_face_ids": 0,
+      "duplicate_photo_face_pairs": 0,
+      "face_event_mismatches": 0,
+      "face_photographer_mismatches": 13142
+    },
+    "awsFaces": 19815,
+    "search": {
+      "stage": "event_updates",
+      "protocol": "AWS SearchFacesByImage + corrected product event binding (photo_faces reconstruction pending by approved order)",
+      "threshold": 90,
+      "queryProductId": "01b35631-612f-48aa-ba53-73846c5bd1d6",
+      "eventId": "e57eca5f-6b09-4b8b-ad80-8026170cfc1b",
+      "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+      "awsMatches": 9,
+      "mappedEventMatches": 0,
+      "expectedProductFound": true,
+      "expectedFaceId": "d79f8393-fa7d-4c78-b048-ddc6a373cf9b",
+      "expectedSimilarity": 100,
+      "databaseMappingPendingApprovedStage3": true
+    },
+    "completedAt": "2026-07-15T17:33:12.303Z"
+  },
+  "photographerResult": {
+    "stage": "photographer_updates",
+    "expected": 8488,
+    "corrected": 8488,
+    "ignored": 0,
+    "rejected": 0,
+    "checkpoints": 340,
+    "audit": {
+      "products": 8191,
+      "photo_faces": 16855,
+      "event_issues": 2707,
+      "photographer_issues": 5266,
+      "indexed_without_photo_faces": 2066,
+      "duplicate_face_ids": 0,
+      "duplicate_photo_face_pairs": 0,
+      "face_event_mismatches": 0,
+      "face_photographer_mismatches": 4654
+    },
+    "awsFaces": 19892,
+    "search": {
+      "stage": "photographer_updates",
+      "protocol": "AWS SearchFacesByImage + production DB event filter",
+      "threshold": 90,
+      "queryProductId": "0013c01a-a2fb-4725-8c3b-b4a23e6d4beb",
+      "eventId": "79c4e1be-53f0-4117-83cb-1847f3163f5e",
+      "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+      "awsMatches": 2,
+      "mappedEventMatches": 2,
+      "expectedProductFound": true,
+      "expectedFaceId": "88c76f59-c196-42f6-b1ee-40bab49d9948",
+      "expectedSimilarity": 100,
+      "databaseMappingPendingApprovedStage3": false
+    },
+    "completedAt": "2026-07-15T17:50:48.598Z"
+  },
+  "reconstructionResult": {
+    "stage": "photo_faces_reconstruction",
+    "expected": 393,
+    "corrected": 393,
+    "ignored": 0,
+    "rejected": 0,
+    "checkpoints": 16,
+    "audit": {
+      "products": 8191,
+      "photo_faces": 17248,
+      "event_issues": 2707,
+      "photographer_issues": 5266,
+      "indexed_without_photo_faces": 1744,
+      "duplicate_face_ids": 0,
+      "duplicate_photo_face_pairs": 0,
+      "face_event_mismatches": 0,
+      "face_photographer_mismatches": 4654
+    },
+    "awsFaces": 19892,
+    "search": {
+      "stage": "photo_faces_reconstruction",
+      "protocol": "AWS SearchFacesByImage + production DB event filter",
+      "threshold": 90,
+      "queryProductId": "01b35631-612f-48aa-ba53-73846c5bd1d6",
+      "eventId": "e57eca5f-6b09-4b8b-ad80-8026170cfc1b",
+      "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+      "awsMatches": 9,
+      "mappedEventMatches": 9,
+      "expectedProductFound": true,
+      "expectedFaceId": "d79f8393-fa7d-4c78-b048-ddc6a373cf9b",
+      "expectedSimilarity": 100,
+      "databaseMappingPendingApprovedStage3": false
+    },
+    "completedAt": "2026-07-15T17:51:40.583Z"
+  },
+  "finalAudit": {
+    "before": {
+      "database": {
+        "products": 8159,
+        "photo_faces": 16778,
+        "event_issues": 2707,
+        "photographer_issues": 13754,
+        "indexed_without_photo_faces": 2066,
+        "duplicate_face_ids": 0,
+        "duplicate_photo_face_pairs": 0,
+        "face_event_mismatches": 0,
+        "face_photographer_mismatches": 13142
+      },
+      "awsFaces": 19815
+    },
+    "after": {
+      "database": {
+        "products": 8191,
+        "photo_faces": 17248,
+        "event_issues": 2707,
+        "photographer_issues": 5266,
+        "indexed_without_photo_faces": 1744,
+        "duplicate_face_ids": 0,
+        "duplicate_photo_face_pairs": 0,
+        "face_event_mismatches": 0,
+        "face_photographer_mismatches": 4654
+      },
+      "awsFaces": 19892
+    },
+    "expected": {
+      "products": 8135,
+      "photoFaces": 17055,
+      "awsFaces": 19699,
+      "eventIssues": 2707,
+      "photographerIssues": 5266,
+      "indexedWithoutPhotoFaces": 1744,
+      "awsOrphans": 2644
+    },
+    "awsCandidateFacesStillPresent": true,
+    "allCheckpointsCompleted": true,
+    "duplicates": {
+      "faceIds": 0,
+      "photoFacePairs": 0
+    },
+    "forbiddenAwsOperationsExecuted": []
+  },
+  "completedAt": "2026-07-15T17:51:41.999Z",
+  "rollbackPlan": "C:\\PROJETOS\\FUNPACE\\remix_-funpace-media\\artifacts\\face-recovery-phase3b-dry-run\\2026-07-15T17-18-52-299Z\\rollback-plan.json",
+  "forbiddenOperationsExecuted": []
+}

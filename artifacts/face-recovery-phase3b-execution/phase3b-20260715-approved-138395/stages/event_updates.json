@@ -1,0 +1,35 @@
+{
+  "stage": "event_updates",
+  "expected": 349,
+  "corrected": 0,
+  "ignored": 349,
+  "rejected": 0,
+  "checkpoints": 14,
+  "audit": {
+    "products": 8159,
+    "photo_faces": 16778,
+    "event_issues": 2707,
+    "photographer_issues": 13754,
+    "indexed_without_photo_faces": 2066,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 13142
+  },
+  "awsFaces": 19815,
+  "search": {
+    "stage": "event_updates",
+    "protocol": "AWS SearchFacesByImage + corrected product event binding (photo_faces reconstruction pending by approved order)",
+    "threshold": 90,
+    "queryProductId": "01b35631-612f-48aa-ba53-73846c5bd1d6",
+    "eventId": "e57eca5f-6b09-4b8b-ad80-8026170cfc1b",
+    "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "awsMatches": 9,
+    "mappedEventMatches": 0,
+    "expectedProductFound": true,
+    "expectedFaceId": "d79f8393-fa7d-4c78-b048-ddc6a373cf9b",
+    "expectedSimilarity": 100,
+    "databaseMappingPendingApprovedStage3": true
+  },
+  "completedAt": "2026-07-15T17:33:12.303Z"
+}

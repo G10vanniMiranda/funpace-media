@@ -1,0 +1,104 @@
+{
+  "phase": "3A_read_only_audit",
+  "startedAt": "2026-07-15T17:03:35.920Z",
+  "completedAt": "2026-07-15T17:04:24.993Z",
+  "outputDir": "C:\\PROJETOS\\FUNPACE\\remix_-funpace-media\\artifacts\\face-recovery-phase3a",
+  "readOnlyGuarantee": {
+    "databaseStatements": [
+      "SELECT"
+    ],
+    "awsOperations": [
+      "ListFaces"
+    ],
+    "storageOperations": [
+      "GET list metadata",
+      "HEAD",
+      "GET Range fallback"
+    ],
+    "mutationsPerformed": 0
+  },
+  "inventory": {
+    "products": 8131,
+    "photos": 8089,
+    "indexed": 7343,
+    "pending": 1,
+    "processing": 0,
+    "no_face": 297,
+    "failed": 4,
+    "photo_faces": 16655,
+    "awsFaces": 19692,
+    "storageObjects": 16321,
+    "externalBucketObjects": 16292,
+    "supabaseStorageObjects": 29,
+    "events": 16,
+    "photographers": 24
+  },
+  "indexedWithoutPhotoFaces": {
+    "total": 2066,
+    "byClassification": {
+      "A_automatic_safe": 0,
+      "B_automatic_high_confidence": 0,
+      "C_manual_review": 2066,
+      "D_not_recoverable": 0
+    }
+  },
+  "aws": {
+    "byClassification": {
+      "valid": 3513,
+      "orphan": 3037,
+      "duplicate": 0,
+      "inconsistent": 13142,
+      "without_reference": 0
+    }
+  },
+  "events": {
+    "issues": 3056,
+    "byClassification": {
+      "A_automatic_safe": 349,
+      "B_automatic_high_confidence": 0,
+      "C_manual_review": 0,
+      "D_not_identifiable": 2707
+    }
+  },
+  "photographers": {
+    "issues": 13754,
+    "productIssues": 612,
+    "photoFaceIssues": 13142,
+    "byClassification": {
+      "A_automatic_safe": 8488,
+      "B_automatic_high_confidence": 0,
+      "C_manual_review": 4654,
+      "D_not_identifiable": 612
+    }
+  },
+  "storage": {
+    "auditedPhotos": 8089,
+    "existing": 8086,
+    "missing": 3,
+    "metadataMismatch": 0,
+    "checksumAvailable": 8073,
+    "checksumCompared": 8067
+  },
+  "integrity": {
+    "indexedViolations": 5937,
+    "duplicateDatabaseFaceIds": 0,
+    "duplicateAwsFaceIds": 0,
+    "duplicatePhotoFacePairs": 0
+  },
+  "reconciliationMatrix": {
+    "A_automatic_safe": 8837,
+    "B_automatic_high_confidence": 0,
+    "C_manual_review": 6720,
+    "D_not_recoverable": 0,
+    "D_not_identifiable": 3319
+  },
+  "totals": {
+    "violationInstances": 35058,
+    "uniqueAffectedEntities": 19238
+  },
+  "limitations": [
+    "AWS ListFaces does not expose face creation date.",
+    "AWS ListFaces does not expose last-use timestamps.",
+    "Storage checksum is classified as unavailable when neither the provider manifest nor product metadata provides a comparable digest."
+  ]
+}

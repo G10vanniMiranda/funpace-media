@@ -1,0 +1,29 @@
+[
+  {
+    "productId": "35ef862b-239b-4b32-8a09-4c1a631e0b17",
+    "type": "IMG",
+    "publicationStatus": "removed",
+    "eventId": "b9fe3c61-1567-403b-8028-28abf298ccb8",
+    "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "storage": {
+      "productId": "35ef862b-239b-4b32-8a09-4c1a631e0b17",
+      "source": "https://99dev.pro/bucket/files/public/giovannimiranda09/2026/07/adfc82cbe1a740dd9f2902d569796701.jpg",
+      "bucket": "giovannimiranda09",
+      "storageProvider": "external_bucket",
+      "storageKey": "adfc82cbe1a740dd9f2902d569796701.jpg",
+      "exists": true,
+      "ambiguousManifestMatch": false,
+      "manifestCandidates": 1,
+      "sizeBytes": 157812,
+      "expectedSizeBytes": 157812,
+      "sizeMatches": true,
+      "checksum": "a59572e41991c76119ac5503e7f3769e6dcd8538bfd2a04b224ab441f5c4560c",
+      "expectedChecksum": "a59572e41991c76119ac5503e7f3769e6dcd8538bfd2a04b224ab441f5c4560c",
+      "checksumMatches": true,
+      "integrity": "valid",
+      "probeStatus": null,
+      "error": null
+    },
+    "eligibleForValidatedPipeline": false
+  }
+]

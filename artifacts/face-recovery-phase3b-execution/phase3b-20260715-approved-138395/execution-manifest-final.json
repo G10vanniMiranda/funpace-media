@@ -1,0 +1,64 @@
+{
+  "executionId": "phase3b-20260715-approved-138395",
+  "status": "completed_and_independently_audited",
+  "approvedManifestSha": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+  "finalAuditSha": "4d0edec4db743e942a88e16eafa3a263860c515115fac1099524a050acda9d4c",
+  "effectiveExecution": {
+    "eventIdsCorrected": 349,
+    "photographerIdsCorrected": 8488,
+    "photoFacesReconstructed": 393,
+    "ignoredFromApprovedScope": 0,
+    "rejectedFromApprovedScope": 0,
+    "idempotentReplayNoOps": 698
+  },
+  "before": {
+    "products": 8151,
+    "photo_faces": 16763,
+    "event_issues": 3056,
+    "photographer_issues": 13754,
+    "indexed_without_photo_faces": 2066,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 13142,
+    "aws_faces": 19800
+  },
+  "after": {
+    "products": 8200,
+    "photo_faces": 17263,
+    "aws_faces": 19907,
+    "processing": 0,
+    "pending": 1,
+    "event_issues": 2707,
+    "photographer_issues": 5266,
+    "indexed_without_photo_faces": 1744,
+    "aws_orphans": 2644,
+    "duplicate_database_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "duplicate_aws_face_ids": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 4654
+  },
+  "idempotency": {
+    "allApprovedRowsAtDesiredState": true,
+    "duplicateFree": true,
+    "conditionalReplayWouldMutateRows": 0
+  },
+  "checkpoints": {
+    "uniqueCheckpointFiles": 370,
+    "expected": 370,
+    "allCompleted": true
+  },
+  "searches": {
+    "eventUpdatesPassed": true,
+    "photographerUpdatesPassed": true,
+    "reconstructionPassed": true,
+    "evidenceFiles": [
+      "search/event_updates.json",
+      "search/photographer_updates.json",
+      "search/photo_faces_reconstruction.json"
+    ]
+  },
+  "forbiddenOperationsExecuted": [],
+  "completedAt": "2026-07-15T17:56:28.486Z"
+}

@@ -1,0 +1,35 @@
+{
+  "stage": "photo_faces_reconstruction",
+  "expected": 393,
+  "corrected": 393,
+  "ignored": 0,
+  "rejected": 0,
+  "checkpoints": 16,
+  "audit": {
+    "products": 8191,
+    "photo_faces": 17248,
+    "event_issues": 2707,
+    "photographer_issues": 5266,
+    "indexed_without_photo_faces": 1744,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 4654
+  },
+  "awsFaces": 19892,
+  "search": {
+    "stage": "photo_faces_reconstruction",
+    "protocol": "AWS SearchFacesByImage + production DB event filter",
+    "threshold": 90,
+    "queryProductId": "01b35631-612f-48aa-ba53-73846c5bd1d6",
+    "eventId": "e57eca5f-6b09-4b8b-ad80-8026170cfc1b",
+    "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "awsMatches": 9,
+    "mappedEventMatches": 9,
+    "expectedProductFound": true,
+    "expectedFaceId": "d79f8393-fa7d-4c78-b048-ddc6a373cf9b",
+    "expectedSimilarity": 100,
+    "databaseMappingPendingApprovedStage3": false
+  },
+  "completedAt": "2026-07-15T17:51:40.583Z"
+}

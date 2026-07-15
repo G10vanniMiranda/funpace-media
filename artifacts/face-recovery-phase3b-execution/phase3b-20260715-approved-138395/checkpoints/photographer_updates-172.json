@@ -1,0 +1,21 @@
+{
+  "stage": "photographer_updates",
+  "checkpoint": 172,
+  "batchSize": 25,
+  "cumulative": 4300,
+  "corrected": 4300,
+  "ignored": 0,
+  "rejected": 0,
+  "audit": {
+    "products": 8175,
+    "photo_faces": 16820,
+    "event_issues": 2707,
+    "photographer_issues": 9454,
+    "indexed_without_photo_faces": 2066,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 8842
+  },
+  "completedAt": "2026-07-15T17:42:23.994Z"
+}

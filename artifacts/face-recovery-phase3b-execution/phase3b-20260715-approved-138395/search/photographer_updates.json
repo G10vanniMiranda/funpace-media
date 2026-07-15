@@ -1,0 +1,19 @@
+{
+  "passed": true,
+  "attempts": [
+    {
+      "stage": "photographer_updates",
+      "protocol": "AWS SearchFacesByImage + production DB event filter",
+      "threshold": 90,
+      "queryProductId": "0013c01a-a2fb-4725-8c3b-b4a23e6d4beb",
+      "eventId": "79c4e1be-53f0-4117-83cb-1847f3163f5e",
+      "photographerId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+      "awsMatches": 2,
+      "mappedEventMatches": 2,
+      "expectedProductFound": true,
+      "expectedFaceId": "88c76f59-c196-42f6-b1ee-40bab49d9948",
+      "expectedSimilarity": 100,
+      "databaseMappingPendingApprovedStage3": false
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+{
+  "auditedAt": "2026-07-15T17:56:28.483Z",
+  "approvedManifestSha": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+  "proposalSha": "1662daf50ae340fd5a31a87d257e71d66898b0b2e998d3e7249365312404cc04",
+  "effectiveExecution": {
+    "eventIdsCorrected": 349,
+    "photographerIdsCorrected": 8488,
+    "photoFacesReconstructed": 393,
+    "ignoredFromApprovedScope": 0,
+    "rejectedFromApprovedScope": 0,
+    "idempotentReplayNoOps": 698
+  },
+  "targetValidation": {
+    "eventMismatches": 0,
+    "photographerMismatches": 0,
+    "reconstructionMismatches": 0,
+    "reconstructionAwsMismatches": 0
+  },
+  "before": {
+    "products": 8151,
+    "photo_faces": 16763,
+    "event_issues": 3056,
+    "photographer_issues": 13754,
+    "indexed_without_photo_faces": 2066,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 13142,
+    "aws_faces": 19800
+  },
+  "after": {
+    "products": 8200,
+    "photo_faces": 17263,
+    "aws_faces": 19907,
+    "processing": 0,
+    "pending": 1,
+    "event_issues": 2707,
+    "photographer_issues": 5266,
+    "indexed_without_photo_faces": 1744,
+    "aws_orphans": 2644,
+    "duplicate_database_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "duplicate_aws_face_ids": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 4654
+  },
+  "differencesFromDryRun": {
+    "coreActionCounts": {
+      "eventIds": 0,
+      "photographerIds": 0,
+      "photoFaces": 0
+    },
+    "ambientProductsCreatedSinceExecutionPreflight": 49,
+    "ambientPhotoFacesCreatedSinceExecutionPreflight": 107,
+    "ambientAwsFacesCreatedSinceExecutionPreflight": 107
+  },
+  "idempotency": {
+    "allApprovedRowsAtDesiredState": true,
+    "duplicateFree": true,
+    "conditionalReplayWouldMutateRows": 0
+  },
+  "checkpoints": {
+    "uniqueCheckpointFiles": 370,
+    "expected": 370,
+    "allCompleted": true
+  },
+  "searches": {
+    "eventUpdatesPassed": true,
+    "photographerUpdatesPassed": true,
+    "reconstructionPassed": true,
+    "evidenceFiles": [
+      "search/event_updates.json",
+      "search/photographer_updates.json",
+      "search/photo_faces_reconstruction.json"
+    ]
+  },
+  "executionStops": [
+    {
+      "timestamp": "2026-07-15T17:29:13.190Z",
+      "message": "for SELECT DISTINCT, ORDER BY expressions must appear in select list",
+      "stoppedImmediately": true
+    },
+    {
+      "timestamp": "2026-07-15T17:31:29.418Z",
+      "message": "Real face search validation failed for event_updates.",
+      "stoppedImmediately": true
+    }
+  ],
+  "awsOperationsUsedByPhase3B": [
+    "ListFaces",
+    "SearchFacesByImage"
+  ],
+  "forbiddenOperationsExecutedByPhase3B": [],
+  "filesChangedInProductionData": [
+    "public.products.eventId",
+    "public.photo_faces.photographer_id",
+    "public.photo_faces (393 inserted rows)"
+  ],
+  "afterArtifacts": [
+    {
+      "file": "after/products.json",
+      "sha256": "2ede1b04c4cb427332ceffbdc4e61db5aa4454e03dd8b286528ac817aa3efbd5"
+    },
+    {
+      "file": "after/photo_faces.json",
+      "sha256": "187eb3d850d49b625b1060ce5bd0d1acc58ec2bca7f401a8596c606658adb0fa"
+    },
+    {
+      "file": "after/events.json",
+      "sha256": "ba045d62bf97ac2075a6b545d98e5dd79d3b3234880a146e5feb30d55e6b1310"
+    },
+    {
+      "file": "after/photographers.json",
+      "sha256": "95cb25c4917d7976bd1576b6a8645d50aabb12afcca4744459a7cf6afe369d6c"
+    },
+    {
+      "file": "after/aws_faces.json",
+      "sha256": "b27ab11a767ee4e508a87d45838c04ce367c92e05a7bf93c740d0963e47ccad5"
+    }
+  ],
+  "rollbackPlan": "artifacts/face-recovery-phase3b-dry-run/2026-07-15T17-18-52-299Z/rollback-plan.json"
+}

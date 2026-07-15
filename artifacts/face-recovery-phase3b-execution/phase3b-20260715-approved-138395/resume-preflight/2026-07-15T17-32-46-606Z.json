@@ -1,0 +1,46 @@
+{
+  "checkedAt": "2026-07-15T17:32:49.060Z",
+  "manifestSha": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+  "proposalSha": "1662daf50ae340fd5a31a87d257e71d66898b0b2e998d3e7249365312404cc04",
+  "mode": "apply_requested",
+  "snapshotArtifacts": [
+    {
+      "file": "resume-preflight/2026-07-15T17-32-46-606Z/products.json",
+      "count": 8159,
+      "sha256": "3e15030f8e04878f302aa5eed21f9b6fb45e8a4bde2c727a1ad8d5364c5da3ea"
+    },
+    {
+      "file": "resume-preflight/2026-07-15T17-32-46-606Z/photo_faces.json",
+      "count": 16778,
+      "sha256": "37292c9d6e987a9874d4f6d9ca635532f7d7623f87d2b20f7df21d5a281cdb3c"
+    },
+    {
+      "file": "resume-preflight/2026-07-15T17-32-46-606Z/events.json",
+      "count": 16,
+      "sha256": "ba045d62bf97ac2075a6b545d98e5dd79d3b3234880a146e5feb30d55e6b1310"
+    },
+    {
+      "file": "resume-preflight/2026-07-15T17-32-46-606Z/photographers.json",
+      "count": 24,
+      "sha256": "95cb25c4917d7976bd1576b6a8645d50aabb12afcca4744459a7cf6afe369d6c"
+    },
+    {
+      "file": "resume-preflight/2026-07-15T17-32-46-606Z/aws_faces.json",
+      "count": 19815,
+      "sha256": "46323c40643bccaffeb5ab359cb9fe8fbb40eef6339bd8eb58acb6c1b0466f16"
+    }
+  ],
+  "awsCount": 19815,
+  "audit": {
+    "products": 8159,
+    "photo_faces": 16778,
+    "event_issues": 2707,
+    "photographer_issues": 13754,
+    "indexed_without_photo_faces": 2066,
+    "duplicate_face_ids": 0,
+    "duplicate_photo_face_pairs": 0,
+    "face_event_mismatches": 0,
+    "face_photographer_mismatches": 13142
+  },
+  "divergences": []
+}

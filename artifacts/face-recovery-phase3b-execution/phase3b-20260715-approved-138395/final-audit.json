@@ -1,0 +1,46 @@
+{
+  "before": {
+    "database": {
+      "products": 8159,
+      "photo_faces": 16778,
+      "event_issues": 2707,
+      "photographer_issues": 13754,
+      "indexed_without_photo_faces": 2066,
+      "duplicate_face_ids": 0,
+      "duplicate_photo_face_pairs": 0,
+      "face_event_mismatches": 0,
+      "face_photographer_mismatches": 13142
+    },
+    "awsFaces": 19815
+  },
+  "after": {
+    "database": {
+      "products": 8191,
+      "photo_faces": 17248,
+      "event_issues": 2707,
+      "photographer_issues": 5266,
+      "indexed_without_photo_faces": 1744,
+      "duplicate_face_ids": 0,
+      "duplicate_photo_face_pairs": 0,
+      "face_event_mismatches": 0,
+      "face_photographer_mismatches": 4654
+    },
+    "awsFaces": 19892
+  },
+  "expected": {
+    "products": 8135,
+    "photoFaces": 17055,
+    "awsFaces": 19699,
+    "eventIssues": 2707,
+    "photographerIssues": 5266,
+    "indexedWithoutPhotoFaces": 1744,
+    "awsOrphans": 2644
+  },
+  "awsCandidateFacesStillPresent": true,
+  "allCheckpointsCompleted": true,
+  "duplicates": {
+    "faceIds": 0,
+    "photoFacePairs": 0
+  },
+  "forbiddenAwsOperationsExecuted": []
+}

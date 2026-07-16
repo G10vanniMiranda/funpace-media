@@ -1,0 +1,1506 @@
+[
+  {
+    "kind": "event_photographer_updates",
+    "checkpoint": 1,
+    "batchSize": 1,
+    "cumulative": 1,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 1,
+    "batchSize": 25,
+    "cumulative": 25,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 2,
+    "batchSize": 25,
+    "cumulative": 50,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 3,
+    "batchSize": 25,
+    "cumulative": 75,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 4,
+    "batchSize": 25,
+    "cumulative": 100,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 5,
+    "batchSize": 25,
+    "cumulative": 125,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 6,
+    "batchSize": 25,
+    "cumulative": 150,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 7,
+    "batchSize": 25,
+    "cumulative": 175,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 8,
+    "batchSize": 25,
+    "cumulative": 200,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 9,
+    "batchSize": 25,
+    "cumulative": 225,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 10,
+    "batchSize": 25,
+    "cumulative": 250,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 11,
+    "batchSize": 25,
+    "cumulative": 275,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 12,
+    "batchSize": 25,
+    "cumulative": 300,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 13,
+    "batchSize": 25,
+    "cumulative": 325,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 14,
+    "batchSize": 25,
+    "cumulative": 350,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 15,
+    "batchSize": 25,
+    "cumulative": 375,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 16,
+    "batchSize": 25,
+    "cumulative": 400,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 17,
+    "batchSize": 25,
+    "cumulative": 425,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 18,
+    "batchSize": 25,
+    "cumulative": 450,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 19,
+    "batchSize": 25,
+    "cumulative": 475,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 20,
+    "batchSize": 25,
+    "cumulative": 500,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 21,
+    "batchSize": 25,
+    "cumulative": 525,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 22,
+    "batchSize": 25,
+    "cumulative": 550,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 23,
+    "batchSize": 25,
+    "cumulative": 575,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 24,
+    "batchSize": 25,
+    "cumulative": 600,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 25,
+    "batchSize": 25,
+    "cumulative": 625,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 26,
+    "batchSize": 25,
+    "cumulative": 650,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 27,
+    "batchSize": 25,
+    "cumulative": 675,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 28,
+    "batchSize": 25,
+    "cumulative": 700,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 29,
+    "batchSize": 25,
+    "cumulative": 725,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 30,
+    "batchSize": 25,
+    "cumulative": 750,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 31,
+    "batchSize": 25,
+    "cumulative": 775,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 32,
+    "batchSize": 25,
+    "cumulative": 800,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 33,
+    "batchSize": 25,
+    "cumulative": 825,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 34,
+    "batchSize": 25,
+    "cumulative": 850,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 35,
+    "batchSize": 25,
+    "cumulative": 875,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 36,
+    "batchSize": 25,
+    "cumulative": 900,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 37,
+    "batchSize": 25,
+    "cumulative": 925,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 38,
+    "batchSize": 25,
+    "cumulative": 950,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 39,
+    "batchSize": 25,
+    "cumulative": 975,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 40,
+    "batchSize": 25,
+    "cumulative": 1000,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 41,
+    "batchSize": 25,
+    "cumulative": 1025,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 42,
+    "batchSize": 25,
+    "cumulative": 1050,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 43,
+    "batchSize": 25,
+    "cumulative": 1075,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 44,
+    "batchSize": 25,
+    "cumulative": 1100,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 45,
+    "batchSize": 25,
+    "cumulative": 1125,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 46,
+    "batchSize": 25,
+    "cumulative": 1150,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 47,
+    "batchSize": 25,
+    "cumulative": 1175,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 48,
+    "batchSize": 25,
+    "cumulative": 1200,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 49,
+    "batchSize": 25,
+    "cumulative": 1225,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 50,
+    "batchSize": 25,
+    "cumulative": 1250,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 51,
+    "batchSize": 25,
+    "cumulative": 1275,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 52,
+    "batchSize": 25,
+    "cumulative": 1300,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 53,
+    "batchSize": 25,
+    "cumulative": 1325,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 54,
+    "batchSize": 25,
+    "cumulative": 1350,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 55,
+    "batchSize": 25,
+    "cumulative": 1375,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 56,
+    "batchSize": 25,
+    "cumulative": 1400,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 57,
+    "batchSize": 25,
+    "cumulative": 1425,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 58,
+    "batchSize": 25,
+    "cumulative": 1450,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 59,
+    "batchSize": 25,
+    "cumulative": 1475,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 60,
+    "batchSize": 25,
+    "cumulative": 1500,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 61,
+    "batchSize": 25,
+    "cumulative": 1525,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 62,
+    "batchSize": 25,
+    "cumulative": 1550,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 63,
+    "batchSize": 25,
+    "cumulative": 1575,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 64,
+    "batchSize": 25,
+    "cumulative": 1600,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 65,
+    "batchSize": 25,
+    "cumulative": 1625,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 66,
+    "batchSize": 25,
+    "cumulative": 1650,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 67,
+    "batchSize": 25,
+    "cumulative": 1675,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 68,
+    "batchSize": 25,
+    "cumulative": 1700,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 69,
+    "batchSize": 25,
+    "cumulative": 1725,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 70,
+    "batchSize": 25,
+    "cumulative": 1750,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 71,
+    "batchSize": 25,
+    "cumulative": 1775,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 72,
+    "batchSize": 25,
+    "cumulative": 1800,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 73,
+    "batchSize": 25,
+    "cumulative": 1825,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 74,
+    "batchSize": 25,
+    "cumulative": 1850,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 75,
+    "batchSize": 25,
+    "cumulative": 1875,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 76,
+    "batchSize": 25,
+    "cumulative": 1900,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 77,
+    "batchSize": 25,
+    "cumulative": 1925,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 78,
+    "batchSize": 25,
+    "cumulative": 1950,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 79,
+    "batchSize": 25,
+    "cumulative": 1975,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 80,
+    "batchSize": 25,
+    "cumulative": 2000,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 81,
+    "batchSize": 25,
+    "cumulative": 2025,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 82,
+    "batchSize": 25,
+    "cumulative": 2050,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 83,
+    "batchSize": 25,
+    "cumulative": 2075,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 84,
+    "batchSize": 25,
+    "cumulative": 2100,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 85,
+    "batchSize": 25,
+    "cumulative": 2125,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 86,
+    "batchSize": 25,
+    "cumulative": 2150,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 87,
+    "batchSize": 25,
+    "cumulative": 2175,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 88,
+    "batchSize": 25,
+    "cumulative": 2200,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 89,
+    "batchSize": 25,
+    "cumulative": 2225,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 90,
+    "batchSize": 25,
+    "cumulative": 2250,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 91,
+    "batchSize": 25,
+    "cumulative": 2275,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 92,
+    "batchSize": 25,
+    "cumulative": 2300,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 93,
+    "batchSize": 25,
+    "cumulative": 2325,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 94,
+    "batchSize": 25,
+    "cumulative": 2350,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 95,
+    "batchSize": 25,
+    "cumulative": 2375,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 96,
+    "batchSize": 25,
+    "cumulative": 2400,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 97,
+    "batchSize": 25,
+    "cumulative": 2425,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 98,
+    "batchSize": 25,
+    "cumulative": 2450,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 99,
+    "batchSize": 25,
+    "cumulative": 2475,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 100,
+    "batchSize": 25,
+    "cumulative": 2500,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 101,
+    "batchSize": 25,
+    "cumulative": 2525,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 102,
+    "batchSize": 25,
+    "cumulative": 2550,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 103,
+    "batchSize": 25,
+    "cumulative": 2575,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 104,
+    "batchSize": 25,
+    "cumulative": 2600,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 105,
+    "batchSize": 25,
+    "cumulative": 2625,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 106,
+    "batchSize": 25,
+    "cumulative": 2650,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 107,
+    "batchSize": 25,
+    "cumulative": 2675,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 108,
+    "batchSize": 25,
+    "cumulative": 2700,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 109,
+    "batchSize": 25,
+    "cumulative": 2725,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 110,
+    "batchSize": 25,
+    "cumulative": 2750,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 111,
+    "batchSize": 25,
+    "cumulative": 2775,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 112,
+    "batchSize": 25,
+    "cumulative": 2800,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 113,
+    "batchSize": 25,
+    "cumulative": 2825,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 114,
+    "batchSize": 25,
+    "cumulative": 2850,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 115,
+    "batchSize": 25,
+    "cumulative": 2875,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 116,
+    "batchSize": 25,
+    "cumulative": 2900,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 117,
+    "batchSize": 25,
+    "cumulative": 2925,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 118,
+    "batchSize": 25,
+    "cumulative": 2950,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 119,
+    "batchSize": 25,
+    "cumulative": 2975,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 120,
+    "batchSize": 25,
+    "cumulative": 3000,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 121,
+    "batchSize": 25,
+    "cumulative": 3025,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 122,
+    "batchSize": 25,
+    "cumulative": 3050,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 123,
+    "batchSize": 25,
+    "cumulative": 3075,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 124,
+    "batchSize": 25,
+    "cumulative": 3100,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 125,
+    "batchSize": 25,
+    "cumulative": 3125,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 126,
+    "batchSize": 25,
+    "cumulative": 3150,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 127,
+    "batchSize": 25,
+    "cumulative": 3175,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 128,
+    "batchSize": 25,
+    "cumulative": 3200,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 129,
+    "batchSize": 25,
+    "cumulative": 3225,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 130,
+    "batchSize": 25,
+    "cumulative": 3250,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 131,
+    "batchSize": 25,
+    "cumulative": 3275,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 132,
+    "batchSize": 25,
+    "cumulative": 3300,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 133,
+    "batchSize": 25,
+    "cumulative": 3325,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 134,
+    "batchSize": 25,
+    "cumulative": 3350,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 135,
+    "batchSize": 25,
+    "cumulative": 3375,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 136,
+    "batchSize": 25,
+    "cumulative": 3400,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 137,
+    "batchSize": 25,
+    "cumulative": 3425,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 138,
+    "batchSize": 25,
+    "cumulative": 3450,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 139,
+    "batchSize": 25,
+    "cumulative": 3475,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 140,
+    "batchSize": 25,
+    "cumulative": 3500,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 141,
+    "batchSize": 25,
+    "cumulative": 3525,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 142,
+    "batchSize": 25,
+    "cumulative": 3550,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 143,
+    "batchSize": 25,
+    "cumulative": 3575,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 144,
+    "batchSize": 25,
+    "cumulative": 3600,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 145,
+    "batchSize": 25,
+    "cumulative": 3625,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 146,
+    "batchSize": 25,
+    "cumulative": 3650,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 147,
+    "batchSize": 25,
+    "cumulative": 3675,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 148,
+    "batchSize": 25,
+    "cumulative": 3700,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 149,
+    "batchSize": 25,
+    "cumulative": 3725,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 150,
+    "batchSize": 25,
+    "cumulative": 3750,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 151,
+    "batchSize": 25,
+    "cumulative": 3775,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 152,
+    "batchSize": 25,
+    "cumulative": 3800,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 153,
+    "batchSize": 25,
+    "cumulative": 3825,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 154,
+    "batchSize": 25,
+    "cumulative": 3850,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 155,
+    "batchSize": 25,
+    "cumulative": 3875,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 156,
+    "batchSize": 25,
+    "cumulative": 3900,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 157,
+    "batchSize": 25,
+    "cumulative": 3925,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 158,
+    "batchSize": 25,
+    "cumulative": 3950,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 159,
+    "batchSize": 25,
+    "cumulative": 3975,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 160,
+    "batchSize": 25,
+    "cumulative": 4000,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 161,
+    "batchSize": 25,
+    "cumulative": 4025,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 162,
+    "batchSize": 25,
+    "cumulative": 4050,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 163,
+    "batchSize": 25,
+    "cumulative": 4075,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 164,
+    "batchSize": 25,
+    "cumulative": 4100,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 165,
+    "batchSize": 25,
+    "cumulative": 4125,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 166,
+    "batchSize": 25,
+    "cumulative": 4150,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 167,
+    "batchSize": 25,
+    "cumulative": 4175,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 168,
+    "batchSize": 25,
+    "cumulative": 4200,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 169,
+    "batchSize": 25,
+    "cumulative": 4225,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 170,
+    "batchSize": 25,
+    "cumulative": 4250,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 171,
+    "batchSize": 25,
+    "cumulative": 4275,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 172,
+    "batchSize": 25,
+    "cumulative": 4300,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 173,
+    "batchSize": 25,
+    "cumulative": 4325,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 174,
+    "batchSize": 25,
+    "cumulative": 4350,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 175,
+    "batchSize": 25,
+    "cumulative": 4375,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 176,
+    "batchSize": 25,
+    "cumulative": 4400,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 177,
+    "batchSize": 25,
+    "cumulative": 4425,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 178,
+    "batchSize": 25,
+    "cumulative": 4450,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 179,
+    "batchSize": 25,
+    "cumulative": 4475,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 180,
+    "batchSize": 25,
+    "cumulative": 4500,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 181,
+    "batchSize": 25,
+    "cumulative": 4525,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 182,
+    "batchSize": 25,
+    "cumulative": 4550,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 183,
+    "batchSize": 25,
+    "cumulative": 4575,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 184,
+    "batchSize": 25,
+    "cumulative": 4600,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 185,
+    "batchSize": 25,
+    "cumulative": 4625,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 186,
+    "batchSize": 25,
+    "cumulative": 4650,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  },
+  {
+    "kind": "photo_face_photographer_updates",
+    "checkpoint": 187,
+    "batchSize": 4,
+    "cumulative": 4654,
+    "validation": "simulated_only_no_mutation",
+    "duplicates": 0
+  }
+]

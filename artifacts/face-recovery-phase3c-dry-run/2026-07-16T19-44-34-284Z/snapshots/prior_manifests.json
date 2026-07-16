@@ -1,0 +1,337 @@
+[
+  {
+    "source": "artifacts/face-recovery-phase3a/summary.json",
+    "sha256": "5f5e98ea678b931ac8f0c68740cb6c0d47160e406e411de536d9b39c282a01fa",
+    "content": {
+      "phase": "3A_read_only_audit",
+      "startedAt": "2026-07-15T17:03:35.920Z",
+      "completedAt": "2026-07-15T17:04:24.993Z",
+      "outputDir": "C:\\PROJETOS\\FUNPACE\\remix_-funpace-media\\artifacts\\face-recovery-phase3a",
+      "readOnlyGuarantee": {
+        "databaseStatements": [
+          "SELECT"
+        ],
+        "awsOperations": [
+          "ListFaces"
+        ],
+        "storageOperations": [
+          "GET list metadata",
+          "HEAD",
+          "GET Range fallback"
+        ],
+        "mutationsPerformed": 0
+      },
+      "inventory": {
+        "products": 8131,
+        "photos": 8089,
+        "indexed": 7343,
+        "pending": 1,
+        "processing": 0,
+        "no_face": 297,
+        "failed": 4,
+        "photo_faces": 16655,
+        "awsFaces": 19692,
+        "storageObjects": 16321,
+        "externalBucketObjects": 16292,
+        "supabaseStorageObjects": 29,
+        "events": 16,
+        "photographers": 24
+      },
+      "indexedWithoutPhotoFaces": {
+        "total": 2066,
+        "byClassification": {
+          "A_automatic_safe": 0,
+          "B_automatic_high_confidence": 0,
+          "C_manual_review": 2066,
+          "D_not_recoverable": 0
+        }
+      },
+      "aws": {
+        "byClassification": {
+          "valid": 3513,
+          "orphan": 3037,
+          "duplicate": 0,
+          "inconsistent": 13142,
+          "without_reference": 0
+        }
+      },
+      "events": {
+        "issues": 3056,
+        "byClassification": {
+          "A_automatic_safe": 349,
+          "B_automatic_high_confidence": 0,
+          "C_manual_review": 0,
+          "D_not_identifiable": 2707
+        }
+      },
+      "photographers": {
+        "issues": 13754,
+        "productIssues": 612,
+        "photoFaceIssues": 13142,
+        "byClassification": {
+          "A_automatic_safe": 8488,
+          "B_automatic_high_confidence": 0,
+          "C_manual_review": 4654,
+          "D_not_identifiable": 612
+        }
+      },
+      "storage": {
+        "auditedPhotos": 8089,
+        "existing": 8086,
+        "missing": 3,
+        "metadataMismatch": 0,
+        "checksumAvailable": 8073,
+        "checksumCompared": 8067
+      },
+      "integrity": {
+        "indexedViolations": 5937,
+        "duplicateDatabaseFaceIds": 0,
+        "duplicateAwsFaceIds": 0,
+        "duplicatePhotoFacePairs": 0
+      },
+      "reconciliationMatrix": {
+        "A_automatic_safe": 8837,
+        "B_automatic_high_confidence": 0,
+        "C_manual_review": 6720,
+        "D_not_recoverable": 0,
+        "D_not_identifiable": 3319
+      },
+      "totals": {
+        "violationInstances": 35058,
+        "uniqueAffectedEntities": 19238
+      },
+      "limitations": [
+        "AWS ListFaces does not expose face creation date.",
+        "AWS ListFaces does not expose last-use timestamps.",
+        "Storage checksum is classified as unavailable when neither the provider manifest nor product metadata provides a comparable digest."
+      ]
+    }
+  },
+  {
+    "source": "artifacts/face-recovery-phase3b-dry-run/2026-07-15T17-18-52-299Z/manifest.json",
+    "sha256": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+    "content": {
+      "schemaVersion": 1,
+      "phase": "3B_safe_automatic_reconciliation",
+      "executionId": "2026-07-15T17-18-52-299Z",
+      "mode": "dry_run_only",
+      "startedAt": "2026-07-15T17:18:52.303Z",
+      "completedAt": "2026-07-15T17:18:55.361Z",
+      "collectionId": "funpace-faces",
+      "readOnlyGuarantee": {
+        "databaseOperations": [
+          "BEGIN READ ONLY",
+          "SELECT",
+          "COMMIT"
+        ],
+        "awsOperations": [
+          "ListFaces"
+        ],
+        "filesystemOperations": [
+          "write local audit artifacts"
+        ],
+        "mutationsPerformed": 0,
+        "forbiddenOperationsObserved": []
+      },
+      "rulesVersion": "phase3b-exact-v1",
+      "proposalSha256": "1662daf50ae340fd5a31a87d257e71d66898b0b2e998d3e7249365312404cc04",
+      "evidence": [
+        {
+          "file": "artifacts/face-recovery-phase3a/summary.json",
+          "bytes": 2569,
+          "sha256": "5f5e98ea678b931ac8f0c68740cb6c0d47160e406e411de536d9b39c282a01fa"
+        },
+        {
+          "file": "artifacts/face-recovery-phase3a/event-issues.json",
+          "bytes": 1687050,
+          "sha256": "90c8b9400c52cfba28f72bad041aeddf722f14088cab78129a7a17fe23e82229"
+        },
+        {
+          "file": "artifacts/face-recovery-phase3a/photographer-issues.json",
+          "bytes": 5989613,
+          "sha256": "3699f3ac8600ea2b1805eeb559e19a63ed1b54a2e414cb4c2e1b63f596686bb5"
+        },
+        {
+          "file": "artifacts/face-recovery-phase3a/indexed-without-photo-faces.json",
+          "bytes": 1278132,
+          "sha256": "e5073f7ff48a47f7c8d3d82dca249544551c34becc0f38b563fc34bc1db78152"
+        },
+        {
+          "file": "artifacts/face-recovery-phase3a/aws-faces-audit.json",
+          "bytes": 17724972,
+          "sha256": "faa3502e25f72f589b69e72d9faa8238fe5305b2fe91cb8b4a6dea9b6321294f"
+        },
+        {
+          "file": "artifacts/face-recovery-phase3a/storage-audit.json",
+          "bytes": 6162103,
+          "sha256": "6427df7b12ff2c703e0c5617b4994ff09c48cd7191564f195d6e6319f69f836b"
+        }
+      ],
+      "snapshotAndArtifactHashes": [
+        {
+          "file": "snapshots/products.json",
+          "bytes": 12634981,
+          "sha256": "eb21c66999c294efcc4b1fd80c39da752fd3db37f522ccf585a4cc196db0b26b"
+        },
+        {
+          "file": "snapshots/photo_faces.json",
+          "bytes": 8262704,
+          "sha256": "160f011bc1cfa2f46b8bcc02053b19f77418f8b22ddee2b68c6eb2bc26ffd6e7"
+        },
+        {
+          "file": "snapshots/events.json",
+          "bytes": 12749,
+          "sha256": "ba045d62bf97ac2075a6b545d98e5dd79d3b3234880a146e5feb30d55e6b1310"
+        },
+        {
+          "file": "snapshots/photographers.json",
+          "bytes": 26882,
+          "sha256": "95cb25c4917d7976bd1576b6a8645d50aabb12afcca4744459a7cf6afe369d6c"
+        },
+        {
+          "file": "snapshots/aws-faces.json",
+          "bytes": 4998714,
+          "sha256": "5002973b70c01822e628ceab983e37f53b368969fe88b3552b8897183dffe698"
+        },
+        {
+          "file": "proposals.json",
+          "bytes": 2978176,
+          "sha256": "1662daf50ae340fd5a31a87d257e71d66898b0b2e998d3e7249365312404cc04"
+        },
+        {
+          "file": "rejections.json",
+          "bytes": 87,
+          "sha256": "4adc601130552226b65bc32c40a3739ea8c58316cb510bf2b8fd012673cc75a9"
+        },
+        {
+          "file": "checkpoints-simulated.json",
+          "bytes": 99449,
+          "sha256": "daae984362b0ecaf9e724cea48459264a68f6aac6fd8be0569992946339c2758"
+        },
+        {
+          "file": "rollback-plan.json",
+          "bytes": 1639807,
+          "sha256": "d93c7014f24fcbd2618a6e48b5b9cca9fb209a0ca08f28045002a6753ef7c2c2"
+        }
+      ],
+      "liveInventory": {
+        "products": 8135,
+        "photoFaces": 16662,
+        "events": 16,
+        "photographers": 24,
+        "awsFaces": 19699
+      },
+      "accepted": {
+        "eventUpdates": 349,
+        "photographerUpdates": 8488,
+        "photoFaceRowsToReconstruct": 393,
+        "productsToReconstruct": 322
+      },
+      "rejected": {
+        "eventUpdates": 0,
+        "photographerUpdates": 0,
+        "photoFaceRows": 0
+      },
+      "safety": {
+        "proposalFaceDuplicates": 0,
+        "proposalPairDuplicates": 0,
+        "liveAwsFaceDuplicates": 0,
+        "liveDbFaceDuplicates": 0,
+        "awsCountChangedSincePhase3a": 7
+      },
+      "before": {
+        "products": 8135,
+        "photoFaces": 16662,
+        "awsFaces": 19699,
+        "eventIssues": 3056,
+        "photographerIssues": 13754,
+        "indexedWithoutPhotoFaces": 2066,
+        "awsOrphans": 3037
+      },
+      "predictedAfter": {
+        "products": 8135,
+        "photoFaces": 17055,
+        "awsFaces": 19699,
+        "eventIssues": 2707,
+        "photographerIssues": 5266,
+        "indexedWithoutPhotoFaces": 1744,
+        "awsOrphans": 2644
+      },
+      "predictedCoreInconsistencyActionsEliminated": 9230,
+      "limitations": [
+        "No database or AWS mutation was performed.",
+        "Checkpoint results are simulations over the immutable proposal list.",
+        "Face-search validation is deferred until approved changes exist; Phase 3A evidence remains unchanged.",
+        "Predicted totals subtract only accepted action-specific issues and do not claim all legacy inconsistencies are resolved."
+      ]
+    }
+  },
+  {
+    "source": "artifacts/face-recovery-phase3b-execution/phase3b-20260715-approved-138395/execution-manifest-final.json",
+    "sha256": "f113222d72d94b7b27aabe3ef8594a5a25023e55a14569416e3d7856839442fb",
+    "content": {
+      "executionId": "phase3b-20260715-approved-138395",
+      "status": "completed_and_independently_audited",
+      "approvedManifestSha": "1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16",
+      "finalAuditSha": "4d0edec4db743e942a88e16eafa3a263860c515115fac1099524a050acda9d4c",
+      "effectiveExecution": {
+        "eventIdsCorrected": 349,
+        "photographerIdsCorrected": 8488,
+        "photoFacesReconstructed": 393,
+        "ignoredFromApprovedScope": 0,
+        "rejectedFromApprovedScope": 0,
+        "idempotentReplayNoOps": 698
+      },
+      "before": {
+        "products": 8151,
+        "photo_faces": 16763,
+        "event_issues": 3056,
+        "photographer_issues": 13754,
+        "indexed_without_photo_faces": 2066,
+        "duplicate_face_ids": 0,
+        "duplicate_photo_face_pairs": 0,
+        "face_event_mismatches": 0,
+        "face_photographer_mismatches": 13142,
+        "aws_faces": 19800
+      },
+      "after": {
+        "products": 8200,
+        "photo_faces": 17263,
+        "aws_faces": 19907,
+        "processing": 0,
+        "pending": 1,
+        "event_issues": 2707,
+        "photographer_issues": 5266,
+        "indexed_without_photo_faces": 1744,
+        "aws_orphans": 2644,
+        "duplicate_database_face_ids": 0,
+        "duplicate_photo_face_pairs": 0,
+        "duplicate_aws_face_ids": 0,
+        "face_event_mismatches": 0,
+        "face_photographer_mismatches": 4654
+      },
+      "idempotency": {
+        "allApprovedRowsAtDesiredState": true,
+        "duplicateFree": true,
+        "conditionalReplayWouldMutateRows": 0
+      },
+      "checkpoints": {
+        "uniqueCheckpointFiles": 370,
+        "expected": 370,
+        "allCompleted": true
+      },
+      "searches": {
+        "eventUpdatesPassed": true,
+        "photographerUpdatesPassed": true,
+        "reconstructionPassed": true,
+        "evidenceFiles": [
+          "search/event_updates.json",
+          "search/photographer_updates.json",
+          "search/photo_faces_reconstruction.json"
+        ]
+      },
+      "forbiddenOperationsExecuted": [],
+      "completedAt": "2026-07-15T17:56:28.486Z"
+    }
+  }
+]

@@ -1,0 +1,142 @@
+{
+  "schemaVersion": 1,
+  "phase": "3C_intelligent_historical_reconciliation",
+  "executionId": "2026-07-16T19-44-34-284Z",
+  "mode": "dry_run_only",
+  "startedAt": "2026-07-16T19:44:34.288Z",
+  "completedAt": "2026-07-16T19:45:18.404Z",
+  "rulesVersion": "phase3c-multi-evidence-exact-v1",
+  "thresholdPolicyScore": 99.9,
+  "proposalSha256": "7aee4c23b4ea721f92d148c5907b619469160c8efe8f1aef7dea5656719b866e",
+  "environment": {
+    "databaseVersion": "PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit",
+    "codeVersion": "0efce23f04baf283eae357e8fd09ed9d3b7a95f4",
+    "reconciliationScriptSha256": "fd20c466a74fd4da016be819ce1e7e2c66b53d532709b678c68cef752403c91d",
+    "collectionId": "funpace-faces",
+    "storageBucket": "giovannimiranda09"
+  },
+  "readOnlyGuarantee": {
+    "databaseOperations": [
+      "BEGIN READ ONLY",
+      "SELECT",
+      "COMMIT"
+    ],
+    "awsOperations": [
+      "ListFaces"
+    ],
+    "storageOperations": [
+      "list metadata"
+    ],
+    "mutationsPerformed": 0,
+    "forbiddenOperationsExecuted": []
+  },
+  "accepted": {
+    "eventPhotographerUpdates": 1,
+    "productEventUpdates": 0,
+    "productPhotographerUpdates": 0,
+    "photoFacePhotographerUpdates": 4654,
+    "photoFaceReconstruction": 0
+  },
+  "reviewQueue": {
+    "products": 2110,
+    "faces": 0,
+    "suggestOnly": 0,
+    "manualRequired": 2110
+  },
+  "before": {
+    "products": 8200,
+    "photoFaces": 17263,
+    "awsFaces": 19907,
+    "eventIssues": 2707,
+    "photographerIssues": 5266,
+    "indexedWithoutPhotoFaces": 1744,
+    "awsOrphans": 2644
+  },
+  "predictedAfter": {
+    "products": 8200,
+    "photoFaces": 17263,
+    "awsFaces": 19907,
+    "eventIssues": 2110,
+    "photographerIssues": 15,
+    "indexedWithoutPhotoFaces": 1744,
+    "awsOrphans": 2644
+  },
+  "simulatedCheckpoints": 188,
+  "snapshotAndArtifactHashes": [
+    {
+      "file": "snapshots/products.json",
+      "bytes": 12751900,
+      "sha256": "6129d4dd6a6a806bf70037317b77e8d47377ff6e5ae113860fb404b7749699c8"
+    },
+    {
+      "file": "snapshots/photo_faces.json",
+      "bytes": 8887255,
+      "sha256": "187eb3d850d49b625b1060ce5bd0d1acc58ec2bca7f401a8596c606658adb0fa"
+    },
+    {
+      "file": "snapshots/events.json",
+      "bytes": 12749,
+      "sha256": "ba045d62bf97ac2075a6b545d98e5dd79d3b3234880a146e5feb30d55e6b1310"
+    },
+    {
+      "file": "snapshots/photographers.json",
+      "bytes": 26882,
+      "sha256": "95cb25c4917d7976bd1576b6a8645d50aabb12afcca4744459a7cf6afe369d6c"
+    },
+    {
+      "file": "snapshots/aws_faces.json",
+      "bytes": 5051476,
+      "sha256": "b27ab11a767ee4e508a87d45838c04ce367c92e05a7bf93c740d0963e47ccad5"
+    },
+    {
+      "file": "snapshots/storage_objects.json",
+      "bytes": 11734459,
+      "sha256": "241637ad52fc8b63f65a9098975a8cafe83fc5a2ad5fbdef673e18b4c9cad191"
+    },
+    {
+      "file": "snapshots/prior_manifests.json",
+      "bytes": 11105,
+      "sha256": "2ca75ceaf3015d1f96ca960f27c39ee7ad30246877b4102f0c378629b0ca6a20"
+    },
+    {
+      "file": "storage-audit.json",
+      "bytes": 3902657,
+      "sha256": "70b883e1d80fe9fb2e1e7bf86937fcbbe4178de812b4888ea2f5299d877b363b"
+    },
+    {
+      "file": "proposals.json",
+      "bytes": 2649589,
+      "sha256": "7aee4c23b4ea721f92d148c5907b619469160c8efe8f1aef7dea5656719b866e"
+    },
+    {
+      "file": "rejected-event-photographer-inference.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "manual-review-queue.json",
+      "bytes": 10701935,
+      "sha256": "0ac8472322553d6b214fd33eeef08072b342d7476977e8a10b8da655a284ac3f"
+    },
+    {
+      "file": "manual-face-review-queue.json",
+      "bytes": 3,
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "checkpoints-simulated.json",
+      "bytes": 35937,
+      "sha256": "e1e52547c55b182d1d9a4a88b75dcb11d83a74e80302d31a178860bbf404a778"
+    },
+    {
+      "file": "rollback-plan.json",
+      "bytes": 856775,
+      "sha256": "b821fdc49cda52c798bf50a94ce54b0e372c416abac00835f921e6cc392410f0"
+    }
+  ],
+  "limitations": [
+    "Policy confidence is a deterministic evidence score, not a statistical probability.",
+    "No /api/face/search call is made during dry-run because no reconciled state exists yet.",
+    "Missing historical events are never created or approximated automatically."
+  ]
+}

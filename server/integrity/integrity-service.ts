@@ -28,12 +28,14 @@ function boolEnv(name: string, fallback = false) {
 export function getIntegrityConfig() {
   const cutoff = String(process.env.INTEGRITY_AUTO_RECONCILE_SINCE || '').trim();
   const cutoffMs = cutoff ? Date.parse(cutoff) : Number.NaN;
+  const reconciliationLocked = process.env.NODE_ENV === 'production' || boolEnv('INTEGRITY_RECONCILIATION_LOCKED', true);
   return {
     intervalMinutes: Math.max(5, Number(process.env.INTEGRITY_SCAN_INTERVAL_MINUTES || 15)),
     staleProcessingMinutes: Math.max(5, Number(process.env.INTEGRITY_STALE_PROCESSING_MINUTES || 15)),
     autoReconcileRequested: boolEnv('INTEGRITY_AUTO_RECONCILE_ENABLED'),
     autoReconcileCutoff: Number.isFinite(cutoffMs) ? new Date(cutoffMs).toISOString() : null,
-    autoReconcileEnabled: boolEnv('INTEGRITY_AUTO_RECONCILE_ENABLED') && Number.isFinite(cutoffMs),
+    reconciliationLocked,
+    autoReconcileEnabled: !reconciliationLocked && boolEnv('INTEGRITY_AUTO_RECONCILE_ENABLED') && Number.isFinite(cutoffMs),
     minimumAutoConfidence: 99.9,
     alertWebhookConfigured: Boolean(process.env.INTEGRITY_ALERT_WEBHOOK_URL),
     schedulerEnabled: boolEnv('INTEGRITY_SCHEDULER_ENABLED'),
@@ -258,6 +260,8 @@ function buildMetrics(state: Awaited<ReturnType<typeof loadState>>, findings: Fi
     aws_faces: awsFaces.length, storage_objects: storageFiles.length, face_indexed: indexed, face_pending: pending, face_processing: processing, face_failed: failed,
     face_processing_stuck: count('face_processing_stuck'), aws_orphan_faces: count('aws_orphan_face'), aws_faces_without_product: count('aws_face_without_product'),
     indexed_without_faces: count('indexed_without_photo_faces'), integrity_critical_findings: critical, integrity_findings: findings.length,
+    invalid_product_events: count('product_event_invalid'), face_event_mismatches: count('face_event_mismatch'), face_photographer_invalid: count('face_photographer_invalid'),
+    duplicate_database_face_ids: count('duplicate_database_face_id'), duplicate_aws_face_ids: count('duplicate_aws_face_id'),
     photos_per_hour: photos.filter((row: Row) => row.createdAt && Date.now() - new Date(row.createdAt).getTime() <= 3_600_000).length,
     faces_indexed_per_hour: state.faces.filter((row: Row) => row.created_at && Date.now() - new Date(row.created_at).getTime() <= 3_600_000).length,
     recognition_success_percent: photos.length ? Number(((indexed / photos.length) * 100).toFixed(2)) : 100,

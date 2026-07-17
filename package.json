@@ -18,14 +18,15 @@
     "bucket:upload:test": "node scripts/test-bucket-upload.mjs 5",
     "payments:reconcile": "node scripts/reconcile-infinitepay-pending-orders.mjs",
     "payments:audit": "node scripts/audit-payments.mjs",
-    "faces:backfill": "tsx scripts/backfill-face-indexing.ts",
     "supabase:schema:apply": "node scripts/apply-supabase-schema.mjs",
     "supabase:schema:validate": "node scripts/validate-supabase-schema.mjs",
     "supabase:admin:set": "node scripts/set-supabase-admin.mjs",
     "supabase:multiphoto:verify": "node scripts/verify-multiphoto-face-architecture.mjs",
     "integrity:schema:apply": "node scripts/apply-integrity-monitoring.mjs",
     "integrity:audit": "tsx scripts/run-integrity-monitor.ts",
-    "integrity:reconcile": "tsx scripts/run-integrity-monitor.ts --reconcile"
+    "integrity:guards:apply": "node scripts/apply-supabase-patch.mjs add-face-integrity-guards.sql",
+    "integrity:guards:validate": "node scripts/validate-face-integrity-guards.mjs",
+    "security:secrets:audit": "node scripts/audit-secret-hygiene.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.1063.0",

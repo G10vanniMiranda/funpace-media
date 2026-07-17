@@ -20,6 +20,7 @@ import directUploadHandler from "./server/api/media/direct-upload";
 import mediaJobsHandler from "./server/api/media/jobs";
 import integrityCronHandler from "./server/api/integrity/cron";
 import { startIntegrityScheduler } from "./server/integrity/integrity-service";
+import healthHandler from "./server/api/health";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
@@ -1437,33 +1438,7 @@ app.post("/payments/infinitepay/webhook", async (req, res) => {
   }
 });
 
-app.get("/api/health", async (req, res) => {
-  const dbConfig = getDbConfig();
-  const status: any = {
-    env: {
-      DATABASE_URL: !!process.env.DATABASE_URL,
-      SUPABASE_URL: !!(process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.VITE_SUPABASE_URL),
-      INFINITEPAY_HANDLE: !!process.env.INFINITEPAY_HANDLE,
-      INFINITEPAY_WEBHOOK_SECRET: !!getWebhookSecret(),
-    },
-    database: "unchecked",
-  };
-
-  if ((dbConfig as any).host || (dbConfig as any).connectionString) {
-    const pool = new Pool(dbConfig);
-    try {
-      const result = await pool.query("select now()");
-      status.database = "connected";
-      status.serverTime = result.rows[0].now;
-    } catch (err: any) {
-      status.database = "failed: " + err.message;
-    } finally {
-      await pool.end();
-    }
-  }
-
-  res.json(status);
-});
+app.get("/api/health", healthHandler);
 
 app.get("/api/events/media-counts", eventMediaCountsHandler);
 app.post("/api/media/direct-upload", directUploadHandler);

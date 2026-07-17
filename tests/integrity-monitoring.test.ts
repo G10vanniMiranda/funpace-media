@@ -19,7 +19,7 @@ test('integrity layer is additive, auditable and cannot invoke face mutation API
 
 test('automatic reconciliation fails closed and requires 99.9 confidence plus cutoff', () => {
   assert.match(service, /minimumAutoConfidence: 99\.9/);
-  assert.match(service, /autoReconcileEnabled: boolEnv\('INTEGRITY_AUTO_RECONCILE_ENABLED'\) && Number\.isFinite\(cutoffMs\)/);
+  assert.match(service, /autoReconcileEnabled: !reconciliationLocked && boolEnv\('INTEGRITY_AUTO_RECONCILE_ENABLED'\) && Number\.isFinite\(cutoffMs\)/);
   assert.match(service, /Number\(findingRow\.confidence\) < config\.minimumAutoConfidence/);
   assert.match(service, /new Date\(entityProduct\.createdAt\)\.getTime\(\) < cutoffMs/);
   assert.match(service, /fill_face_photographer/);

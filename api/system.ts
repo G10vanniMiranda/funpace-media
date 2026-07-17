@@ -34,9 +34,6 @@ export default async function handler(req: any, res: any) {
   setSecurityHeaders(res);
 
   if (route === 'health') {
-    if (process.env.ENABLE_PUBLIC_DIAGNOSTICS !== 'true') {
-      return res.status(200).json({ ok: true, time: new Date().toISOString() });
-    }
     return healthHandler(req, res);
   }
 

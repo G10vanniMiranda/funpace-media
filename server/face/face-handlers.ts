@@ -153,6 +153,9 @@ export async function testFaceHandler(req: any, res: any) {
 }
 
 export async function backfillFaceHandler(req: any, res: any) {
+  if (process.env.FACE_BACKFILL_ENABLED !== 'true') {
+    return res.status(410).json({ error: 'Backfill facial encerrado e bloqueado pela Fase 5.' });
+  }
   const bearer = String(req.headers?.authorization || '').match(/^Bearer\s+(.+)$/i)?.[1] || '';
   const operationsSecret = process.env.OPERATIONS_SECRET || '';
   const hasOperationsAccess = Boolean(operationsSecret && bearer === operationsSecret);

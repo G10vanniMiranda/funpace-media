@@ -1,6 +1,9 @@
 import 'dotenv/config';
 import pg from 'pg';
 import { processPhotoFaceIndex } from '../server/face/face-indexing.js';
+import { assertLegacyFaceRecoveryLocked } from './legacy-face-recovery-lock.js';
+
+assertLegacyFaceRecoveryLocked('backfill-face-indexing');
 
 type Mode = 'diagnose' | 'dry-run' | 'run';
 type Product = {

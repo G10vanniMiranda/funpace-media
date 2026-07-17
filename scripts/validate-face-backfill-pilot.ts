@@ -3,6 +3,9 @@ import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { ListFacesCommand, RekognitionClient } from '@aws-sdk/client-rekognition';
 import { processPhotoFaceIndex } from '../server/face/face-indexing.js';
+import { assertLegacyFaceRecoveryLocked } from './legacy-face-recovery-lock.js';
+
+assertLegacyFaceRecoveryLocked('validate-face-backfill-pilot');
 
 const productIds = String(process.argv.find((arg) => arg.startsWith('--product-ids='))?.split('=').slice(1).join('=') || '')
   .split(',').map((id) => id.trim()).filter(Boolean);

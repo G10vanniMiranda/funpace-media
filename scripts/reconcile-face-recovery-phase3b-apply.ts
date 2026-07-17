@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import pg from 'pg';
 import { ListFacesCommand, RekognitionClient, SearchFacesByImageCommand } from '@aws-sdk/client-rekognition';
+import { assertLegacyFaceRecoveryLocked } from './legacy-face-recovery-lock.js';
 
 type Row = Record<string, any>;
 type StageName = 'event_updates' | 'photographer_updates' | 'photo_faces_reconstruction';
@@ -11,6 +12,7 @@ type StageName = 'event_updates' | 'photographer_updates' | 'photo_faces_reconst
 const approvedManifestSha = '1383953648343b1b6cf367c2f088282ad68c26279730690394a047514b6b6c16';
 const approvedDir = path.resolve('artifacts/face-recovery-phase3b-dry-run/2026-07-15T17-18-52-299Z');
 const applyMode = process.argv.includes('--apply');
+if (applyMode) assertLegacyFaceRecoveryLocked('reconcile-face-recovery-phase3b-apply');
 const executionId = process.argv.find((arg) => arg.startsWith('--execution-id='))?.slice(15) || `phase3b-${new Date().toISOString().replace(/[:.]/g, '-')}`;
 const outputDir = path.resolve('artifacts/face-recovery-phase3b-execution', executionId);
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, max: 2 });

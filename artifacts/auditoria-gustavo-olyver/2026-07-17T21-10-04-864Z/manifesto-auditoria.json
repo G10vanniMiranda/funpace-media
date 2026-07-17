@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-07-17T21:10:04.864Z",
+  "databaseSnapshotAt": "2026-07-17T21:10:04.166Z",
+  "timezone": "America/Porto_Velho",
+  "readOnly": true,
+  "photographer": {
+    "id": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "authUserId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "name": "FOTÓGRAFO OFICIAL FUNPACE",
+    "email": "criativastudiobr@gmail.com"
+  },
+  "counts": {
+    "candidates": 1,
+    "saleItems": 80,
+    "definitiveItems": 50,
+    "excludedItems": 30,
+    "divergences": 36,
+    "payouts": 1
+  },
+  "totalsCents": {
+    "gross": "61248",
+    "platformFee": "24496",
+    "photographerNet": "36752",
+    "refunds": "0",
+    "provenPayouts": "0",
+    "pending": "36752"
+  },
+  "files": [
+    "auditoria-gustavo-olyver-resumo.md",
+    "auditoria-gustavo-olyver-vendas.csv",
+    "auditoria-gustavo-olyver-eventos.csv",
+    "auditoria-gustavo-olyver-mensal.csv",
+    "auditoria-gustavo-olyver-divergencias.csv",
+    "auditoria-gustavo-olyver-repasses.csv",
+    "auditoria-gustavo-olyver-excluidos.csv"
+  ],
+  "queryMode": "PostgreSQL repeatable read, read only",
+  "durationMs": 2635
+}

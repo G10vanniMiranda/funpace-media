@@ -1,0 +1,37 @@
+﻿orderId;transactionNsu;slugAvailable;httpStatus;status;amountSignal;reason
+92db5705-d673-499e-a49c-832489e49b8c;9c2e4636-f49c-44e2-902f-2fe08213cd25;true;200;pending;;
+1acd0254-5f9a-4d64-a544-95775b39bc8d;95ceb5fa-c6f4-43ae-8729-543b9d9a76ce;true;200;pending;;
+7fff3345-b3cc-4dc6-8d02-5520ab405f32;60868e54-e5f7-4249-8ae9-e12b80ea5502;true;200;pending;;
+a196cc98-1970-434c-8575-909e3db1c395;3222a253-4fab-44a5-9043-e6dad895051b;true;200;pending;;
+8a19eee0-bc46-47cd-aa70-3fd9471812d1;b716894d-9ebc-4ff4-8ce1-2a67627c4592;true;200;pending;;
+8b42045e-9433-4901-81e4-ae4f4410fd24;6d1dbc1b-9505-4102-ad99-199f40fd9d26;true;200;pending;;
+b6ff6383-2c85-434c-a6fe-6785d7cc1e20;E18236120202605300106s12b6cace2b;false;;not_checked;;identificadores insuficientes
+dc079023-54c8-45d5-a617-0d6995da9217;;false;;not_checked;;identificadores insuficientes
+405eb949-3429-4e92-884e-a1c4299f70aa;;false;;not_checked;;identificadores insuficientes
+7031a68e-e9d4-4064-8592-2ef4d4265042;;false;;not_checked;;identificadores insuficientes
+07278173-7119-4ff9-9170-c018d12fcf63;;false;;not_checked;;identificadores insuficientes
+9b8cdad1-5395-4b5e-8de3-40698379d85b;;false;;not_checked;;identificadores insuficientes
+a1718f5b-819d-4623-bc5e-07407da2e0af;;false;;not_checked;;identificadores insuficientes
+470199e9-318d-4af2-b72e-0610e1c443b8;;false;;not_checked;;identificadores insuficientes
+e1d94fed-c40b-45df-a296-35e282ab1972;;false;;not_checked;;identificadores insuficientes
+c4c4cf7e-2228-4dbc-9326-720328999f93;6f12a6e6-09a9-4969-ae32-34baca819d19;true;200;pending;;
+9830d3c0-77ec-4c49-adc6-5d94fd7adb8f;55d6fa08-3c90-4077-af3e-f32aba09170d;true;200;pending;;
+82487886-e71c-4637-9e9d-216435b67818;;false;;not_checked;;identificadores insuficientes
+a643be8e-c0f9-4cd5-be90-c93804993b3f;b3c3a4b8-2566-4d59-8e44-5b1fa88e57dd;true;200;pending;;
+3314b068-6dc7-4078-916c-ed9a55d5c4da;d342c087-7743-4a59-86c8-232ecf7171ea;true;200;pending;;
+177f5a37-a71e-4c06-8698-c1e101de873d;3476a267-0123-4d00-a60b-95ca759dea09;true;200;pending;;
+29bcbf6d-918d-49b3-aa72-9ef424e868d5;41170fbe-da55-4751-9f00-fc02123399c7;true;200;pending;;
+98b007f0-bc0b-456e-b2f9-d213ad2e7879;56c8a3a8-a68e-481e-9723-90affcef70a5;true;200;pending;;
+ac97667e-ba42-41fa-b987-9a81d1c2fd5d;3f186290-4cea-41c9-aaba-b84284cdc77b;true;200;pending;;
+d9bef1df-99cf-4432-9ac2-81ccbd3351cb;48d8328a-a17f-473e-949e-8eadfaeade3f;true;200;pending;;
+454f122d-b7ca-471f-89f8-273a05458e6f;3c27722c-ae6e-4d1b-92fe-4fc27e9c0fd0;true;200;pending;;
+50004e91-52bb-45f8-be2b-15a07047e142;0b30a1fb-3943-4084-9b6c-52abca95f212;true;200;pending;;
+c277243e-33c0-4711-97d4-908e1cf5aeb8;51a36b00-1d7a-4799-a89e-d45d6a071b7f;true;200;pending;;
+80b6bfd6-ea0e-473a-bd6a-ca8b340ef651;9b8a2fc0-d717-492a-8ce7-3744a1b4fc0c;true;200;pending;;
+2d6b3dca-c239-4bd9-8d6a-35f02e62aed1;;false;;not_checked;;identificadores insuficientes
+f307db96-d77c-4bf4-9891-ac7dbb000d28;7f82f5ec-077b-447b-8e22-0c227c5aa0de;true;200;paid;110;
+fd68b99c-5d40-4d22-9f0e-05e4662eb03a;65147657-a3ee-4bea-a247-4ec6100ccd53;true;200;paid;1490;
+e67d2b3c-2ea2-4c24-a852-a98920186189;d6c3124b-6abe-45c2-9084-dedd71a9a59c;true;200;paid;1490;
+6261e03f-782b-4fcb-9d82-7eae7e48b6a7;1a1fd7ec-8a8d-47e2-b3fd-bf03e3355564;true;200;paid;1341;
+5de73c48-85a5-4887-a353-28177aea0236;03d527ee-0f8b-41da-9ffd-3d99ca288cc2;true;200;paid;2682;
+f3c2d855-be06-4116-9155-45ac4287fc80;92b7cdc5-3348-4709-a865-0eab55767fc0;true;200;paid;1341;

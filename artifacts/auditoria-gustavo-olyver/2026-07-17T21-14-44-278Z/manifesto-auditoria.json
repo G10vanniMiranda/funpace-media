@@ -1,0 +1,123 @@
+{
+  "generatedAt": "2026-07-17T21:14:44.278Z",
+  "databaseSnapshotAt": "2026-07-17T21:14:38.403Z",
+  "timezone": "America/Porto_Velho",
+  "readOnly": true,
+  "photographer": {
+    "id": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "authUserId": "e996a6b5-fb69-4e79-bd73-80a92ea3ea39",
+    "name": "FOTÓGRAFO OFICIAL FUNPACE",
+    "email": "criativastudiobr@gmail.com"
+  },
+  "counts": {
+    "candidates": 1,
+    "saleItems": 80,
+    "definitiveItems": 50,
+    "excludedItems": 30,
+    "divergences": 50,
+    "payouts": 1
+  },
+  "totalsCents": {
+    "gross": "61248",
+    "platformFee": "24496",
+    "photographerNet": "36752",
+    "refunds": "0",
+    "provenPayouts": "0",
+    "pending": "36752"
+  },
+  "legacyRelations": [
+    {
+      "tableName": "run-events",
+      "columns": [
+        "id",
+        "name",
+        "slug",
+        "status",
+        "date",
+        "start_time",
+        "location_name",
+        "city",
+        "state"
+      ],
+      "exact_rows": 1,
+      "photographer_matches": 0
+    },
+    {
+      "tableName": "run-payment-events",
+      "columns": [
+        "id",
+        "payment_id",
+        "provider_event_id",
+        "event_type",
+        "payload",
+        "received_at"
+      ],
+      "exact_rows": 406,
+      "photographer_matches": 0
+    },
+    {
+      "tableName": "run-payment-reconciliations",
+      "columns": [
+        "id",
+        "run_id",
+        "issue_key",
+        "issue_code",
+        "severity",
+        "resolution_status",
+        "registration_id",
+        "payment_id",
+        "gateway_transaction_id",
+        "expected_amount_cents",
+        "gateway_amount_cents",
+        "details",
+        "first_detected_at",
+        "last_detected_at",
+        "resolved_at",
+        "resolved_by",
+        "resolution_notes"
+      ],
+      "exact_rows": 39,
+      "photographer_matches": 0
+    },
+    {
+      "tableName": "run-payments",
+      "columns": [
+        "id",
+        "registration_id",
+        "provider",
+        "status",
+        "amount_cents",
+        "provider_payment_id",
+        "checkout_url",
+        "created_at",
+        "updated_at",
+        "expires_at",
+        "paid_at",
+        "gateway_status",
+        "gateway_transaction_id",
+        "gateway_payload"
+      ],
+      "exact_rows": 314,
+      "photographer_matches": 0
+    }
+  ],
+  "gatewayReconciliation": {
+    "attempted": 36,
+    "checked": 25,
+    "paid": 6,
+    "notChecked": 11,
+    "failed": 0
+  },
+  "files": [
+    "auditoria-gustavo-olyver-resumo.md",
+    "auditoria-gustavo-olyver-vendas.csv",
+    "auditoria-gustavo-olyver-eventos.csv",
+    "auditoria-gustavo-olyver-mensal.csv",
+    "auditoria-gustavo-olyver-divergencias.csv",
+    "auditoria-gustavo-olyver-repasses.csv",
+    "auditoria-gustavo-olyver-excluidos.csv",
+    "auditoria-gustavo-olyver-infinitepay.csv"
+  ],
+  "queryMode": "PostgreSQL repeatable read, read only",
+  "durationMs": 7793
+}

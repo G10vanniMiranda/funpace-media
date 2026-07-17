@@ -22,7 +22,10 @@
     "supabase:schema:apply": "node scripts/apply-supabase-schema.mjs",
     "supabase:schema:validate": "node scripts/validate-supabase-schema.mjs",
     "supabase:admin:set": "node scripts/set-supabase-admin.mjs",
-    "supabase:multiphoto:verify": "node scripts/verify-multiphoto-face-architecture.mjs"
+    "supabase:multiphoto:verify": "node scripts/verify-multiphoto-face-architecture.mjs",
+    "integrity:schema:apply": "node scripts/apply-integrity-monitoring.mjs",
+    "integrity:audit": "tsx scripts/run-integrity-monitor.ts",
+    "integrity:reconcile": "tsx scripts/run-integrity-monitor.ts --reconcile"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.1063.0",

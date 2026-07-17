@@ -17,6 +17,7 @@ function routeName(req: any) {
   if (url.includes('/media/jobs')) return 'media-jobs';
   if (url.includes('/payments/reconcile')) return 'payments-reconcile';
   if (url.includes('/downloads/authorize')) return 'downloads-authorize';
+  if (url.includes('/integrity/cron')) return 'integrity-cron';
   return 'health';
 }
 
@@ -51,6 +52,10 @@ export default async function handler(req: any, res: any) {
   if (route === 'checkout-debug') return checkoutDebugHandler(req, res);
   if (route === 'media-jobs') return mediaJobsHandler(req, res);
   if (route === 'payments-reconcile') return paymentsReconcileHandler(req, res);
+  if (route === 'integrity-cron') {
+    const { default: integrityCronHandler } = await import('../server/api/integrity/cron.js');
+    return integrityCronHandler(req, res);
+  }
 
   return res.status(404).json({ error: 'Rota operacional não encontrada.' });
 }

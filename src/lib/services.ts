@@ -20,6 +20,7 @@ import {
   FaceSearchResponse,
   PhotographerReferral,
   ReferralSettings,
+  IntegrityDashboardSnapshot,
 } from '../types';
 import { MOCK_PHOTOGRAPHERS, MOCK_PHOTOS, MOCK_VIDEOS } from '../data';
 import { isMockMode } from './config';
@@ -3178,5 +3179,40 @@ export const adminService = {
     }, true).catch((error) => {
       console.error('Não foi possível registrar log admin:', error);
     });
+  },
+
+  async getIntegrityDashboard(): Promise<IntegrityDashboardSnapshot> {
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessão admin expirada.');
+    const response = await fetch('/api/admin/integrity', { headers: { Authorization: `Bearer ${accessToken}` } });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || `Integridade HTTP ${response.status}`);
+    return payload as IntegrityDashboardSnapshot;
+  },
+
+  async runIntegrityScan(reconcile = false) {
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessão admin expirada.');
+    const response = await fetch('/api/admin/integrity/run', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reconcile }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || `Integridade HTTP ${response.status}`);
+    return payload;
+  },
+
+  async updateIntegrityReview(id: string, status: 'approved' | 'rejected', note?: string) {
+    const accessToken = await getCurrentAccessToken();
+    if (!accessToken) throw new Error('Sessão admin expirada.');
+    const response = await fetch(`/api/admin/integrity/review/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status, note }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(payload?.error || `Integridade HTTP ${response.status}`);
+    return payload;
   },
 };

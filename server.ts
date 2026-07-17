@@ -18,6 +18,8 @@ import downloadEmailHandler from "./api/orders/download-email";
 import eventMediaCountsHandler from "./server/api/events/media-counts";
 import directUploadHandler from "./server/api/media/direct-upload";
 import mediaJobsHandler from "./server/api/media/jobs";
+import integrityCronHandler from "./server/api/integrity/cron";
+import { startIntegrityScheduler } from "./server/integrity/integrity-service";
 import type { PaymentMethod } from "./server/payments/providers/types";
 import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceHandler, testFaceHandler } from "./server/face/face-handlers";
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
@@ -1473,8 +1475,15 @@ app.all([
   "/api/admin/snapshot",
   "/api/admin/orders/status",
   "/api/admin/payments/recovery",
+  "/api/admin/integrity",
+  "/api/admin/integrity/run",
+  "/api/admin/integrity/review/:id",
 ], async (req, res) => {
   return adminApiHandler(req, res);
+});
+
+app.post("/api/integrity/cron", async (req, res) => {
+  return integrityCronHandler(req, res);
 });
 
 app.all("/api/orders/download-email", async (req, res) => {
@@ -3269,6 +3278,7 @@ async function setupViteAndListen() {
 
   const server = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Servidor rodando em http://localhost:${PORT}`);
+    startIntegrityScheduler();
   });
 
   server.requestTimeout = Number(process.env.SERVER_REQUEST_TIMEOUT_MS || 20 * 60 * 1000);

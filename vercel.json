@@ -104,6 +104,22 @@
       "destination": "/api/admin?route=payments-recovery"
     },
     {
+      "source": "/api/admin/integrity",
+      "destination": "/api/admin?route=integrity"
+    },
+    {
+      "source": "/api/admin/integrity/run",
+      "destination": "/api/admin?route=integrity&action=run"
+    },
+    {
+      "source": "/api/admin/integrity/review/:id",
+      "destination": "/api/admin?route=integrity&action=review&id=:id"
+    },
+    {
+      "source": "/api/integrity/cron",
+      "destination": "/api/system?route=integrity-cron"
+    },
+    {
       "source": "/api/admin/photographers/:id/:action",
       "destination": "/api/admin?route=photographers-action&id=:id&action=:action"
     },

@@ -373,3 +373,53 @@ export interface Video extends Product {
   thumbnailUrl?: string;
   duration?: string;
 }
+
+export interface IntegrityRun {
+  id: string;
+  mode: 'audit' | 'reconcile';
+  trigger_source: string;
+  status: 'running' | 'completed' | 'failed';
+  summary: Record<string, any>;
+  started_at: string;
+  completed_at?: string | null;
+  error?: string | null;
+}
+
+export interface IntegrityFinding {
+  id: string;
+  category: string;
+  severity: 'info' | 'warning' | 'critical';
+  entity_type: string;
+  entity_id?: string | null;
+  confidence: number;
+  evidence: Record<string, any>;
+  status: string;
+  last_seen_at: string;
+}
+
+export interface IntegrityReviewItem extends IntegrityFinding {
+  finding_id: string;
+  proposal: Record<string, any>;
+  reviewer_note?: string | null;
+  decided_at?: string | null;
+}
+
+export interface IntegrityDashboardSnapshot {
+  latestRun: IntegrityRun | null;
+  runs: IntegrityRun[];
+  findings: IntegrityFinding[];
+  reviewQueue: IntegrityReviewItem[];
+  alerts: Array<Record<string, any>>;
+  corrections: Array<Record<string, any>>;
+  metrics: Record<string, number>;
+  metricTimestamps: Record<string, string>;
+  alertRules: Array<Record<string, any>>;
+  configuration: {
+    schedulerEnabled: boolean;
+    autoReconcileEnabled: boolean;
+    autoReconcileCutoff: string | null;
+    intervalMinutes: number;
+    minimumAutoConfidence: number;
+  };
+  generatedAt: string;
+}

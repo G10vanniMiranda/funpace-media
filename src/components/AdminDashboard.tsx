@@ -46,6 +46,7 @@ import { adminService, eventService, photographerService, platformSettingsServic
 import { formatCpf, isValidCpf, onlyCpfDigits } from '../lib/cpf';
 import { getCurrentAccessToken } from '../lib/supabase';
 import { FUNPACE_CONTACT_EMAIL } from '../lib/contact';
+import { IntegrityDashboard } from './admin/IntegrityDashboard';
 
 interface AdminDashboardProps {
   photographers: Photographer[];
@@ -73,7 +74,7 @@ type StorageStats = {
   updatedAt: string;
 };
 
-type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'referrals' | 'coupons' | 'logs' | 'settings';
+type AdminTab = 'overview' | 'users' | 'photographers' | 'events' | 'media' | 'orders' | 'payments' | 'sales' | 'referrals' | 'coupons' | 'integrity' | 'logs' | 'settings';
 type PhotographerStatusFilter = 'all' | 'active' | 'pending' | 'disabled';
 type PhotographerAdminAction = 'disable' | 'reactivate' | 'delete';
 const EVENT_COVER_POSITION_OPTIONS = [
@@ -2151,6 +2152,12 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
           />
           <AdminSidebarLink
             icon={<Activity />}
+            label="Integridade"
+            active={activeTab === 'integrity'}
+            onClick={() => setActiveTab('integrity')}
+          />
+          <AdminSidebarLink
+            icon={<Activity />}
             label="Logs"
             active={activeTab === 'logs'}
             onClick={() => setActiveTab('logs')}
@@ -2196,6 +2203,7 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               {activeTab === 'sales' && 'Fluxo de Caixa'}
               {activeTab === 'referrals' && 'Indicações de Fotógrafos'}
               {activeTab === 'coupons' && 'Cupons e Promoções'}
+              {activeTab === 'integrity' && 'Integridade do Sistema'}
               {activeTab === 'logs' && 'Logs e Auditoria'}
               {activeTab === 'settings' && 'Preferências'}
             </h2>
@@ -3492,6 +3500,8 @@ export function AdminDashboard({ photographers, photos, videos, orders, withdraw
               </div>
             </motion.div>
           )}
+
+          {activeTab === 'integrity' && <IntegrityDashboard />}
 
           {activeTab === 'logs' && (
             <motion.div key="logs" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="space-y-5">

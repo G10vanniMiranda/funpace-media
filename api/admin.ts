@@ -16,6 +16,7 @@ function routeName(req: any) {
   const url = String(req.url || '');
   if (url.includes('/orders/status')) return 'orders-status';
   if (url.includes('/payments/recovery')) return 'payments-recovery';
+  if (url.includes('/integrity')) return 'integrity';
   if (url.includes('/photographers/')) return 'photographers-action';
   return 'snapshot';
 }
@@ -44,6 +45,11 @@ export default async function handler(req: any, res: any) {
   if (route === 'payments-recovery') {
     const { default: paymentRecoveryHandler } = await import('../server/api/admin/payments/recovery.js');
     return paymentRecoveryHandler(req, res);
+  }
+
+  if (route === 'integrity') {
+    const { default: integrityHandler } = await import('../server/api/admin/integrity.js');
+    return integrityHandler(req, res);
   }
 
   if (route === 'photographers-action') {

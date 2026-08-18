@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-test('production CSP allows the configured API host used by admin recovery calls', () => {
-  const vercelConfig = JSON.parse(readFileSync('vercel.json', 'utf8'));
+test('production CSP allows the configured API host used by admin recovery calls', async () => {
+  const { config: vercelConfig } = await import('../vercel.mjs');
   const csp = vercelConfig.headers
     .flatMap((entry: any) => entry.headers)
     .find((header: any) => header.key === 'Content-Security-Policy')?.value || '';

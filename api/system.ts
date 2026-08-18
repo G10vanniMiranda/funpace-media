@@ -5,6 +5,7 @@ import directUploadHandler from '../server/api/media/direct-upload.js';
 import mediaJobsHandler from '../server/api/media/jobs.js';
 import paymentsReconcileHandler from '../server/api/payments/reconcile.js';
 import { handleOptions, rateLimitAsync, setSecurityHeaders } from '../server/shared/security.js';
+import { sendMaintenanceResponse } from '../server/shared/maintenance.js';
 
 function routeName(req: any) {
   const queryRoute = String(req.query?.route || '').trim();
@@ -23,6 +24,14 @@ function routeName(req: any) {
 
 export default async function handler(req: any, res: any) {
   const route = routeName(req);
+
+  if (route === 'maintenance') {
+    if (!['GET', 'HEAD'].includes(String(req.method || 'GET').toUpperCase())) {
+      res.setHeader('Allow', 'GET, HEAD');
+      return res.status(405).send('Method Not Allowed');
+    }
+    return sendMaintenanceResponse(req, res);
+  }
 
   if (route === 'downloads-authorize') {
     const { default: downloadAuthorizeHandler } = await import('../server/api/downloads/authorize.js');

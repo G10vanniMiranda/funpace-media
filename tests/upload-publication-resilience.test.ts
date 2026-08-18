@@ -104,7 +104,7 @@ test('browser upload retries network/proxy drops and requires storage confirmati
 test('optional Supabase direct upload is multiplexed and keeps external bucket fallback', () => {
   const directUpload = readFileSync('server/api/media/direct-upload.ts', 'utf8');
   const system = readFileSync('api/system.ts', 'utf8');
-  const vercel = readFileSync('vercel.json', 'utf8');
+  const vercel = readFileSync('vercel.mjs', 'utf8');
 
   assert.match(directUpload, /createSignedUploadUrl/);
   assert.match(directUpload, /external_bucket/);
@@ -123,7 +123,7 @@ test('media processing jobs are queued and exposed only through operations diagn
   const mediaRepository = readFileSync('server/media/media-job-repository.ts', 'utf8');
   const sql = readFileSync('scripts/add-media-processing-worker.sql', 'utf8');
   const system = readFileSync('api/system.ts', 'utf8');
-  const vercel = readFileSync('vercel.json', 'utf8');
+  const vercel = readFileSync('vercel.mjs', 'utf8');
 
   assert.match(dashboard, /media-job:queued/);
   assert.match(services, /media_processing_jobs/);
@@ -151,7 +151,7 @@ test('media processing jobs are queued and exposed only through operations diagn
   assert.match(system, /media-jobs/);
   assert.match(vercel, /\/api\/media\/jobs/);
   assert.match(vercel, /\/api\/media\/jobs\/process/);
-  assert.match(vercel, /"api\/system\.ts"[\s\S]*?"maxDuration": 300/);
+  assert.match(vercel, /'api\/system\.ts'[\s\S]*?maxDuration: 300/);
   assert.match(vercel, /\/api\/system\?route=media-jobs/);
   assert.match(vercel, /\/api\/system\?route=media-jobs&action=process/);
 });

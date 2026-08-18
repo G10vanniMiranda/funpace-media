@@ -35,6 +35,7 @@
     "@tailwindcss/vite": "^4.1.14",
     "@types/cors": "^2.8.19",
     "@vercel/analytics": "^2.0.1",
+    "@vercel/functions": "^3.9.3",
     "@vitejs/plugin-react": "^5.0.4",
     "busboy": "^1.6.0",
     "cors": "^2.8.6",

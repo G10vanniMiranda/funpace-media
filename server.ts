@@ -26,6 +26,7 @@ import { backfillFaceHandler, faceConsentHandler, indexPhotoHandler, searchFaceH
 import { shouldBypassFaceBackfillRateLimit } from "./server/face/face-rate-limit";
 import { ensureRequestId, errorToLog, getRequestId, logEvent } from "./server/shared/observability";
 import { rateLimitAsync as sharedRateLimitAsync } from "./server/shared/security";
+import { sendMaintenanceResponse, shouldServeMaintenancePage } from "./server/shared/maintenance";
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
@@ -3110,6 +3111,18 @@ app.post("/api/webhooks/infinitepay", async (req, res) => {
   }
 
   res.status(200).send("OK");
+});
+
+app.use((req, res, next) => {
+  if (!shouldServeMaintenancePage({
+    method: req.method,
+    pathname: req.path,
+  })) {
+    next();
+    return;
+  }
+
+  sendMaintenanceResponse(req, res);
 });
 
 app.get("/fotografo/:slug", (req, res, next) => {

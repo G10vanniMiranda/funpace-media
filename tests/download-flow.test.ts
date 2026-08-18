@@ -74,11 +74,11 @@ test('Vercel Hobby deployment stays within twelve serverless function files', ()
       return entry.isFile() && entry.name.endsWith('.ts') ? [path] : [];
     });
   const functions = collectFunctions('api');
-  const vercel = readFileSync('vercel.json', 'utf8');
+  const vercel = readFileSync('vercel.mjs', 'utf8');
   const dispatcher = readFileSync('api/system.ts', 'utf8');
 
   assert.equal(functions.length, 12, functions.join('\n'));
-  assert.match(vercel, /"source": "\/api\/downloads\/authorize"[\s\S]*"destination": "\/api\/system\?route=downloads-authorize"/);
+  assert.match(vercel, /source: '\/api\/downloads\/authorize'[\s\S]*destination: '\/api\/system\?route=downloads-authorize'/);
   assert.match(dispatcher, /route === 'downloads-authorize'/);
   assert.match(dispatcher, /server\/api\/downloads\/authorize/);
 });

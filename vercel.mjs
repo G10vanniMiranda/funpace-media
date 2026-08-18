@@ -1,0 +1,62 @@
+const rewrites = [
+  { source: '/api/health', destination: '/api/system?route=health' },
+  { source: '/api/checkout/debug', destination: '/api/system?route=checkout-debug' },
+  { source: '/api/events/media-counts', destination: '/api/system?route=events-media-counts' },
+  { source: '/api/media/direct-upload', destination: '/api/system?route=media-direct-upload' },
+  { source: '/api/media/jobs', destination: '/api/system?route=media-jobs' },
+  { source: '/api/media/jobs/process', destination: '/api/system?route=media-jobs&action=process' },
+  { source: '/api/payments/reconcile', destination: '/api/system?route=payments-reconcile' },
+  { source: '/api/downloads/authorize', destination: '/api/system?route=downloads-authorize' },
+  { source: '/api/admin/snapshot', destination: '/api/admin?route=snapshot' },
+  { source: '/api/admin/orders/status', destination: '/api/admin?route=orders-status' },
+  { source: '/api/admin/payments/recovery', destination: '/api/admin?route=payments-recovery' },
+  { source: '/api/admin/integrity', destination: '/api/admin?route=integrity' },
+  { source: '/api/admin/integrity/run', destination: '/api/admin?route=integrity&action=run' },
+  { source: '/api/admin/integrity/review/:id', destination: '/api/admin?route=integrity&action=review&id=:id' },
+  { source: '/api/integrity/cron', destination: '/api/system?route=integrity-cron' },
+  { source: '/api/admin/photographers/:id/:action', destination: '/api/admin?route=photographers-action&id=:id&action=:action' },
+  { source: '/api/admin/photographers/:id', destination: '/api/admin?route=photographers-action&id=:id' },
+  { source: '/api/face/search', destination: '/api/face?route=search' },
+  { source: '/api/face/consent', destination: '/api/face?route=consent' },
+  { source: '/api/face/index', destination: '/api/face?route=index' },
+  { source: '/api/face/test', destination: '/api/face?route=test' },
+  { source: '/api/face/backfill', destination: '/api/face?route=backfill' },
+  { source: '/api/:path*', destination: '/api/:path*' },
+  { source: '/:path*', destination: '/index.html' },
+];
+
+export const config = {
+  functions: {
+    'api/checkout/create-session.ts': { maxDuration: 30 },
+    'api/system.ts': { maxDuration: 300 },
+    'api/face.ts': { maxDuration: 300 },
+  },
+  crons: [
+    { path: '/api/payments/reconcile', schedule: '0 3 * * *' },
+    { path: '/api/media/jobs/process', schedule: '*/10 * * * *' },
+  ],
+  headers: [
+    {
+      source: '/(.*)',
+      headers: [
+        { key: 'X-Content-Type-Options', value: 'nosniff' },
+        { key: 'X-Frame-Options', value: 'DENY' },
+        { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+        { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(), payment=()' },
+        { key: 'Strict-Transport-Security', value: 'max-age=31536000; includeSubDomains; preload' },
+        {
+          key: 'Content-Security-Policy',
+          value: "default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; connect-src 'self' https://api.funpace.media https://*.supabase.co https://api.checkout.infinitepay.io https://checkout.infinitepay.io https://*.infinitepay.io https://99dev.pro; img-src 'self' data: blob: https:; media-src 'self' blob: data: https:; font-src 'self' data: https://fonts.gstatic.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; script-src 'self'; form-action 'self' https://*.infinitepay.io; upgrade-insecure-requests",
+        },
+      ],
+    },
+  ],
+  redirects: [
+    {
+      source: '/fotografo/:slug((?!definir-senha$)[^/]+)',
+      destination: '/:slug',
+      permanent: true,
+    },
+  ],
+  rewrites,
+};

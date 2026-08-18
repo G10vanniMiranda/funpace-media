@@ -46,7 +46,7 @@ test('selfie search always attempts to delete the temporary S3 object', () => {
 });
 
 test('Vercel and Express expose face search, index, backfill and diagnostics routes', () => {
-  const vercel = readFileSync('vercel.json', 'utf8');
+  const vercel = readFileSync('vercel.mjs', 'utf8');
   const express = readFileSync('server.ts', 'utf8');
   for (const route of ['/api/face/search', '/api/face/index', '/api/face/backfill', '/api/face/test']) {
     assert.match(vercel, new RegExp(route.replaceAll('/', '\\/')));
